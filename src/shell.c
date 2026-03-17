@@ -316,6 +316,12 @@ static int command_requires_more_input(const char *text, char *error, size_t err
   return parse_error_is_incomplete_compound(parse_error) ? 1 : -1;
 }
 
+/* Callback wrapper for the line editor: checks if text needs more input. */
+static int repl_needs_more(const char *text) {
+  char parse_error[OOSH_MAX_OUTPUT];
+  return command_requires_more_input(text, parse_error, sizeof(parse_error));
+}
+
 static int append_command_fragment(char *command, size_t command_size, const char *fragment) {
   char cleaned[OOSH_MAX_LINE];
 
@@ -6821,63 +6827,42 @@ int oosh_shell_run_repl(OoshShell *shell) {
   }
 
   while (shell->running) {
-    int needs_more = 0;
-
     command[0] = '\0';
-	    if (interactive) {
-	      OoshLineReadStatus read_status;
-        int pending_heredoc = 0;
+    if (interactive) {
+      OoshLineReadStatus read_status;
 
-	      oosh_prompt_render(&shell->prompt, shell, prompt, sizeof(prompt));
-	      while (1) {
+      oosh_prompt_render(&shell->prompt, shell, prompt, sizeof(prompt));
+      fputs(prompt, stdout);
+      fflush(stdout);
+
+      read_status = oosh_line_editor_read_line(
+        shell, prompt, shell->prompt.continuation, repl_needs_more,
+        command, sizeof(command)
+      );
+      if (read_status == OOSH_LINE_READ_EOF) {
+        return 0;
+      }
+      if (read_status == OOSH_LINE_READ_ERROR) {
+        return 1;
+      }
+
+      /* Detect and report parse errors that slipped through (e.g. heredoc). */
+      if (command[0] != '\0') {
         char parse_error[OOSH_MAX_OUTPUT];
-        const char *active_prompt = needs_more ? "... " : prompt;
-
-        fputs(active_prompt, stdout);
-        fflush(stdout);
-
-        read_status = oosh_line_editor_read_line(shell, active_prompt, line, sizeof(line));
-        if (read_status == OOSH_LINE_READ_EOF) {
-          if (command[0] != '\0') {
-            write_buffer("oosh: incomplete command block");
-          }
-          return 0;
-        }
-        if (read_status == OOSH_LINE_READ_ERROR) {
-          return 1;
-        }
-
-	        if (command[0] == '\0' && is_blank_or_comment_line(line)) {
-	          break;
-	        }
-	        if (!pending_heredoc && is_blank_or_comment_line(line)) {
-	          continue;
-	        }
-	        if (append_command_fragment(command, sizeof(command), line) != 0) {
-          write_buffer("oosh: command block too large");
-          command[0] = '\0';
-          break;
-        }
-
-	        needs_more = command_requires_more_input(command, parse_error, sizeof(parse_error));
-	        if (needs_more > 0) {
-            pending_heredoc = parse_error_is_unterminated_heredoc(parse_error);
-	          continue;
-	        }
-          pending_heredoc = 0;
-	        if (needs_more < 0) {
-	          char message[OOSH_MAX_OUTPUT];
-
-          snprintf(message, sizeof(message), "oosh: %s", parse_error[0] == '\0' ? "parse error" : parse_error);
+        int check = command_requires_more_input(command, parse_error, sizeof(parse_error));
+        if (check < 0) {
+          char message[OOSH_MAX_OUTPUT];
+          snprintf(message, sizeof(message), "oosh: %s",
+                   parse_error[0] == '\0' ? "parse error" : parse_error);
           write_buffer(message);
           command[0] = '\0';
         }
-        break;
       }
-	    } else {
-        int pending_heredoc = 0;
-	      while (1) {
-	        char parse_error[OOSH_MAX_OUTPUT];
+    } else {
+      int needs_more = 0;
+      int pending_heredoc = 0;
+      while (1) {
+        char parse_error[OOSH_MAX_OUTPUT];
 
         if (fgets(line, sizeof(line), stdin) == NULL) {
           if (command[0] != '\0') {
@@ -6886,27 +6871,26 @@ int oosh_shell_run_repl(OoshShell *shell) {
           return 0;
         }
         trim_trailing_newlines(line);
-	        if (command[0] == '\0' && is_blank_or_comment_line(line)) {
-	          break;
-	        }
-	        if (!pending_heredoc && is_blank_or_comment_line(line)) {
-	          continue;
-	        }
-	        if (append_command_fragment(command, sizeof(command), line) != 0) {
+        if (command[0] == '\0' && is_blank_or_comment_line(line)) {
+          break;
+        }
+        if (!pending_heredoc && is_blank_or_comment_line(line)) {
+          continue;
+        }
+        if (append_command_fragment(command, sizeof(command), line) != 0) {
           write_buffer("oosh: command block too large");
           command[0] = '\0';
           break;
         }
 
-	        needs_more = command_requires_more_input(command, parse_error, sizeof(parse_error));
-	        if (needs_more > 0) {
-            pending_heredoc = parse_error_is_unterminated_heredoc(parse_error);
-	          continue;
-	        }
-          pending_heredoc = 0;
-	        if (needs_more < 0) {
-	          char message[OOSH_MAX_OUTPUT];
-
+        needs_more = command_requires_more_input(command, parse_error, sizeof(parse_error));
+        if (needs_more > 0) {
+          pending_heredoc = parse_error_is_unterminated_heredoc(parse_error);
+          continue;
+        }
+        pending_heredoc = 0;
+        if (needs_more < 0) {
+          char message[OOSH_MAX_OUTPUT];
           snprintf(message, sizeof(message), "oosh: %s", parse_error[0] == '\0' ? "parse error" : parse_error);
           write_buffer(message);
           command[0] = '\0';

@@ -829,20 +829,38 @@ int oosh_line_editor_is_interactive(void) {
 }
 #endif
 
-OoshLineReadStatus oosh_line_editor_read_line(OoshShell *shell, const char *prompt, char *out, size_t out_size) {
+OoshLineReadStatus oosh_line_editor_read_line(
+  OoshShell *shell,
+  const char *prompt,
+  const char *prompt_continue,
+  OoshLineEditorNeedsMoreFn needs_more,
+  char *out,
+  size_t out_size
+) {
   OoshTerminalState terminal_state;
+  /* Single-line editing buffer — reused for each continuation line. */
+  char line[OOSH_MAX_LINE];
   size_t length = 0;
   size_t cursor = 0;
   size_t history_index;
   char history_scratch[OOSH_MAX_LINE];
+  /* Multiline accumulation buffer. */
+  char multi[OOSH_MAX_OUTPUT];
+  size_t multi_len = 0;
+  /* Active prompt for the current editing line. */
+  const char *active_prompt;
+  int in_continuation = 0;
 
   if (shell == NULL || prompt == NULL || out == NULL || out_size == 0) {
     return OOSH_LINE_READ_ERROR;
   }
 
   out[0] = '\0';
+  line[0] = '\0';
+  multi[0] = '\0';
   history_scratch[0] = '\0';
   history_index = shell->history_count;
+  active_prompt = prompt;
 
   if (terminal_enter_raw(&terminal_state) != 0) {
     return OOSH_LINE_READ_ERROR;
@@ -857,16 +875,56 @@ OoshLineReadStatus oosh_line_editor_read_line(OoshShell *shell, const char *prom
     }
 
     if (key == OOSH_KEY_ENTER) {
+      /* Append current line into the multiline buffer. */
+      size_t space = sizeof(multi) - multi_len - 1;
+
+      if (multi_len > 0 && space > 0) {
+        multi[multi_len++] = '\n';
+        space--;
+      }
+      if (length > 0 && length <= space) {
+        memcpy(multi + multi_len, line, length);
+        multi_len += length;
+      }
+      multi[multi_len] = '\0';
+
+      /* Check if more input is needed. */
+      if (needs_more != NULL && multi_len > 0 && needs_more(multi) > 0) {
+        /* Enter continuation mode: print newline, show secondary prompt. */
+        fputc('\n', stdout);
+        active_prompt = (prompt_continue != NULL && prompt_continue[0] != '\0')
+                        ? prompt_continue : "... ";
+        fputs(active_prompt, stdout);
+        fflush(stdout);
+        in_continuation = 1;
+        /* Reset single-line state for the next line. */
+        length = 0;
+        cursor = 0;
+        line[0] = '\0';
+        history_index = shell->history_count;
+        history_scratch[0] = '\0';
+        continue;
+      }
+
+      /* Complete (or no callback): submit. */
       terminal_leave_raw(&terminal_state);
       fputc('\n', stdout);
+      copy_string(out, out_size, multi);
       return OOSH_LINE_READ_OK;
     }
 
     if (key == OOSH_KEY_CTRL_D) {
-      terminal_leave_raw(&terminal_state);
-      if (length == 0) {
+      if (length == 0 && multi_len == 0) {
+        terminal_leave_raw(&terminal_state);
         fputc('\n', stdout);
         return OOSH_LINE_READ_EOF;
+      }
+      /* In multiline mode: submit whatever we have. */
+      if (multi_len > 0) {
+        terminal_leave_raw(&terminal_state);
+        fputc('\n', stdout);
+        copy_string(out, out_size, multi);
+        return OOSH_LINE_READ_OK;
       }
       continue;
     }
@@ -880,20 +938,20 @@ OoshLineReadStatus oosh_line_editor_read_line(OoshShell *shell, const char *prom
 
     if (key == OOSH_KEY_CTRL_A) {
       cursor = 0;
-      redraw_line(prompt, out, length, cursor);
+      redraw_line(active_prompt, line, length, cursor);
       continue;
     }
 
     if (key == OOSH_KEY_CTRL_E) {
       cursor = length;
-      redraw_line(prompt, out, length, cursor);
+      redraw_line(active_prompt, line, length, cursor);
       continue;
     }
 
     if (key == OOSH_KEY_LEFT) {
       if (cursor > 0) {
         cursor--;
-        redraw_line(prompt, out, length, cursor);
+        redraw_line(active_prompt, line, length, cursor);
       }
       continue;
     }
@@ -901,59 +959,64 @@ OoshLineReadStatus oosh_line_editor_read_line(OoshShell *shell, const char *prom
     if (key == OOSH_KEY_RIGHT) {
       if (cursor < length) {
         cursor++;
-        redraw_line(prompt, out, length, cursor);
+        redraw_line(active_prompt, line, length, cursor);
       }
       continue;
     }
 
     if (key == OOSH_KEY_UP) {
-      navigate_history(shell, -1, out, out_size, &length, &cursor, &history_index, history_scratch, sizeof(history_scratch));
-      redraw_line(prompt, out, length, cursor);
+      /* History navigation only on the first line. */
+      if (!in_continuation) {
+        navigate_history(shell, -1, line, sizeof(line), &length, &cursor, &history_index, history_scratch, sizeof(history_scratch));
+        redraw_line(active_prompt, line, length, cursor);
+      }
       continue;
     }
 
     if (key == OOSH_KEY_DOWN) {
-      navigate_history(shell, 1, out, out_size, &length, &cursor, &history_index, history_scratch, sizeof(history_scratch));
-      redraw_line(prompt, out, length, cursor);
+      if (!in_continuation) {
+        navigate_history(shell, 1, line, sizeof(line), &length, &cursor, &history_index, history_scratch, sizeof(history_scratch));
+        redraw_line(active_prompt, line, length, cursor);
+      }
       continue;
     }
 
     if (key == OOSH_KEY_TAB) {
-      handle_completion(shell, prompt, out, out_size, &length, &cursor);
+      handle_completion(shell, active_prompt, line, sizeof(line), &length, &cursor);
       continue;
     }
 
     if (key == OOSH_KEY_BACKSPACE) {
       if (cursor > 0) {
-        memmove(out + cursor - 1, out + cursor, length - cursor + 1);
+        memmove(line + cursor - 1, line + cursor, length - cursor + 1);
         length--;
         cursor--;
-        redraw_line(prompt, out, length, cursor);
+        redraw_line(active_prompt, line, length, cursor);
       }
       continue;
     }
 
     if (key == OOSH_KEY_DELETE) {
       if (cursor < length) {
-        memmove(out + cursor, out + cursor + 1, length - cursor);
+        memmove(line + cursor, line + cursor + 1, length - cursor);
         length--;
-        redraw_line(prompt, out, length, cursor);
+        redraw_line(active_prompt, line, length, cursor);
       }
       continue;
     }
 
     if (isprint(key)) {
-      if (length + 1 >= out_size) {
+      if (length + 1 >= sizeof(line)) {
         fputc('\a', stdout);
         fflush(stdout);
         continue;
       }
 
-      memmove(out + cursor + 1, out + cursor, length - cursor + 1);
-      out[cursor] = (char) key;
+      memmove(line + cursor + 1, line + cursor, length - cursor + 1);
+      line[cursor] = (char) key;
       length++;
       cursor++;
-      redraw_line(prompt, out, length, cursor);
+      redraw_line(active_prompt, line, length, cursor);
     }
   }
 }

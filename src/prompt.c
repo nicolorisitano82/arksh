@@ -268,6 +268,7 @@ void oosh_prompt_config_init(OoshPromptConfig *config) {
   copy_string(config->right[1], sizeof(config->right[1]), "os");
   copy_string(config->right[2], sizeof(config->right[2]), "datetime");
   config->right_count = 3;
+  copy_string(config->continuation, sizeof(config->continuation), "... ");
 }
 
 int oosh_prompt_config_load(OoshPromptConfig *config, const char *path) {
@@ -327,6 +328,8 @@ int oosh_prompt_config_load(OoshPromptConfig *config, const char *path) {
         copy_string(config->plugins[config->plugin_count], sizeof(config->plugins[config->plugin_count]), value);
         config->plugin_count++;
       }
+    } else if (strcmp(key, "continuation") == 0) {
+      copy_string(config->continuation, sizeof(config->continuation), value);
     }
   }
 

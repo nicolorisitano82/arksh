@@ -259,11 +259,11 @@ Stato epoca: `[ ]`
 
 ### E5-S1. Modello editor multilinea
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E5-S1-T1` introdurre buffer multilinea interno
-- `[ ]` `E5-S1-T2` supportare editing e rendering su piu righe
-- `[ ]` `E5-S1-T3` allineare il prompt secondario ai blocchi incompleti
+- `[x]` `E5-S1-T1` introdurre buffer multilinea interno
+- `[x]` `E5-S1-T2` supportare editing e rendering su piu righe
+- `[x]` `E5-S1-T3` allineare il prompt secondario ai blocchi incompleti
 
 ### E5-S2. Reverse search e movimenti per parola
 

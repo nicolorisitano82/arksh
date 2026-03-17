@@ -16,8 +16,18 @@ typedef enum {
   OOSH_LINE_READ_ERROR
 } OoshLineReadStatus;
 
+/* Returns >0 if more input is needed, 0 if complete, <0 on parse error. */
+typedef int (*OoshLineEditorNeedsMoreFn)(const char *text);
+
 int oosh_line_editor_is_interactive(void);
-OoshLineReadStatus oosh_line_editor_read_line(OoshShell *shell, const char *prompt, char *out, size_t out_size);
+OoshLineReadStatus oosh_line_editor_read_line(
+  OoshShell *shell,
+  const char *prompt,
+  const char *prompt_continue,
+  OoshLineEditorNeedsMoreFn needs_more,
+  char *out,
+  size_t out_size
+);
 
 #ifdef __cplusplus
 }

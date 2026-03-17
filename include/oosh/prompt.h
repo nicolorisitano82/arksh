@@ -32,6 +32,7 @@ typedef struct {
   size_t style_count;
   char plugins[OOSH_MAX_PLUGIN_PATHS][OOSH_MAX_PATH];
   size_t plugin_count;
+  char continuation[64];
 } OoshPromptConfig;
 
 void oosh_prompt_config_init(OoshPromptConfig *config);
