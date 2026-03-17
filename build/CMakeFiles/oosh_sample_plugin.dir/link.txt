@@ -1,0 +1,1 @@
+/usr/bin/cc  -arch arm64 -bundle -Wl,-headerpad_max_install_names -L/opt/homebrew/opt/node@16/lib -undefined dynamic_lookup -o oosh_sample_plugin.dylib CMakeFiles/oosh_sample_plugin.dir/plugins/sample/sample_plugin.c.o

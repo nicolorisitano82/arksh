@@ -1,0 +1,4 @@
+./oosh_test_count_lines <<EOF
+one
+two
+EOF
