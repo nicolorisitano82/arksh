@@ -1,0 +1,4 @@
+./oosh_test_echo_stdin <<-EOF
+	one
+	two
+EOF

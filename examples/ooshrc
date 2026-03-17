@@ -1,0 +1,6 @@
+# Example startup file for oosh
+set PROJECT oosh
+set LIMIT 32
+export PROJECT_ROOT "$PWD"
+alias ll="ls -1"
+alias docs="ls docs"

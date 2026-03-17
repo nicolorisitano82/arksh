@@ -1,0 +1,1634 @@
+Start testing: Mar 17 21:21 CET
+----------------------------------------------------------
+78/82 Testing: oosh_positional_count
+78/82 Test: oosh_positional_count
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/params/param-count.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_positional_count" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+3
+<end of output>
+Test time =   0.39 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_positional_count" end time: Mar 17 21:21 CET
+"oosh_positional_count" time elapsed: 00:00:00
+----------------------------------------------------------
+
+82/82 Testing: oosh_positional_scope_restore
+82/82 Test: oosh_positional_scope_restore
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/params/scope-restore.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_positional_scope_restore" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+type=path
+path=/Users/nicolo/Desktop/oosh/build/arg
+name=arg
+exists=false
+size=0
+hidden=false
+readable=false
+writable=false
+0
+<end of output>
+Test time =   0.40 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_positional_scope_restore" end time: Mar 17 21:21 CET
+"oosh_positional_scope_restore" time elapsed: 00:00:00
+----------------------------------------------------------
+
+79/82 Testing: oosh_positional_all
+79/82 Test: oosh_positional_all
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/params/param-all.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_positional_all" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+type=path
+path=/Users/nicolo/Desktop/oosh/build/alpha beta gamma
+name=alpha beta gamma
+exists=false
+size=0
+hidden=false
+readable=false
+writable=false
+<end of output>
+Test time =   0.38 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_positional_all" end time: Mar 17 21:21 CET
+"oosh_positional_all" time elapsed: 00:00:00
+----------------------------------------------------------
+
+77/82 Testing: oosh_positional_in_function
+77/82 Test: oosh_positional_in_function
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/params/positional-in-function.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_positional_in_function" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+world doctor
+<end of output>
+Test time =   0.38 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_positional_in_function" end time: Mar 17 21:21 CET
+"oosh_positional_in_function" time elapsed: 00:00:00
+----------------------------------------------------------
+
+81/82 Testing: oosh_positional_source_args
+81/82 Test: oosh_positional_source_args
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/params/source-params.oosh hello"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_positional_source_args" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+type=path
+path=/Users/nicolo/Desktop/oosh/build/hello
+name=hello
+exists=false
+size=0
+hidden=false
+readable=false
+writable=false
+1
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_positional_source_args" end time: Mar 17 21:21 CET
+"oosh_positional_source_args" time elapsed: 00:00:00
+----------------------------------------------------------
+
+80/82 Testing: oosh_positional_shell_pid
+80/82 Test: oosh_positional_shell_pid
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "text("%s") -> print("$$")"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_positional_shell_pid" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+53783
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_positional_shell_pid" end time: Mar 17 21:21 CET
+"oosh_positional_shell_pid" time elapsed: 00:00:00
+----------------------------------------------------------
+
+54/82 Testing: oosh_group_heredoc_tail
+54/82 Test: oosh_group_heredoc_tail
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/heredoc/group-tail.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_group_heredoc_tail" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+hello
+<end of output>
+Test time =   0.21 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[hello]
+"oosh_group_heredoc_tail" end time: Mar 17 21:21 CET
+"oosh_group_heredoc_tail" time elapsed: 00:00:00
+----------------------------------------------------------
+
+55/82 Testing: oosh_subshell_heredoc_tail
+55/82 Test: oosh_subshell_heredoc_tail
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/heredoc/subshell-tail.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_subshell_heredoc_tail" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+hello
+<end of output>
+Test time =   1.35 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[hello]
+"oosh_subshell_heredoc_tail" end time: Mar 17 21:21 CET
+"oosh_subshell_heredoc_tail" time elapsed: 00:00:01
+----------------------------------------------------------
+
+64/82 Testing: oosh_group_input_redirection
+64/82 Test: oosh_group_input_redirection
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "{ ./oosh_test_count_lines ; } < /Users/nicolo/Desktop/oosh/tests/fixtures/heredoc/basic.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_group_input_redirection" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+4
+<end of output>
+Test time =   0.50 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[4]
+"oosh_group_input_redirection" end time: Mar 17 21:21 CET
+"oosh_group_input_redirection" time elapsed: 00:00:00
+----------------------------------------------------------
+
+52/82 Testing: oosh_heredoc_preserve_blank_and_comment
+52/82 Test: oosh_heredoc_preserve_blank_and_comment
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/heredoc/preserve-blank-and-comment.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_heredoc_preserve_blank_and_comment" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+one
+
+#kept
+three
+<end of output>
+Test time =   0.16 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[one[
+]+[
+]+#kept[
+]+three]
+"oosh_heredoc_preserve_blank_and_comment" end time: Mar 17 21:21 CET
+"oosh_heredoc_preserve_blank_and_comment" time elapsed: 00:00:00
+----------------------------------------------------------
+
+65/82 Testing: oosh_subshell_input_redirection
+65/82 Test: oosh_subshell_input_redirection
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "( ./oosh_test_count_lines ) < /Users/nicolo/Desktop/oosh/tests/fixtures/heredoc/basic.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_subshell_input_redirection" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+4
+<end of output>
+Test time =   1.62 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[4]
+"oosh_subshell_input_redirection" end time: Mar 17 21:21 CET
+"oosh_subshell_input_redirection" time elapsed: 00:00:01
+----------------------------------------------------------
+
+53/82 Testing: oosh_inline_if_heredoc
+53/82 Test: oosh_inline_if_heredoc
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/heredoc/inline-if.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_inline_if_heredoc" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+hello
+<end of output>
+Test time =   0.17 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[hello]
+"oosh_inline_if_heredoc" end time: Mar 17 21:21 CET
+"oosh_inline_if_heredoc" time elapsed: 00:00:00
+----------------------------------------------------------
+
+47/82 Testing: oosh_wait_builtin
+47/82 Test: oosh_wait_builtin
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" ""./oosh_test_pause" 0 & wait %1"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_wait_builtin" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+[1] running pid=53793 "./oosh_test_pause" 0
+<end of output>
+Test time =   0.44 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_wait_builtin" end time: Mar 17 21:21 CET
+"oosh_wait_builtin" time elapsed: 00:00:00
+----------------------------------------------------------
+
+50/82 Testing: oosh_heredoc_strip_tabs
+50/82 Test: oosh_heredoc_strip_tabs
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/heredoc/strip-tabs.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_heredoc_strip_tabs" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+one
+two
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[one[
+]+two]
+"oosh_heredoc_strip_tabs" end time: Mar 17 21:21 CET
+"oosh_heredoc_strip_tabs" time elapsed: 00:00:00
+----------------------------------------------------------
+
+49/82 Testing: oosh_heredoc_basic
+49/82 Test: oosh_heredoc_basic
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/heredoc/basic.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_heredoc_basic" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+2
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[2]
+"oosh_heredoc_basic" end time: Mar 17 21:21 CET
+"oosh_heredoc_basic" time elapsed: 00:00:00
+----------------------------------------------------------
+
+56/82 Testing: oosh_fd_redirect_output_dup
+56/82 Test: oosh_fd_redirect_output_dup
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" ""./oosh_test_emit_args" hello 3> fd3.out 1>&3 ; fd3.out -> read_text(64)"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_fd_redirect_output_dup" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+hello
+<end of output>
+Test time =   0.48 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[hello]
+"oosh_fd_redirect_output_dup" end time: Mar 17 21:21 CET
+"oosh_fd_redirect_output_dup" time elapsed: 00:00:00
+----------------------------------------------------------
+
+57/82 Testing: oosh_fd_redirect_input_dup
+57/82 Test: oosh_fd_redirect_input_dup
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" ""./oosh_test_emit_args" left right > fdin.txt ; "./oosh_test_count_lines" 3< fdin.txt 0<&3"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_fd_redirect_input_dup" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+2
+<end of output>
+Test time =   0.21 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[2]
+"oosh_fd_redirect_input_dup" end time: Mar 17 21:21 CET
+"oosh_fd_redirect_input_dup" time elapsed: 00:00:00
+----------------------------------------------------------
+
+51/82 Testing: oosh_heredoc_pipeline
+51/82 Test: oosh_heredoc_pipeline
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/heredoc/pipeline.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_heredoc_pipeline" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+2
+<end of output>
+Test time =   0.17 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[2]
+"oosh_heredoc_pipeline" end time: Mar 17 21:21 CET
+"oosh_heredoc_pipeline" time elapsed: 00:00:00
+----------------------------------------------------------
+
+24/82 Testing: oosh_background_job
+24/82 Test: oosh_background_job
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" ""./oosh_test_pause" 1 & jobs"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_background_job" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+[1] running pid=53789 "./oosh_test_pause" 1
+[1] running pid=53789 "./oosh_test_pause" 1
+<end of output>
+Test time =   1.58 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_background_job" end time: Mar 17 21:21 CET
+"oosh_background_job" time elapsed: 00:00:01
+----------------------------------------------------------
+
+63/82 Testing: oosh_subshell_redirection
+63/82 Test: oosh_subshell_redirection
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "( text("isolated") -> print() ) > subshell_scope.out ; subshell_scope.out -> read_text(32)"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_subshell_redirection" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+isolated
+<end of output>
+Test time =   0.73 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[isolated]
+"oosh_subshell_redirection" end time: Mar 17 21:21 CET
+"oosh_subshell_redirection" time elapsed: 00:00:00
+----------------------------------------------------------
+
+59/82 Testing: oosh_subshell_binding_scope
+59/82 Test: oosh_subshell_binding_scope
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "let flavor = text("vanilla") ; ( let flavor = text("mint") ) ; flavor -> value"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_subshell_binding_scope" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+vanilla
+<end of output>
+Test time =   0.75 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[vanilla]
+"oosh_subshell_binding_scope" end time: Mar 17 21:21 CET
+"oosh_subshell_binding_scope" time elapsed: 00:00:00
+----------------------------------------------------------
+
+61/82 Testing: oosh_subshell_env_scope
+61/82 Test: oosh_subshell_env_scope
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "set MODE outer ; ( set MODE inner ) ; text("%s") -> print("$MODE")"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_subshell_env_scope" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+outer
+<end of output>
+Test time =   0.74 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[outer]
+"oosh_subshell_env_scope" end time: Mar 17 21:21 CET
+"oosh_subshell_env_scope" time elapsed: 00:00:00
+----------------------------------------------------------
+
+28/82 Testing: oosh_case_builtins_script
+28/82 Test: oosh_case_builtins_script
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/examples/scripts/07-case-and-builtins.oosh"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_case_builtins_script" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+until-once
+text-file
+eval-ok
+script-end
+exit-trap
+<end of output>
+Test time =   0.28 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[until-once[
+]+text-file[
+]+eval-ok[
+]+script-end[
+]+exit-trap]
+"oosh_case_builtins_script" end time: Mar 17 21:21 CET
+"oosh_case_builtins_script" time elapsed: 00:00:00
+----------------------------------------------------------
+
+42/82 Testing: oosh_case_exact
+42/82 Test: oosh_case_exact
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "case text("directory") in directory) text("dir") -> print() ;; *) text("other") -> print() ;; esac"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_case_exact" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+dir
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[dir]
+"oosh_case_exact" end time: Mar 17 21:21 CET
+"oosh_case_exact" time elapsed: 00:00:00
+----------------------------------------------------------
+
+45/82 Testing: oosh_eval_builtin
+45/82 Test: oosh_eval_builtin
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "eval "text(\"hi\") -> print()""
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_eval_builtin" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+hi
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[hi]
+"oosh_eval_builtin" end time: Mar 17 21:21 CET
+"oosh_eval_builtin" time elapsed: 00:00:00
+----------------------------------------------------------
+
+46/82 Testing: oosh_exec_builtin
+46/82 Test: oosh_exec_builtin
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "exec "./oosh_test_emit_args" hello world"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_exec_builtin" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+hello
+world
+<end of output>
+Test time =   0.16 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[hello[
+]+world]
+"oosh_exec_builtin" end time: Mar 17 21:21 CET
+"oosh_exec_builtin" time elapsed: 00:00:00
+----------------------------------------------------------
+
+48/82 Testing: oosh_trap_exit
+48/82 Test: oosh_trap_exit
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "trap "text(\"bye\") -> print()" EXIT ; text("run") -> print()"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_trap_exit" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+run
+bye
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[run[
+]+bye]
+"oosh_trap_exit" end time: Mar 17 21:21 CET
+"oosh_trap_exit" time elapsed: 00:00:00
+----------------------------------------------------------
+
+43/82 Testing: oosh_case_wildcard
+43/82 Test: oosh_case_wildcard
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "case text("demo.txt") in *.md) text("md") -> print() ;; *.txt) text("txt") -> print() ;; esac"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_case_wildcard" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+txt
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[txt]
+"oosh_case_wildcard" end time: Mar 17 21:21 CET
+"oosh_case_wildcard" time elapsed: 00:00:00
+----------------------------------------------------------
+
+41/82 Testing: oosh_until_command
+41/82 Test: oosh_until_command
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "until true ; do text("retry") -> print() ; done"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_until_command" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_until_command" end time: Mar 17 21:21 CET
+"oosh_until_command" time elapsed: 00:00:00
+----------------------------------------------------------
+
+44/82 Testing: oosh_case_alternatives
+44/82 Test: oosh_case_alternatives
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "case text("blue") in red|green) text("warm") -> print() ;; blue|cyan) text("cool") -> print() ;; esac"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_case_alternatives" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+cool
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[cool]
+"oosh_case_alternatives" end time: Mar 17 21:21 CET
+"oosh_case_alternatives" time elapsed: 00:00:00
+----------------------------------------------------------
+
+40/82 Testing: oosh_return_invalid
+40/82 Test: oosh_return_invalid
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "return text("x") || true"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_return_invalid" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+return is only valid inside shell functions
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[return is only valid inside shell functions]
+"oosh_return_invalid" end time: Mar 17 21:21 CET
+"oosh_return_invalid" time elapsed: 00:00:00
+----------------------------------------------------------
+
+39/82 Testing: oosh_continue_invalid
+39/82 Test: oosh_continue_invalid
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "continue || true"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_continue_invalid" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+continue is only valid inside loops
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[continue is only valid inside loops]
+"oosh_continue_invalid" end time: Mar 17 21:21 CET
+"oosh_continue_invalid" time elapsed: 00:00:00
+----------------------------------------------------------
+
+38/82 Testing: oosh_break_invalid
+38/82 Test: oosh_break_invalid
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "break || true"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_break_invalid" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+break is only valid inside loops
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[break is only valid inside loops]
+"oosh_break_invalid" end time: Mar 17 21:21 CET
+"oosh_break_invalid" time elapsed: 00:00:00
+----------------------------------------------------------
+
+36/82 Testing: oosh_function_return
+36/82 Test: oosh_function_return
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/functions/return.oosh"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_function_return" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+hi
+<end of output>
+Test time =   0.16 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[hi]
+"oosh_function_return" end time: Mar 17 21:21 CET
+"oosh_function_return" time elapsed: 00:00:00
+----------------------------------------------------------
+
+34/82 Testing: oosh_break_nested
+34/82 Test: oosh_break_nested
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "while true ; do while true ; do text("once") -> print() ; break 2 ; done ; done"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_break_nested" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+once
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[once]
+"oosh_break_nested" end time: Mar 17 21:21 CET
+"oosh_break_nested" time elapsed: 00:00:00
+----------------------------------------------------------
+
+35/82 Testing: oosh_continue_nested
+35/82 Test: oosh_continue_nested
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "for outer in list(1, 2) ; do while true ; do outer -> print() ; continue 2 ; done ; done"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_continue_nested" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+1
+2
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[1[
+]+2]
+"oosh_continue_nested" end time: Mar 17 21:21 CET
+"oosh_continue_nested" time elapsed: 00:00:00
+----------------------------------------------------------
+
+37/82 Testing: oosh_function_return_from_loop
+37/82 Test: oosh_function_return_from_loop
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/functions/return-from-loop.oosh"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_function_return_from_loop" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+1
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[1]
+"oosh_function_return_from_loop" end time: Mar 17 21:21 CET
+"oosh_function_return_from_loop" time elapsed: 00:00:00
+----------------------------------------------------------
+
+58/82 Testing: oosh_group_binding_scope
+58/82 Test: oosh_group_binding_scope
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "{ let flavor = text("mint") ; } ; flavor -> value"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_group_binding_scope" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+mint
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[mint]
+"oosh_group_binding_scope" end time: Mar 17 21:21 CET
+"oosh_group_binding_scope" time elapsed: 00:00:00
+----------------------------------------------------------
+
+62/82 Testing: oosh_group_redirection
+62/82 Test: oosh_group_redirection
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "{ text("grouped") -> print() ; } > group_scope.out ; group_scope.out -> read_text(32)"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_group_redirection" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+grouped
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[grouped]
+"oosh_group_redirection" end time: Mar 17 21:21 CET
+"oosh_group_redirection" time elapsed: 00:00:00
+----------------------------------------------------------
+
+60/82 Testing: oosh_group_env_scope
+60/82 Test: oosh_group_env_scope
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "{ set MODE grouped ; } ; text("%s") -> print("$MODE")"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_group_env_scope" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+grouped
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[grouped]
+"oosh_group_env_scope" end time: Mar 17 21:21 CET
+"oosh_group_env_scope" time elapsed: 00:00:00
+----------------------------------------------------------
+
+69/82 Testing: oosh_class_introspection
+69/82 Test: oosh_class_introspection
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/classes/introspection.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_class_introspection" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+true
+Child
+1
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[true[
+]+Child[
+]+1]
+"oosh_class_introspection" end time: Mar 17 21:21 CET
+"oosh_class_introspection" time elapsed: 00:00:00
+----------------------------------------------------------
+
+67/82 Testing: oosh_class_init_inheritance
+67/82 Test: oosh_class_init_inheritance
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/classes/init-and-inheritance.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_class_init_inheritance" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+readme
+<end of output>
+Test time =   0.16 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[readme]
+"oosh_class_init_inheritance" end time: Mar 17 21:21 CET
+"oosh_class_init_inheritance" time elapsed: 00:00:00
+----------------------------------------------------------
+
+68/82 Testing: oosh_class_multiple_inheritance
+68/82 Test: oosh_class_multiple_inheritance
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/classes/multiple-inheritance.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_class_multiple_inheritance" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+left
+<end of output>
+Test time =   0.16 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[left]
+"oosh_class_multiple_inheritance" end time: Mar 17 21:21 CET
+"oosh_class_multiple_inheritance" time elapsed: 00:00:00
+----------------------------------------------------------
+
+66/82 Testing: oosh_class_basic
+66/82 Test: oosh_class_basic
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/classes/basic.oosh"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_class_basic" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+animal
+<end of output>
+Test time =   0.16 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[animal]
+"oosh_class_basic" end time: Mar 17 21:21 CET
+"oosh_class_basic" time elapsed: 00:00:00
+----------------------------------------------------------
+
+27/82 Testing: oosh_function_script
+27/82 Test: oosh_function_script
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/examples/scripts/05-shell-functions.oosh"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_function_script" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+function greet(name)
+do
+text("ciao %s") -> print(name)
+endfunction
+pair is a shell function
+ciao nicolo
+shell:demo
+fast
+<end of output>
+Test time =   0.16 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[ciao nicolo]
+"oosh_function_script" end time: Mar 17 21:21 CET
+"oosh_function_script" time elapsed: 00:00:00
+----------------------------------------------------------
+
+31/82 Testing: oosh_function_basic
+31/82 Test: oosh_function_basic
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/functions/basic.oosh"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_function_basic" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+hi nicolo
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[hi nicolo]
+"oosh_function_basic" end time: Mar 17 21:21 CET
+"oosh_function_basic" time elapsed: 00:00:00
+----------------------------------------------------------
+
+33/82 Testing: oosh_function_scope
+33/82 Test: oosh_function_scope
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/functions/scope.oosh"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_function_scope" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+inner
+outer
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[outer]
+"oosh_function_scope" end time: Mar 17 21:21 CET
+"oosh_function_scope" time elapsed: 00:00:00
+----------------------------------------------------------
+
+32/82 Testing: oosh_function_redefine
+32/82 Test: oosh_function_redefine
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/tests/fixtures/functions/redefine.oosh"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_function_redefine" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+two:demo
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[two:demo]
+"oosh_function_redefine" end time: Mar 17 21:21 CET
+"oosh_function_redefine" time elapsed: 00:00:00
+----------------------------------------------------------
+
+9/82 Testing: oosh_command_substitution
+9/82 Test: oosh_command_substitution
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" ""./oosh_test_emit_args" $(pwd)"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_command_substitution" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+/Users/nicolo/Desktop/oosh/build
+<end of output>
+Test time =   0.36 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_command_substitution" end time: Mar 17 21:21 CET
+"oosh_command_substitution" time elapsed: 00:00:00
+----------------------------------------------------------
+
+20/82 Testing: oosh_switch_match
+20/82 Test: oosh_switch_match
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "switch 2 ; case 1 ; then text("one") -> print() ; case 2 ; then text("two") -> print() ; default ; then text("other") -> print() ; endswitch"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_switch_match" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+two
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[two]
+"oosh_switch_match" end time: Mar 17 21:21 CET
+"oosh_switch_match" time elapsed: 00:00:00
+----------------------------------------------------------
+
+23/82 Testing: oosh_block_local_scope_restore
+23/82 Test: oosh_block_local_scope_restore
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "let next = 99 ; let sum = list(1, 2) |> reduce(number(0), [:acc :n | local next = acc + n ; next]) ; text("%v") -> print(next)"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_block_local_scope_restore" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+99
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[99]
+"oosh_block_local_scope_restore" end time: Mar 17 21:21 CET
+"oosh_block_local_scope_restore" time elapsed: 00:00:00
+----------------------------------------------------------
+
+22/82 Testing: oosh_block_local_reduce
+22/82 Test: oosh_block_local_reduce
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "list(1, 2, 3) |> reduce(number(0), [:acc :n | local next = acc + n ; next])"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_block_local_reduce" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+6
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[6]
+"oosh_block_local_reduce" end time: Mar 17 21:21 CET
+"oosh_block_local_reduce" time elapsed: 00:00:00
+----------------------------------------------------------
+
+21/82 Testing: oosh_switch_default
+21/82 Test: oosh_switch_default
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "switch "missing" ; case "one" ; then text("one") -> print() ; default ; then text("fallback") -> print() ; endswitch"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_switch_default" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+fallback
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[fallback]
+"oosh_switch_default" end time: Mar 17 21:21 CET
+"oosh_switch_default" time elapsed: 00:00:00
+----------------------------------------------------------
+
+17/82 Testing: oosh_ternary_false
+17/82 Test: oosh_ternary_false
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "1 == 2 ? "yes" : "no""
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_ternary_false" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+no
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[no]
+"oosh_ternary_false" end time: Mar 17 21:21 CET
+"oosh_ternary_false" time elapsed: 00:00:00
+----------------------------------------------------------
+
+71/82 Testing: oosh_print_format_method
+71/82 Test: oosh_print_format_method
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "text("%s:%d") -> print("file", 3)"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_print_format_method" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+file:3
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[file:3]
+"oosh_print_format_method" end time: Mar 17 21:21 CET
+"oosh_print_format_method" time elapsed: 00:00:00
+----------------------------------------------------------
+
+16/82 Testing: oosh_ternary_true
+16/82 Test: oosh_ternary_true
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "bool(true) ? "yes" : "no""
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_ternary_true" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+yes
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[yes]
+"oosh_ternary_true" end time: Mar 17 21:21 CET
+"oosh_ternary_true" time elapsed: 00:00:00
+----------------------------------------------------------
+
+70/82 Testing: oosh_print_method
+70/82 Test: oosh_print_method
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "text("hello") -> print()"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_print_method" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+hello
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[hello]
+"oosh_print_method" end time: Mar 17 21:21 CET
+"oosh_print_method" time elapsed: 00:00:00
+----------------------------------------------------------
+
+73/82 Testing: oosh_shell_namespace
+73/82 Test: oosh_shell_namespace
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "shell() -> plugins |> count()"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_shell_namespace" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+0
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[0]
+"oosh_shell_namespace" end time: Mar 17 21:21 CET
+"oosh_shell_namespace" time elapsed: 00:00:00
+----------------------------------------------------------
+
+72/82 Testing: oosh_proc_namespace
+72/82 Test: oosh_proc_namespace
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "proc() -> pid"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_proc_namespace" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+53852
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[[0-9]+]
+"oosh_proc_namespace" end time: Mar 17 21:21 CET
+"oosh_proc_namespace" time elapsed: 00:00:00
+----------------------------------------------------------
+
+74/82 Testing: oosh_nested_json_roundtrip
+74/82 Test: oosh_nested_json_roundtrip
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "tests/fixtures/json/nested.json -> read_json() |> to_json()"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_nested_json_roundtrip" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+{"a":[1,2,{"b":true}],"name":"demo"}
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[\{"a":\[1,2,\{"b":true\}\],"name":"demo"\}]
+"oosh_nested_json_roundtrip" end time: Mar 17 21:21 CET
+"oosh_nested_json_roundtrip" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/82 Testing: oosh_glob_command_args
+7/82 Test: oosh_glob_command_args
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" ""./oosh_test_emit_args" tests/fixtures/glob/*.fixture | "./oosh_test_count_lines""
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_glob_command_args" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+2
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[2]
+"oosh_glob_command_args" end time: Mar 17 21:21 CET
+"oosh_glob_command_args" time elapsed: 00:00:00
+----------------------------------------------------------
+
+26/82 Testing: oosh_control_flow_script
+26/82 Test: oosh_control_flow_script
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/examples/scripts/04-control-flow.oosh"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_control_flow_script" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+workspace-ok
+CMakeLists.txt
+plugins
+include
+tests
+.claude
+docs
+README.md
+examples
+build
+.git
+build-asan
+src
+fallback
+ternary-yes
+directory
+loop-once
+1
+2
+continue-ok
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_control_flow_script" end time: Mar 17 21:21 CET
+"oosh_control_flow_script" time elapsed: 00:00:00
+----------------------------------------------------------
+
+76/82 Testing: oosh_plugin_pipeline_stage
+76/82 Test: oosh_plugin_pipeline_stage
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "plugin load oosh_sample_plugin.dylib ; text("ciao") |> sample_wrap()"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_plugin_pipeline_stage" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+plugin loaded: sample-plugin (/Users/nicolo/Desktop/oosh/build/oosh_sample_plugin.dylib)
+sample:ciao
+<end of output>
+Test time =   0.29 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[sample:ciao]
+"oosh_plugin_pipeline_stage" end time: Mar 17 21:21 CET
+"oosh_plugin_pipeline_stage" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/82 Testing: oosh_external_command
+5/82 Test: oosh_external_command
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" ""./oosh_test_emit_args" hello"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_external_command" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+hello
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[hello]
+"oosh_external_command" end time: Mar 17 21:21 CET
+"oosh_external_command" time elapsed: 00:00:00
+----------------------------------------------------------
+
+75/82 Testing: oosh_plugin_value_resolver
+75/82 Test: oosh_plugin_value_resolver
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "plugin load oosh_sample_plugin.dylib ; sample() -> name"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_plugin_value_resolver" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+plugin loaded: sample-plugin (/Users/nicolo/Desktop/oosh/build/oosh_sample_plugin.dylib)
+sample-plugin
+<end of output>
+Test time =   0.44 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[sample-plugin]
+"oosh_plugin_value_resolver" end time: Mar 17 21:21 CET
+"oosh_plugin_value_resolver" time elapsed: 00:00:00
+----------------------------------------------------------
+
+14/82 Testing: oosh_if_command
+14/82 Test: oosh_if_command
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "if true ; then "./oosh_test_emit_args" ok ; fi"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_if_command" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+ok
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[ok]
+"oosh_if_command" end time: Mar 17 21:21 CET
+"oosh_if_command" time elapsed: 00:00:00
+----------------------------------------------------------
+
+19/82 Testing: oosh_for_command
+19/82 Test: oosh_for_command
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "for n in list(1, 2, 3) ; do n -> value ; done"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_for_command" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+1
+2
+3
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_for_command" end time: Mar 17 21:21 CET
+"oosh_for_command" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/82 Testing: oosh_env_expansion
+8/82 Test: oosh_env_expansion
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" ""./oosh_test_emit_args" "$PWD""
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_env_expansion" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+/Users/nicolo/Desktop/oosh/build
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_env_expansion" end time: Mar 17 21:21 CET
+"oosh_env_expansion" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/82 Testing: oosh_shell_pipeline
+6/82 Test: oosh_shell_pipeline
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" ""./oosh_test_emit_args" alpha beta | "./oosh_test_count_lines""
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_shell_pipeline" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+2
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[2]
+"oosh_shell_pipeline" end time: Mar 17 21:21 CET
+"oosh_shell_pipeline" time elapsed: 00:00:00
+----------------------------------------------------------
+
+15/82 Testing: oosh_if_value_condition
+15/82 Test: oosh_if_value_condition
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "if bool(false) ; then false ; else true ; fi"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_if_value_condition" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_if_value_condition" end time: Mar 17 21:21 CET
+"oosh_if_value_condition" time elapsed: 00:00:00
+----------------------------------------------------------
+
+18/82 Testing: oosh_while_command
+18/82 Test: oosh_while_command
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "while false ; do true ; done"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_while_command" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_while_command" end time: Mar 17 21:21 CET
+"oosh_while_command" time elapsed: 00:00:00
+----------------------------------------------------------
+
+12/82 Testing: oosh_and_operator
+12/82 Test: oosh_and_operator
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "true && true"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_and_operator" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_and_operator" end time: Mar 17 21:21 CET
+"oosh_and_operator" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/82 Testing: oosh_human_object_type
+3/82 Test: oosh_human_object_type
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" ". -> type"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_human_object_type" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+directory
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_human_object_type" end time: Mar 17 21:21 CET
+"oosh_human_object_type" time elapsed: 00:00:00
+----------------------------------------------------------
+
+10/82 Testing: oosh_history_builtin
+10/82 Test: oosh_history_builtin
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "history"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_history_builtin" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+   1  ls
+   2  cd ..
+   3  ls
+   4  cd ..
+   5  ls
+   6  pwd
+   7  exit
+   8  . -> type
+   9  . -> help
+  10  . -> list
+  11  exit
+  12  help
+  13  ls -l
+  14  ls -l ->
+  15  (ls -l) ->
+  16  let rows = capture_lines("ls -l")
+  17  rows |> each(length)
+  18  capture("ls -l") |> lines() |> each(length)
+  19  exit
+  20  ls
+  21  help
+  22  . -> children()
+  23  . -> children() --> each(2)
+  24  . -> children() --> print()
+  25  . -> children() --> type
+  26  . -> children()
+  27  . -> children() |> where(type == "file") |> each([:it | it -> read_text()])
+  28  exit
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_history_builtin" end time: Mar 17 21:21 CET
+"oosh_history_builtin" time elapsed: 00:00:00
+----------------------------------------------------------
+
+25/82 Testing: oosh_source_file
+25/82 Test: oosh_source_file
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "source /Users/nicolo/Desktop/oosh/examples/ooshrc"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_source_file" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_source_file" end time: Mar 17 21:21 CET
+"oosh_source_file" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/82 Testing: oosh_or_operator
+13/82 Test: oosh_or_operator
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "false || true"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_or_operator" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_or_operator" end time: Mar 17 21:21 CET
+"oosh_or_operator" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/82 Testing: oosh_pipeline_count
+4/82 Test: oosh_pipeline_count
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" ". -> children() |> count()"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_pipeline_count" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+22
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_pipeline_count" end time: Mar 17 21:21 CET
+"oosh_pipeline_count" time elapsed: 00:00:00
+----------------------------------------------------------
+
+11/82 Testing: oosh_sequence_operator
+11/82 Test: oosh_sequence_operator
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "true ; true"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_sequence_operator" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_sequence_operator" end time: Mar 17 21:21 CET
+"oosh_sequence_operator" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/82 Testing: oosh_object_type
+2/82 Test: oosh_object_type
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "obj(".").type"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_object_type" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+string
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_object_type" end time: Mar 17 21:21 CET
+"oosh_object_type" time elapsed: 00:00:00
+----------------------------------------------------------
+
+1/82 Testing: oosh_help
+1/82 Test: oosh_help
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "help"
+Directory: /Users/nicolo/Desktop/oosh/build
+"oosh_help" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+Commands:
+  help         show commands and expression syntax
+  exit         terminate the shell
+  quit         terminate the shell
+  pwd          print current directory
+  cd           change current directory
+  set          list or assign shell variables
+  export       mark a shell variable for child processes
+  let          list or create typed value bindings
+  function     list or inspect shell functions
+  functions    list or inspect shell functions
+  class        list defined classes
+  classes      list or inspect defined classes
+  extend       list or define object/value extensions
+  unset        remove shell variables
+  alias        list or define aliases
+  unalias      remove aliases
+  source       execute commands from a file
+  .            execute commands from a file
+  type         show how a command name resolves
+  history      show interactive command history
+  jobs         list background jobs with state and pid
+  fg           resume or wait for a background job in the foreground
+  bg           resume a stopped background job
+  wait         wait for background jobs to complete
+  eval         evaluate a command string in the current shell
+  exec         run an external command and terminate the current shell
+  trap         list or define shell exit traps
+  true         return success
+  false        return failure
+  break        exit the current loop or an outer loop
+  continue     skip to the next loop iteration
+  return       exit the current shell function
+  inspect      print object metadata for a path
+  get          read an object property
+  call         invoke an object method
+  prompt       show or load prompt configuration
+  plugin       load, inspect or toggle plugins
+  run          execute an external command natively
+
+Shell State:
+  set PROJECT oosh
+  export PROJECT_ROOT "$PWD"
+  alias ll="ls -lah"
+  let files = . -> children()
+  let is_file = [:it | it -> type == "file"]
+  function greet(name) do
+    text("hello %s") -> print(name)
+  endfunction
+  class Named do
+    property name = text("unnamed")
+    method rename = [:self :next | self -> set("name", next)]
+  endclass
+  class Document extends Named do
+    method init = [:self :name | self -> set("name", name)]
+  endclass
+  extend directory property child_count = [:it | it -> children() |> count()]
+  extend object method label = [:it :prefix | prefix]
+  let
+  function
+  functions greet
+  class
+  classes Document
+  extend
+  history
+  sleep 5 &
+  jobs
+  fg
+  bg
+  wait %1
+  eval "text(\"hello\") -> print()"
+  trap "text(\"bye\") -> print()" EXIT
+  true && text("ok") -> print()
+  bool(true) ? "yes" : "no"
+  if true ; then text("ok") -> print() ; fi
+  until true ; do text("retry") -> print() ; done
+  case . -> type in directory) text("dir") -> print() ;; *) text("other") -> print() ;; esac
+  switch . -> type ; case "directory" ; then text("dir") -> print() ; default ; then text("other") -> print() ; endswitch
+  for entry in . -> children() |> take(3) ; do entry -> name ; done
+  greet team
+  source ~/.ooshrc
+  type ls
+  plugin list
+  plugin disable sample-plugin
+  plugin enable sample-plugin
+
+Interactive Keys:
+  arrows to move and browse history
+  tab for command/path completion and -> member hints
+  ctrl-a / ctrl-e to jump line bounds
+  ctrl-z to stop a foreground job on POSIX
+
+Expressions:
+  . -> type
+  . -> children()
+  README.md -> read_text(256)
+  data.json -> read_json()
+  text("hello")
+  bool(true) ? "yes" : "no"
+  text("%s") -> print("hello")
+  env() -> HOME
+  proc() -> pid
+  shell() -> plugins |> count()
+  list(1, 2, "three")
+  capture("pwd")
+  [:it | it -> name]
+  [:n | local next = n + 1 ; next]
+  Document(text("readme")) -> type
+  Document(text("readme")) -> isa("Named")
+  is_file -> arity
+  obj(".").type   [legacy]
+
+Object Pipelines:
+  . -> children() |> where(type == "file") |> sort(size desc)
+  . -> children() |> where(type == "file") |> take(5)
+  . -> children() |> first()
+  . -> children() |> each(name) |> take(5)
+  . -> children() |> where(is_file) |> each([:it | it -> name])
+  . -> child_count
+  capture("pwd") |> lines() |> first()
+  text(" a, b , c ") |> trim() |> split(",") |> join(" | ")
+  list(1, 2, 3) |> reduce(number(0), [:acc :n | local next = acc + n ; next])
+  list(1, 2, 3) |> reduce(number(0), [:acc :n | acc + n])
+  list(1, 2, 3) |> to_json()
+  map("a", list(1, 2, map("b", true))) |> to_json()
+  list(1, 20, 3) |> sort(value desc)
+  plugin load build/oosh_sample_plugin.dylib ; sample() -> name
+  plugin load build/oosh_sample_plugin.dylib ; text("ciao") |> sample_wrap()
+
+Shell Pipelines:
+  ls -1 | wc -l
+  ls include > out.txt
+  cat < README.md | grep oosh
+  ls missing 2>&1 | wc -l
+  ./build/oosh_test_count_lines <<EOF
+one
+two
+EOF
+  ./build/oosh_test_emit_args hello 3> out.txt 1>&3
+
+Control Flow:
+  bool(true) ? "yes" : "no"
+  if bool(false) ; then text("no") -> print() ; else text("yes") -> print() ; fi
+  while false ; do text("no") -> print() ; done
+  until true ; do text("retry") -> print() ; done
+  for n in list(1, 2, 3) ; do n -> value ; done
+  case . -> type in directory) text("dir") -> print() ;; *) text("other") -> print() ;; esac
+  switch . -> type ; case "directory" ; then text("dir") -> print() ; default ; then text("other") -> print() ; endswitch
+  multiline blocks also work in REPL and source files
+
+Job Control:
+  sleep 30 &
+  jobs
+  fg %1
+  bg
+  wait %1
+
+Expansions:
+  cd ~
+  text("%s") -> print("$HOME")
+  text("%s") -> print($(pwd))
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_help" end time: Mar 17 21:21 CET
+"oosh_help" time elapsed: 00:00:00
+----------------------------------------------------------
+
+29/82 Testing: oosh_alias_rc
+29/82 Test: oosh_alias_rc
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "type ll"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_alias_rc" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+ll is an alias for ls -1
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_alias_rc" end time: Mar 17 21:21 CET
+"oosh_alias_rc" time elapsed: 00:00:00
+----------------------------------------------------------
+
+30/82 Testing: oosh_shell_var_precedence
+30/82 Test: oosh_shell_var_precedence
+Command: "/Users/nicolo/Desktop/oosh/build/oosh" "-c" "README.md -> read_text($LIMIT)"
+Directory: /Users/nicolo/Desktop/oosh
+"oosh_shell_var_precedence" start time: Mar 17 21:21 CET
+Output:
+----------------------------------------------------------
+# oosh
+
+`oosh` e uno skeleton in
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"oosh_shell_var_precedence" end time: Mar 17 21:21 CET
+"oosh_shell_var_precedence" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Mar 17 21:21 CET

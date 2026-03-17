@@ -1,0 +1,21 @@
+class Named do
+  property name = text("unnamed")
+  method rename = [:self :next | self -> set("name", next)]
+endclass
+
+class Timestamped do
+  property created_at = text("now")
+endclass
+
+class Document extends Named, Timestamped do
+  property kind = text("doc")
+  method init = [:self :name | self -> set("name", name)]
+  method label = [:self | text("%s:%s") -> print(self -> kind, self -> name)]
+endclass
+
+let doc = Document(text("manuale"))
+doc -> label()
+doc -> type
+doc -> isa("Named")
+doc -> properties
+classes Document

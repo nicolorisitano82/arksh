@@ -1,0 +1,6 @@
+class Animal do
+  property kind = text("animal")
+  method speak = [:self | self -> kind]
+endclass
+
+Animal() -> speak()

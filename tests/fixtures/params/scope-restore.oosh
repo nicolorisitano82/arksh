@@ -1,0 +1,6 @@
+function f(x) do
+text("%s") -> print($1)
+endfunction
+
+f arg
+text("%d") -> print($#)

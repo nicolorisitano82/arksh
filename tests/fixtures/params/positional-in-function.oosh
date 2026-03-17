@@ -1,0 +1,5 @@
+function greet(name, title) do
+text("$1 $2") -> print()
+endfunction
+
+greet world doctor

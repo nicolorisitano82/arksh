@@ -1,0 +1,4 @@
+./oosh_test_echo_stdin <<EOF | ./oosh_test_count_lines
+one
+two
+EOF

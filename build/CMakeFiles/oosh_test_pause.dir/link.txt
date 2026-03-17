@@ -1,0 +1,1 @@
+/usr/bin/cc  -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names -L/opt/homebrew/opt/node@16/lib CMakeFiles/oosh_test_pause.dir/tests/pause_seconds.c.o -o oosh_test_pause

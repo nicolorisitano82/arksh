@@ -1,0 +1,12 @@
+class Left do
+  property side = text("left")
+endclass
+
+class Right do
+  property side = text("right")
+endclass
+
+class Both extends Left, Right do
+endclass
+
+Both() -> side

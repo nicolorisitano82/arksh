@@ -1,0 +1,27 @@
+# oosh example 02
+# Valori, block, binding tipizzati ed estensioni definite nel linguaggio.
+
+let files = . -> children()
+let is_file = [:it | it -> type == "file"]
+let get_name = [:it | it -> name]
+let preview_block = [:it :limit | it -> read_text(limit)]
+let sum_with_local = [:acc :n | local next = acc + n ; next]
+
+# Mostra i binding attivi.
+let
+is_file -> type
+is_file -> arity
+is_file -> source
+
+# Usa block assegnati a variabili.
+files |> where(is_file) |> each(get_name) |> take(5)
+list(1, 2, 3) |> reduce(number(0), sum_with_local)
+
+# Aggiunge una proprieta e un metodo custom.
+extend directory property child_count = [:it | it -> children() |> count()]
+extend file method preview = [:it :limit | it -> read_text(limit)]
+extend
+
+# Usa i nuovi membri.
+. -> child_count
+README.md -> preview(96)
