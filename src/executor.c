@@ -318,6 +318,8 @@ typedef struct {
   size_t var_count;
   OoshValueBinding bindings[OOSH_MAX_VALUE_BINDINGS];
   size_t binding_count;
+  char positional_params[OOSH_MAX_POSITIONAL_PARAMS][OOSH_MAX_VAR_VALUE];
+  int positional_count;
 } OoshFunctionScopeSnapshot;
 
 typedef struct {
@@ -1292,6 +1294,11 @@ static int snapshot_function_scope(
     }
   }
 
+  snapshot->positional_count = shell->positional_count;
+  for (i = 0; i < (size_t) shell->positional_count && i < OOSH_MAX_POSITIONAL_PARAMS; ++i) {
+    copy_string(snapshot->positional_params[i], sizeof(snapshot->positional_params[i]), shell->positional_params[i]);
+  }
+
   return 0;
 }
 
@@ -1336,6 +1343,11 @@ static int restore_function_scope(
       return 1;
     }
     shell->binding_count++;
+  }
+
+  shell->positional_count = snapshot->positional_count;
+  for (i = 0; i < (size_t) snapshot->positional_count && i < OOSH_MAX_POSITIONAL_PARAMS; ++i) {
+    copy_string(shell->positional_params[i], sizeof(shell->positional_params[i]), snapshot->positional_params[i]);
   }
 
   return 0;
@@ -1673,6 +1685,12 @@ static int bind_function_parameters(
   );
   if (args == NULL) {
     return 1;
+  }
+
+  /* Set positional parameters ($1, $2, …) from call arguments. */
+  shell->positional_count = function_def->param_count;
+  for (i = 0; i < function_def->param_count && i < OOSH_MAX_POSITIONAL_PARAMS; ++i) {
+    copy_string(shell->positional_params[i], sizeof(shell->positional_params[i]), command->argv[i + 1]);
   }
 
   for (i = 0; i < function_def->param_count; ++i) {

@@ -1,0 +1,5 @@
+function show(a, b, c) do
+text("%d") -> print($#)
+endfunction
+
+show x y z

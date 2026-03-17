@@ -1,0 +1,2 @@
+text("%s") -> print($1)
+text("%d") -> print($#)

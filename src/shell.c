@@ -4713,6 +4713,7 @@ int oosh_shell_start_background_job(OoshShell *shell, const char *command_text, 
   shell->jobs[shell->job_count].state = OOSH_JOB_RUNNING;
   shell->jobs[shell->job_count].exit_code = 0;
   shell->jobs[shell->job_count].process = process;
+  shell->last_bg_pid = (long long) process.pid;
   copy_string(shell->jobs[shell->job_count].command, sizeof(shell->jobs[shell->job_count].command), command_text);
   snprintf(
     out,
@@ -5608,7 +5609,7 @@ static int command_unalias(OoshShell *shell, int argc, char **argv, char *out, s
   return 0;
 }
 
-int oosh_shell_source_file(OoshShell *shell, const char *path, char *out, size_t out_size) {
+int oosh_shell_source_file(OoshShell *shell, const char *path, int positional_count, char **positional_args, char *out, size_t out_size) {
   char resolved[OOSH_MAX_PATH];
   FILE *fp;
   char line[OOSH_MAX_LINE];
@@ -5616,6 +5617,10 @@ int oosh_shell_source_file(OoshShell *shell, const char *path, char *out, size_t
   size_t line_number = 0;
   size_t command_start_line = 0;
   int pending_heredoc = 0;
+  char saved_program_path[OOSH_MAX_PATH];
+  char saved_positional_params[OOSH_MAX_POSITIONAL_PARAMS][OOSH_MAX_VAR_VALUE];
+  int saved_positional_count;
+  int i;
 
   if (shell == NULL || path == NULL || out == NULL || out_size == 0) {
     return 1;
@@ -5635,87 +5640,116 @@ int oosh_shell_source_file(OoshShell *shell, const char *path, char *out, size_t
     return 1;
   }
 
-  while (fgets(line, sizeof(line), fp) != NULL) {
-    char line_output[OOSH_MAX_OUTPUT];
-    char parse_error[OOSH_MAX_OUTPUT];
-    size_t line_length;
-    int parse_status;
-    int status;
-
-    line_number++;
-    line_length = strlen(line);
-    if (line_length > 0 && line[line_length - 1] != '\n' && !feof(fp)) {
-      fclose(fp);
-      snprintf(out, out_size, "%s:%zu: line too long", resolved, line_number);
-      return 1;
-    }
-
-    if (command_buffer[0] == '\0' && is_blank_or_comment_line(line)) {
-      continue;
-    }
-    if (!pending_heredoc && is_blank_or_comment_line(line)) {
-      continue;
-    }
-
-    if (command_buffer[0] == '\0') {
-      command_start_line = line_number;
-    }
-    if (append_command_fragment(command_buffer, sizeof(command_buffer), line) != 0) {
-      fclose(fp);
-      snprintf(out, out_size, "%s:%zu: command block too large", resolved, command_start_line);
-      return 1;
-    }
-
-    parse_status = command_requires_more_input(command_buffer, parse_error, sizeof(parse_error));
-    if (parse_status > 0) {
-      pending_heredoc = parse_error_is_unterminated_heredoc(parse_error);
-      continue;
-    }
-    pending_heredoc = 0;
-    if (parse_status < 0) {
-      fclose(fp);
-      snprintf(out, out_size, "%s:%zu: %s", resolved, command_start_line, parse_error[0] == '\0' ? "parse error" : parse_error);
-      return 1;
-    }
-
-    line_output[0] = '\0';
-    status = oosh_shell_execute_line(shell, command_buffer, line_output, sizeof(line_output));
-    if (status != 0) {
-      fclose(fp);
-      snprintf(out, out_size, "%s:%zu: %s", resolved, command_start_line, line_output[0] == '\0' ? "command failed" : line_output);
-      return 1;
-    }
-
-    if (append_output_line(out, out_size, line_output) != 0) {
-      fclose(fp);
-      snprintf(out, out_size, "%s:%zu: sourced output too large", resolved, command_start_line);
-      return 1;
-    }
-
-    command_buffer[0] = '\0';
-    command_start_line = 0;
+  /* Snapshot current positional context and set new one for the sourced file. */
+  copy_string(saved_program_path, sizeof(saved_program_path), shell->program_path);
+  saved_positional_count = shell->positional_count;
+  for (i = 0; i < shell->positional_count && i < OOSH_MAX_POSITIONAL_PARAMS; ++i) {
+    copy_string(saved_positional_params[i], sizeof(saved_positional_params[i]), shell->positional_params[i]);
   }
 
-  if (command_buffer[0] != '\0') {
-    char parse_error[OOSH_MAX_OUTPUT];
+  copy_string(shell->program_path, sizeof(shell->program_path), resolved);
+  shell->positional_count = 0;
+  if (positional_count > 0 && positional_args != NULL) {
+    int n = positional_count < OOSH_MAX_POSITIONAL_PARAMS ? positional_count : OOSH_MAX_POSITIONAL_PARAMS;
+    for (i = 0; i < n; ++i) {
+      copy_string(shell->positional_params[i], sizeof(shell->positional_params[i]),
+                  positional_args[i] != NULL ? positional_args[i] : "");
+    }
+    shell->positional_count = n;
+  }
+
+  {
+    int source_status = 0;
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+      char line_output[OOSH_MAX_OUTPUT];
+      char parse_error[OOSH_MAX_OUTPUT];
+      size_t line_length;
+      int parse_status;
+      int exec_status;
+
+      line_number++;
+      line_length = strlen(line);
+      if (line_length > 0 && line[line_length - 1] != '\n' && !feof(fp)) {
+        snprintf(out, out_size, "%s:%zu: line too long", resolved, line_number);
+        source_status = 1;
+        break;
+      }
+
+      if (command_buffer[0] == '\0' && is_blank_or_comment_line(line)) {
+        continue;
+      }
+      if (!pending_heredoc && is_blank_or_comment_line(line)) {
+        continue;
+      }
+
+      if (command_buffer[0] == '\0') {
+        command_start_line = line_number;
+      }
+      if (append_command_fragment(command_buffer, sizeof(command_buffer), line) != 0) {
+        snprintf(out, out_size, "%s:%zu: command block too large", resolved, command_start_line);
+        source_status = 1;
+        break;
+      }
+
+      parse_status = command_requires_more_input(command_buffer, parse_error, sizeof(parse_error));
+      if (parse_status > 0) {
+        pending_heredoc = parse_error_is_unterminated_heredoc(parse_error);
+        continue;
+      }
+      pending_heredoc = 0;
+      if (parse_status < 0) {
+        snprintf(out, out_size, "%s:%zu: %s", resolved, command_start_line, parse_error[0] == '\0' ? "parse error" : parse_error);
+        source_status = 1;
+        break;
+      }
+
+      line_output[0] = '\0';
+      exec_status = oosh_shell_execute_line(shell, command_buffer, line_output, sizeof(line_output));
+      if (exec_status != 0) {
+        snprintf(out, out_size, "%s:%zu: %s", resolved, command_start_line, line_output[0] == '\0' ? "command failed" : line_output);
+        source_status = 1;
+        break;
+      }
+
+      if (append_output_line(out, out_size, line_output) != 0) {
+        snprintf(out, out_size, "%s:%zu: sourced output too large", resolved, command_start_line);
+        source_status = 1;
+        break;
+      }
+
+      command_buffer[0] = '\0';
+      command_start_line = 0;
+    }
+
+    if (source_status == 0 && command_buffer[0] != '\0') {
+      char parse_error[OOSH_MAX_OUTPUT];
+
+      command_requires_more_input(command_buffer, parse_error, sizeof(parse_error));
+      snprintf(out, out_size, "%s:%zu: %s", resolved, command_start_line, parse_error[0] == '\0' ? "incomplete command block" : parse_error);
+      source_status = 1;
+    }
 
     fclose(fp);
-    command_requires_more_input(command_buffer, parse_error, sizeof(parse_error));
-    snprintf(out, out_size, "%s:%zu: %s", resolved, command_start_line, parse_error[0] == '\0' ? "incomplete command block" : parse_error);
-    return 1;
-  }
 
-  fclose(fp);
-  return 0;
+    /* Restore positional context. */
+    copy_string(shell->program_path, sizeof(shell->program_path), saved_program_path);
+    shell->positional_count = saved_positional_count;
+    for (i = 0; i < saved_positional_count && i < OOSH_MAX_POSITIONAL_PARAMS; ++i) {
+      copy_string(shell->positional_params[i], sizeof(shell->positional_params[i]), saved_positional_params[i]);
+    }
+
+    return source_status;
+  }
 }
 
 static int command_source(OoshShell *shell, int argc, char **argv, char *out, size_t out_size) {
-  if (argc != 2) {
-    snprintf(out, out_size, "usage: source <path>");
+  if (argc < 2) {
+    snprintf(out, out_size, "usage: source <path> [arg ...]");
     return 1;
   }
 
-  return oosh_shell_source_file(shell, argv[1], out, out_size);
+  return oosh_shell_source_file(shell, argv[1], argc - 2, argv + 2, out, out_size);
 }
 
 static int command_type(OoshShell *shell, int argc, char **argv, char *out, size_t out_size) {
@@ -6383,7 +6417,7 @@ static int try_load_default_rc(OoshShell *shell) {
   char output[OOSH_MAX_OUTPUT];
 
   if (env_path != NULL && env_path[0] != '\0') {
-    if (oosh_shell_source_file(shell, env_path, output, sizeof(output)) != 0) {
+    if (oosh_shell_source_file(shell, env_path, 0, NULL, output, sizeof(output)) != 0) {
       fprintf(stderr, "oosh: %s\n", output);
     }
     return 0;
@@ -6394,7 +6428,7 @@ static int try_load_default_rc(OoshShell *shell) {
   }
 
   snprintf(path, sizeof(path), "%s/.ooshrc", home);
-  if (oosh_shell_source_file(shell, path, output, sizeof(output)) != 0 &&
+  if (oosh_shell_source_file(shell, path, 0, NULL, output, sizeof(output)) != 0 &&
       strstr(output, "unable to open source file") == NULL) {
     fprintf(stderr, "oosh: %s\n", output);
   }
@@ -6413,6 +6447,14 @@ int oosh_shell_init(OoshShell *shell) {
   shell->next_instance_id = 1;
   shell->next_job_id = 1;
   shell->loading_plugin_index = -1;
+  shell->last_bg_pid = -1;
+  {
+    OoshPlatformProcessInfo proc_info;
+    memset(&proc_info, 0, sizeof(proc_info));
+    if (oosh_platform_get_process_info(&proc_info) == 0) {
+      shell->shell_pid = (long long) proc_info.pid;
+    }
+  }
   copy_string(shell->traps[OOSH_TRAP_EXIT].name, sizeof(shell->traps[OOSH_TRAP_EXIT].name), "EXIT");
 
   if (oosh_platform_getcwd(shell->cwd, sizeof(shell->cwd)) != 0) {

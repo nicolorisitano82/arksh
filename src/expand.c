@@ -304,6 +304,89 @@ static int execute_command_substitution(OoshShell *shell, const char *command, c
   return 0;
 }
 
+static void expand_positional_list(OoshShell *shell, char *out, size_t out_size) {
+  int j;
+  size_t out_len = 0;
+
+  out[0] = '\0';
+  if (shell == NULL) {
+    return;
+  }
+  for (j = 0; j < shell->positional_count; ++j) {
+    size_t param_len;
+    if (j > 0 && out_len + 1 < out_size) {
+      out[out_len++] = ' ';
+      out[out_len] = '\0';
+    }
+    param_len = strlen(shell->positional_params[j]);
+    if (out_len + param_len < out_size) {
+      memcpy(out + out_len, shell->positional_params[j], param_len);
+      out_len += param_len;
+      out[out_len] = '\0';
+    }
+  }
+}
+
+static int resolve_special_name(OoshShell *shell, const char *name, char *out, size_t out_size) {
+  int all_digits = 1;
+  size_t k;
+  size_t name_len = strlen(name);
+
+  /* Single-char special variables. */
+  if (name_len == 1) {
+    switch (name[0]) {
+      case '?':
+        snprintf(out, out_size, "%d", shell == NULL ? 0 : shell->last_status);
+        return 1;
+      case '#':
+        snprintf(out, out_size, "%d", shell == NULL ? 0 : shell->positional_count);
+        return 1;
+      case '$':
+        snprintf(out, out_size, "%lld", shell == NULL ? 0LL : shell->shell_pid);
+        return 1;
+      case '!':
+        if (shell != NULL && shell->last_bg_pid >= 0) {
+          snprintf(out, out_size, "%lld", shell->last_bg_pid);
+        } else {
+          out[0] = '\0';
+        }
+        return 1;
+      case '-':
+        /* Minimal: return empty string (no shell option flags tracked yet). */
+        out[0] = '\0';
+        return 1;
+      case '@':
+      case '*':
+        expand_positional_list(shell, out, out_size);
+        return 1;
+      default:
+        break;
+    }
+  }
+
+  /* Numeric name: positional parameter. */
+  for (k = 0; k < name_len; ++k) {
+    if (!isdigit((unsigned char) name[k])) {
+      all_digits = 0;
+      break;
+    }
+  }
+  if (all_digits && name_len > 0) {
+    int idx = atoi(name);
+    out[0] = '\0';
+    if (shell != NULL) {
+      if (idx == 0) {
+        copy_string(out, out_size, shell->program_path);
+      } else if (idx >= 1 && idx <= shell->positional_count) {
+        copy_string(out, out_size, shell->positional_params[idx - 1]);
+      }
+    }
+    return 1;
+  }
+
+  return 0; /* Not a special name. */
+}
+
 static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, char *out, size_t out_size, char *error, size_t error_size) {
   char name[128];
   size_t name_len = 0;
@@ -317,8 +400,49 @@ static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, ch
   out[0] = '\0';
   i = *index + 1;
 
-  if (raw[i] == '?') {
-    snprintf(out, out_size, "%d", shell == NULL ? 0 : shell->last_status);
+  /* Single-char specials handled before the ${} / alpha path. */
+  switch (raw[i]) {
+    case '?':
+      snprintf(out, out_size, "%d", shell == NULL ? 0 : shell->last_status);
+      *index = i;
+      return 0;
+    case '#':
+      snprintf(out, out_size, "%d", shell == NULL ? 0 : shell->positional_count);
+      *index = i;
+      return 0;
+    case '$':
+      snprintf(out, out_size, "%lld", shell == NULL ? 0LL : shell->shell_pid);
+      *index = i;
+      return 0;
+    case '!':
+      if (shell != NULL && shell->last_bg_pid >= 0) {
+        snprintf(out, out_size, "%lld", shell->last_bg_pid);
+      }
+      *index = i;
+      return 0;
+    case '-':
+      out[0] = '\0';
+      *index = i;
+      return 0;
+    case '@':
+    case '*':
+      expand_positional_list(shell, out, out_size);
+      *index = i;
+      return 0;
+    default:
+      break;
+  }
+
+  /* Single-digit positional parameter: $0 .. $9 */
+  if (isdigit((unsigned char) raw[i])) {
+    int idx = raw[i] - '0';
+    if (shell != NULL) {
+      if (idx == 0) {
+        copy_string(out, out_size, shell->program_path);
+      } else if (idx >= 1 && idx <= shell->positional_count) {
+        copy_string(out, out_size, shell->positional_params[idx - 1]);
+      }
+    }
     *index = i;
     return 0;
   }
@@ -338,6 +462,11 @@ static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, ch
     }
     name[name_len] = '\0';
     *index = i;
+
+    /* Check for special / positional names inside ${...}. */
+    if (resolve_special_name(shell, name, out, out_size)) {
+      return 0;
+    }
   } else {
     if (!(isalpha((unsigned char) raw[i]) || raw[i] == '_')) {
       copy_string(out, out_size, "$");

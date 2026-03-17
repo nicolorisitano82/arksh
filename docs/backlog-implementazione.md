@@ -137,13 +137,13 @@ Stato epoca: `[ ]`
 
 ### E2-S1. Positional parameters e parametri speciali
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E2-S1-T1` aggiungere storage per `$0`, `$1..$N`
-- `[ ]` `E2-S1-T2` supportare `$@`, `$*`, `$#`
-- `[ ]` `E2-S1-T3` supportare `$$`, `$!`, `$-`
-- `[ ]` `E2-S1-T4` allineare `source` e funzioni shell alla semantica dei parametri
-- `[ ]` `E2-S1-T5` aggiungere test su script e chiamate funzione
+- `[x]` `E2-S1-T1` aggiungere storage per `$0`, `$1..$N`
+- `[x]` `E2-S1-T2` supportare `$@`, `$*`, `$#`
+- `[x]` `E2-S1-T3` supportare `$$`, `$!`, `$-`
+- `[x]` `E2-S1-T4` allineare `source` e funzioni shell alla semantica dei parametri
+- `[x]` `E2-S1-T5` aggiungere test su script e chiamate funzione
 
 ### E2-S2. Parameter expansion avanzata
 

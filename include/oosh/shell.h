@@ -28,6 +28,7 @@ extern "C" {
 #define OOSH_MAX_VALUE_RESOLVERS 32
 #define OOSH_MAX_PIPELINE_STAGE_HANDLERS 32
 #define OOSH_MAX_FUNCTIONS 32
+#define OOSH_MAX_POSITIONAL_PARAMS 64
 #define OOSH_MAX_CLASSES 32
 #define OOSH_MAX_CLASS_PROPERTIES 32
 #define OOSH_MAX_CLASS_METHODS 32
@@ -218,6 +219,10 @@ typedef struct OoshShell {
   int function_depth;
   OoshTrapEntry traps[OOSH_TRAP_COUNT];
   int running_exit_trap;
+  char positional_params[OOSH_MAX_POSITIONAL_PARAMS][OOSH_MAX_VAR_VALUE];
+  int positional_count;
+  long long last_bg_pid;
+  long long shell_pid;
 } OoshShell;
 
 int oosh_shell_init(OoshShell *shell);
@@ -263,7 +268,7 @@ int oosh_shell_register_native_method_extension(OoshShell *shell, const char *ta
 const char *oosh_shell_get_alias(const OoshShell *shell, const char *name);
 int oosh_shell_set_alias(OoshShell *shell, const char *name, const char *value);
 int oosh_shell_unset_alias(OoshShell *shell, const char *name);
-int oosh_shell_source_file(OoshShell *shell, const char *path, char *out, size_t out_size);
+int oosh_shell_source_file(OoshShell *shell, const char *path, int positional_count, char **positional_args, char *out, size_t out_size);
 void oosh_shell_refresh_jobs(OoshShell *shell);
 int oosh_shell_start_background_job(OoshShell *shell, const char *command_text, char *out, size_t out_size);
 void oosh_shell_clear_control_signal(OoshShell *shell);

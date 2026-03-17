@@ -148,6 +148,12 @@ if(BUILD_TESTING)
   add_test(NAME oosh_nested_json_roundtrip COMMAND oosh -c "tests/fixtures/json/nested.json -> read_json() |> to_json()")
   add_test(NAME oosh_plugin_value_resolver COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_sample_plugin> ; sample() -> name")
   add_test(NAME oosh_plugin_pipeline_stage COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_sample_plugin> ; text(\"ciao\") |> sample_wrap()")
+  add_test(NAME oosh_positional_in_function COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/positional-in-function.oosh")
+  add_test(NAME oosh_positional_count COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-count.oosh")
+  add_test(NAME oosh_positional_all COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-all.oosh")
+  add_test(NAME oosh_positional_shell_pid COMMAND oosh -c "text(\"%s\") -> print(\"$$\")")
+  add_test(NAME oosh_positional_source_args COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/source-params.oosh hello")
+  add_test(NAME oosh_positional_scope_restore COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/scope-restore.oosh")
 
   set_tests_properties(
     oosh_external_command
