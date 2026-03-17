@@ -1,6 +1,6 @@
 # oosh
 
-`oosh` e uno skeleton in C per una shell object-oriented, pensata per Linux, macOS e Windows.
+`oosh` è una shell object-oriented in C, pensata per Linux, macOS e Windows.
 
 L'idea di base e che ogni elemento del sistema sia un oggetto interrogabile tramite proprieta e metodi:
 

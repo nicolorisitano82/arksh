@@ -154,6 +154,17 @@ if(BUILD_TESTING)
   add_test(NAME oosh_positional_shell_pid COMMAND oosh -c "text(\"%s\") -> print(\"$$\")")
   add_test(NAME oosh_positional_source_args COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/source-params.oosh hello")
   add_test(NAME oosh_positional_scope_restore COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/scope-restore.oosh")
+  add_test(NAME oosh_param_expand_default COMMAND oosh -c "text(\"%s\") -> print(\"\${UNDEF:-fallback}\")")
+  add_test(NAME oosh_param_expand_set_nodefault COMMAND oosh -c "set X hello ; text(\"%s\") -> print(\"\${X:-fallback}\")")
+  add_test(NAME oosh_param_expand_assign COMMAND oosh -c "text(\"%s\") -> print(\"\${NEW:=assigned}\") ; text(\"%s\") -> print(\"\$NEW\")")
+  add_test(NAME oosh_param_expand_alt COMMAND oosh -c "set Y yes ; text(\"%s\") -> print(\"\${Y:+alt}\")")
+  add_test(NAME oosh_param_expand_alt_unset COMMAND oosh -c "text(\"%s\") -> print(\"\${NOPE:+alt}\")")
+  add_test(NAME oosh_param_expand_length COMMAND oosh -c "set WORD hello ; text(\"%s\") -> print(\"\${#WORD}\")")
+  add_test(NAME oosh_param_expand_suffix_shortest COMMAND oosh -c "set F file.tar.gz ; text(\"%s\") -> print(\"\${F%.*}\")")
+  add_test(NAME oosh_param_expand_suffix_longest COMMAND oosh -c "set F file.tar.gz ; text(\"%s\") -> print(\"\${F%%.*}\")")
+  add_test(NAME oosh_param_expand_prefix_shortest COMMAND oosh -c "set P /usr/local/bin ; text(\"%s\") -> print(\"\${P#/usr}\")")
+  add_test(NAME oosh_param_expand_prefix_longest COMMAND oosh -c "set P /usr/local/bin ; text(\"%s\") -> print(\"\${P##*/}\")")
+  add_test(NAME oosh_param_expand_script COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-expansion.oosh")
 
   set_tests_properties(
     oosh_external_command

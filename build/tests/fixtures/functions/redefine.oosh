@@ -1,9 +1,0 @@
-function greet(name) do
-text("one:%s") -> print(name)
-endfunction
-
-function greet(name) do
-text("two:%s") -> print(name)
-endfunction
-
-greet demo

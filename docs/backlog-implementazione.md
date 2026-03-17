@@ -147,13 +147,13 @@ Stato story: `[x]`
 
 ### E2-S2. Parameter expansion avanzata
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E2-S2-T1` implementare `${var:-default}` e `${var:=default}`
-- `[ ]` `E2-S2-T2` implementare `${var:+alt}` e `${var:?message}`
-- `[ ]` `E2-S2-T3` implementare `${#var}`
-- `[ ]` `E2-S2-T4` implementare forme di trim pattern come `${var%pat}` e `${var%%pat}`
-- `[ ]` `E2-S2-T5` aggiungere test per combinazioni con quoting
+- `[x]` `E2-S2-T1` implementare `${var:-default}` e `${var:=default}`
+- `[x]` `E2-S2-T2` implementare `${var:+alt}` e `${var:?message}`
+- `[x]` `E2-S2-T3` implementare `${#var}`
+- `[x]` `E2-S2-T4` implementare forme di trim pattern come `${var%pat}` e `${var%%pat}`
+- `[x]` `E2-S2-T5` aggiungere test per combinazioni con quoting
 
 ### E2-S3. Field splitting, `IFS` e quote removal
 

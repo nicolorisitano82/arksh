@@ -1,5 +1,0 @@
-function choose() do
-for outer in list(1, 2) ; do while true ; do return outer -> print() ; done ; done
-endfunction
-
-choose

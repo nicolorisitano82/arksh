@@ -304,6 +304,145 @@ static int execute_command_substitution(OoshShell *shell, const char *command, c
   return 0;
 }
 
+/* Forward declaration needed by lookup_var_value. */
+static int resolve_special_name(OoshShell *shell, const char *name, char *out, size_t out_size);
+
+/* ---- Glob matcher (for parameter expansion patterns) ---- */
+
+static int glob_match_full(const char *pat, const char *str) {
+  if (pat == NULL || str == NULL) {
+    return 0;
+  }
+  while (*pat != '\0') {
+    if (*pat == '*') {
+      pat++;
+      do {
+        if (glob_match_full(pat, str)) {
+          return 1;
+        }
+      } while (*str++ != '\0');
+      return 0;
+    }
+    if (*pat == '?') {
+      if (*str == '\0') {
+        return 0;
+      }
+      pat++;
+      str++;
+      continue;
+    }
+    if (*pat == '\\' && *(pat + 1) != '\0') {
+      pat++;
+    }
+    if (*pat != *str) {
+      return 0;
+    }
+    pat++;
+    str++;
+  }
+  return *str == '\0';
+}
+
+/* Resolve a variable name to its string value.
+   Tries special/positional names first, then shell vars.
+   Returns 1 if the variable is "set" (even if empty), 0 if unset.  */
+static int lookup_var_value(OoshShell *shell, const char *name, char *out, size_t out_size) {
+  const char *v;
+
+  if (resolve_special_name(shell, name, out, out_size)) {
+    return 1; /* special vars are always "set" */
+  }
+  v = oosh_shell_get_var(shell, name);
+  if (v == NULL) {
+    out[0] = '\0';
+    return 0; /* unset */
+  }
+  copy_string(out, out_size, v);
+  return 1; /* set (may be empty) */
+}
+
+/* Apply suffix removal: shortest (%/single) or longest (%%/double). */
+static void apply_suffix_trim(const char *val, const char *pat, int longest, char *out, size_t out_size) {
+  size_t len = strlen(val);
+  size_t k;
+
+  if (longest) {
+    /* Longest suffix: scan from the start (smallest j = largest suffix). */
+    for (k = 0; k <= len; ++k) {
+      if (glob_match_full(pat, val + k)) {
+        /* Remove suffix starting at k. */
+        size_t keep = k < out_size - 1 ? k : out_size - 1;
+        memcpy(out, val, keep);
+        out[keep] = '\0';
+        return;
+      }
+    }
+  } else {
+    /* Shortest suffix: scan from end (largest j = shortest suffix). */
+    k = len;
+    for (;;) {
+      if (glob_match_full(pat, val + k)) {
+        size_t keep = k < out_size - 1 ? k : out_size - 1;
+        memcpy(out, val, keep);
+        out[keep] = '\0';
+        return;
+      }
+      if (k == 0) {
+        break;
+      }
+      k--;
+    }
+  }
+  /* No match: return original. */
+  copy_string(out, out_size, val);
+}
+
+/* Apply prefix removal: shortest (#/single) or longest (##/double). */
+static void apply_prefix_trim(const char *val, const char *pat, int longest, char *out, size_t out_size) {
+  size_t len = strlen(val);
+  size_t match_len = 0;
+  int found = 0;
+  size_t k;
+  char tmp[OOSH_MAX_OUTPUT];
+
+  if (longest) {
+    /* Longest prefix: scan from end (largest k). */
+    k = len;
+    for (;;) {
+      size_t copy_len = k < sizeof(tmp) - 1 ? k : sizeof(tmp) - 1;
+      memcpy(tmp, val, copy_len);
+      tmp[copy_len] = '\0';
+      if (glob_match_full(pat, tmp)) {
+        match_len = k;
+        found = 1;
+        break;
+      }
+      if (k == 0) {
+        break;
+      }
+      k--;
+    }
+  } else {
+    /* Shortest prefix: scan from start (smallest k). */
+    for (k = 0; k <= len; ++k) {
+      size_t copy_len = k < sizeof(tmp) - 1 ? k : sizeof(tmp) - 1;
+      memcpy(tmp, val, copy_len);
+      tmp[copy_len] = '\0';
+      if (glob_match_full(pat, tmp)) {
+        match_len = k;
+        found = 1;
+        break;
+      }
+    }
+  }
+
+  if (found) {
+    copy_string(out, out_size, val + match_len);
+  } else {
+    copy_string(out, out_size, val);
+  }
+}
+
 static void expand_positional_list(OoshShell *shell, char *out, size_t out_size) {
   int j;
   size_t out_len = 0;
@@ -448,24 +587,160 @@ static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, ch
   }
 
   if (raw[i] == '{') {
-    i++;
+    char var_name[128];
+    size_t var_name_len = 0;
+    char operand[OOSH_MAX_OUTPUT];
+    size_t operand_len = 0;
+    int length_mode = 0;
+    int colon_prefix = 0;
+    char op = '\0';
+    char op2 = '\0';
+    char val_buf[OOSH_MAX_OUTPUT];
+    int is_set;
+
+    i++; /* skip '{' */
+
+    /* ${#var}: length-of-var.  Distinguish from ${#} (positional count). */
+    if (raw[i] == '#' && raw[i + 1] != '}' && raw[i + 1] != '\0') {
+      char next = raw[i + 1];
+      if (isalpha((unsigned char) next) || next == '_' || isdigit((unsigned char) next)
+          || next == '@' || next == '*' || next == '?' || next == '!' || next == '-' || next == '$') {
+        length_mode = 1;
+        i++; /* skip '#' */
+      }
+    }
+
+    /* Read variable name. */
+    if (isalpha((unsigned char) raw[i]) || raw[i] == '_') {
+      while (isalnum((unsigned char) raw[i]) || raw[i] == '_') {
+        if (var_name_len + 1 >= sizeof(var_name)) {
+          snprintf(error, error_size, "variable name too long in ${...}");
+          return 1;
+        }
+        var_name[var_name_len++] = raw[i++];
+      }
+    } else if (isdigit((unsigned char) raw[i])) {
+      while (isdigit((unsigned char) raw[i])) {
+        if (var_name_len + 1 >= sizeof(var_name)) {
+          snprintf(error, error_size, "variable name too long in ${...}");
+          return 1;
+        }
+        var_name[var_name_len++] = raw[i++];
+      }
+    } else {
+      switch (raw[i]) {
+        case '@': case '*': case '#': case '$': case '!': case '?': case '-':
+          var_name[var_name_len++] = raw[i++];
+          break;
+        default:
+          break;
+      }
+    }
+    var_name[var_name_len] = '\0';
+
+    /* Detect operator after name. */
+    if (raw[i] == ':' && (raw[i + 1] == '-' || raw[i + 1] == '='
+                          || raw[i + 1] == '+' || raw[i + 1] == '?')) {
+      colon_prefix = 1;
+      i++;
+      op = raw[i++];
+    } else if (raw[i] == '-' || raw[i] == '=' || raw[i] == '+' || raw[i] == '?') {
+      op = raw[i++];
+    } else if (raw[i] == '%') {
+      i++;
+      op = '%';
+      if (raw[i] == '%') { op2 = '%'; i++; }
+    } else if (raw[i] == '#' && !length_mode) {
+      i++;
+      op = '#';
+      if (raw[i] == '#') { op2 = '#'; i++; }
+    }
+
+    /* Read operand until '}'. */
     while (raw[i] != '\0' && raw[i] != '}') {
-      if (name_len + 1 >= sizeof(name)) {
-        snprintf(error, error_size, "environment variable name too long");
+      if (operand_len + 1 >= sizeof(operand)) {
+        snprintf(error, error_size, "parameter expansion operand too long");
         return 1;
       }
-      name[name_len++] = raw[i++];
+      operand[operand_len++] = raw[i++];
     }
+    operand[operand_len] = '\0';
+
     if (raw[i] != '}') {
       snprintf(error, error_size, "unterminated ${...} expansion");
       return 1;
     }
-    name[name_len] = '\0';
     *index = i;
 
-    /* Check for special / positional names inside ${...}. */
-    if (resolve_special_name(shell, name, out, out_size)) {
+    /* Resolve variable value. */
+    is_set = lookup_var_value(shell, var_name, val_buf, sizeof(val_buf));
+
+    /* ${#var}: return length. */
+    if (length_mode) {
+      snprintf(out, out_size, "%zu", strlen(val_buf));
       return 0;
+    }
+
+    /* No operator: simple lookup. */
+    if (op == '\0') {
+      copy_string(out, out_size, val_buf);
+      return 0;
+    }
+
+    /* Determine condition for default/assign/alt/error operators.
+       colon_prefix=1 → trigger if unset OR empty.
+       colon_prefix=0 → trigger only if unset.               */
+    {
+      int trigger = colon_prefix ? (!is_set || val_buf[0] == '\0') : !is_set;
+
+      switch (op) {
+        case '-':
+          /* ${var:-default}: if unset/empty, use operand; else use var value. */
+          copy_string(out, out_size, trigger ? operand : val_buf);
+          return 0;
+
+        case '=':
+          /* ${var:=default}: if unset/empty, assign operand to var and use it. */
+          if (trigger) {
+            if (shell != NULL) {
+              oosh_shell_set_var(shell, var_name, operand, 0);
+            }
+            copy_string(out, out_size, operand);
+          } else {
+            copy_string(out, out_size, val_buf);
+          }
+          return 0;
+
+        case '+':
+          /* ${var:+alt}: if set (and non-empty with colon), use operand; else empty. */
+          copy_string(out, out_size, trigger ? "" : operand);
+          return 0;
+
+        case '?':
+          /* ${var:?message}: if unset/empty, error with message. */
+          if (trigger) {
+            snprintf(error, error_size, "%s: %s",
+                     var_name[0] != '\0' ? var_name : "parameter",
+                     operand[0] != '\0' ? operand : "parameter null or not set");
+            return 1;
+          }
+          copy_string(out, out_size, val_buf);
+          return 0;
+
+        case '%':
+          /* ${var%pat} or ${var%%pat}: suffix trim. */
+          apply_suffix_trim(val_buf, operand, op2 == '%', out, out_size);
+          return 0;
+
+        case '#':
+          /* ${var#pat} or ${var##pat}: prefix trim. */
+          apply_prefix_trim(val_buf, operand, op2 == '#', out, out_size);
+          return 0;
+
+        default:
+          copy_string(out, out_size, val_buf);
+          return 0;
+      }
     }
   } else {
     if (!(isalpha((unsigned char) raw[i]) || raw[i] == '_')) {

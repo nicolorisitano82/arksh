@@ -1,5 +1,0 @@
-function greet(name) do
-text("hi %s") -> print(name)
-endfunction
-
-greet nicolo

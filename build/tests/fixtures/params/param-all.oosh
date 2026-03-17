@@ -1,5 +1,0 @@
-function list(a, b, c) do
-text("%s") -> print($@)
-endfunction
-
-list alpha beta gamma

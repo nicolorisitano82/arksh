@@ -1,0 +1,18 @@
+set GREETING hello
+
+text("%s") -> print("${GREETING:-world}")
+text("%s") -> print("${MISSING:-world}")
+
+unset GREETING
+text("%s") -> print("${GREETING:=assigned}")
+text("%s") -> print("${GREETING}")
+
+set PRESENT yes
+text("%s") -> print("${PRESENT:+alt}")
+text("%s") -> print("${MISSING2:+alt}")
+
+text("%d") -> print("${#PRESENT}")
+
+set PATH_VAL /usr/local/bin
+text("%s") -> print("${PATH_VAL%/bin}")
+text("%s") -> print("${PATH_VAL#/usr}")

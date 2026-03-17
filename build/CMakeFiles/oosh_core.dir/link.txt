@@ -1,2 +1,0 @@
-/usr/bin/ar qc liboosh_core.a CMakeFiles/oosh_core.dir/src/expand.c.o CMakeFiles/oosh_core.dir/src/executor.c.o CMakeFiles/oosh_core.dir/src/line_editor.c.o CMakeFiles/oosh_core.dir/src/lexer.c.o CMakeFiles/oosh_core.dir/src/object.c.o CMakeFiles/oosh_core.dir/src/parser.c.o CMakeFiles/oosh_core.dir/src/platform.c.o CMakeFiles/oosh_core.dir/src/plugin.c.o CMakeFiles/oosh_core.dir/src/prompt.c.o CMakeFiles/oosh_core.dir/src/shell.c.o
-/usr/bin/ranlib liboosh_core.a
