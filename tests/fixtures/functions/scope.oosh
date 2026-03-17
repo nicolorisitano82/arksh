@@ -1,0 +1,8 @@
+let name = text("outer")
+
+function show(name) do
+text("%s") -> print(name)
+endfunction
+
+show inner
+name -> print()

@@ -1,0 +1,3 @@
+{ ./oosh_test_echo_stdin ; } <<EOF
+hello
+EOF

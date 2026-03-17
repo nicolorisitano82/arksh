@@ -1,0 +1,21 @@
+function greet(name) do
+text("hello %s") -> print(name)
+endfunction
+
+function greet(name) do
+text("ciao %s") -> print(name)
+endfunction
+
+function pair(left, right) do
+text("%s:%s") -> print(left, right)
+endfunction
+
+function greet_fast(name) do
+return text("fast") ; text("never") -> print()
+endfunction
+
+functions greet
+type pair
+greet nicolo
+pair shell demo
+greet_fast nicolo

@@ -1,0 +1,13 @@
+class Named do
+  property name = text("base")
+endclass
+
+class Labelled do
+  method label = [:self | self -> name]
+endclass
+
+class Doc extends Named, Labelled do
+  method init = [:self :name | self -> set("name", name)]
+endclass
+
+Doc(text("readme")) -> label()

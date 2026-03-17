@@ -1,0 +1,22 @@
+# oosh example 03
+# Stato della shell, configurazione sessione e controllo di flusso base.
+
+set PROJECT oosh
+export PROJECT_ROOT "$PWD"
+alias ll="ls -1"
+
+type ll
+type ls
+
+prompt show
+prompt load examples/oosh.conf
+source examples/ooshrc
+
+true && text("ok") -> print()
+false || text("recovered") -> print()
+
+sleep 1 &
+jobs
+fg
+
+text("%s") -> print("$PROJECT_ROOT")

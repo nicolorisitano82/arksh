@@ -1,0 +1,19 @@
+# oosh example 01
+# Tour rapido del modello object-oriented sul file system.
+
+pwd
+
+# Proprieta base di oggetti file system.
+. -> type
+README.md -> type
+README.md -> size
+README.md -> parent()
+
+# Pipeline object-aware.
+. -> children() |> take(5)
+. -> children() |> where(type == "file") |> sort(size desc) |> take(5)
+. -> children() |> each(name) |> take(10)
+
+# Pipeline shell classica nello stesso script.
+ls -1 | wc -l
+cat < README.md | wc -l

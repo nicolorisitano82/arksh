@@ -1,0 +1,5 @@
+function greet(name) do
+return text("hi") ; text("never") -> print()
+endfunction
+
+greet nicolo

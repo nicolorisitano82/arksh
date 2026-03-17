@@ -1,0 +1,13 @@
+# oosh example 08
+# Heredoc shell-style e redirection avanzata su file descriptor.
+
+./build/oosh_test_count_lines <<EOF
+one
+two
+EOF
+
+./build/oosh_test_emit_args hello 3> /tmp/oosh_example_fd3.txt 1>&3
+/tmp/oosh_example_fd3.txt -> read_text(64)
+
+./build/oosh_test_emit_args left right > /tmp/oosh_example_fdin.txt
+./build/oosh_test_count_lines 3< /tmp/oosh_example_fdin.txt 0<&3

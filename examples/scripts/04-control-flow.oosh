@@ -1,0 +1,43 @@
+# oosh example 04
+# Controllo di flusso shell-style con valori object-aware e blocchi multilinea.
+
+if . -> exists
+then
+text("workspace-ok") -> print()
+else
+text("workspace-missing") -> print()
+fi
+
+for entry in . -> children() |> take(3)
+do
+entry -> name
+done
+
+if bool(false)
+then
+text("no") -> print()
+else
+text("fallback") -> print()
+fi
+
+bool(true) ? "ternary-yes" : "ternary-no"
+
+switch . -> type
+case "directory"
+then
+text("directory") -> print()
+default
+then
+text("other") -> print()
+endswitch
+
+while false
+do
+text("never") -> print()
+done
+
+while true ; do text("loop-once") -> print() ; break ; done
+
+for outer in list(1, 2) ; do while true ; do outer -> print() ; continue 2 ; done ; done
+
+text("continue-ok") -> print()

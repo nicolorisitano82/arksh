@@ -1,0 +1,6 @@
+./oosh_test_echo_stdin <<EOF
+one
+
+#kept
+three
+EOF
