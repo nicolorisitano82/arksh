@@ -214,11 +214,11 @@ Stato story: `[x]`
 
 ### E3-S3. Bridge shell/object piu naturale
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E3-S3-T1` progettare una conversione canonica tra stdout testuale e valori typed
-- `[ ]` `E3-S3-T2` aggiungere helper o sintassi per passare output processo in pipeline object-aware
-- `[ ]` `E3-S3-T3` aggiungere test su composizione shell/object nella stessa riga
+- `[x]` `E3-S3-T1` conversione canonica: `text()` / `string()` gia supportati; `capture()` / `capture_lines()` sono gli idiomi espliciti; aggiunto `OOSH_VALUE_SOURCE_CAPTURE_SHELL` per la sintassi diretta
+- `[x]` `E3-S3-T2` sintassi diretta: `<comando shell> |> <stage>` — se la sorgente non e riconosciuta come value expression, viene eseguita come comando shell e stdout diventa text value (es. `ls -la |> lines |> count`)
+- `[x]` `E3-S3-T3` test: `oosh_shell_obj_bridge_count`, `oosh_shell_obj_bridge_words`, `oosh_shell_obj_bridge_trim`; esempio `10-shell-object-bridge.oosh`
 
 ### E3-S4. Confine chiaro tra comando, value expression e object expression
 
@@ -487,24 +487,21 @@ Stato story: `[ ]`
 
 ## Prossimi punti consigliati
 
-Se vuoi procedere con il percorso piu lineare, i prossimi task consigliati sono:
+Se vuoi procedere con il percorso piu lineare (E3 → E4):
 
-- `E3-S2-T3` (unificare redirection e pipe per built-in ed esterni — opzionale)
-- `E3-S3-T1` (conversione canonica stdout → valori typed)
-- `E3-S5-T1` (built-in `builtin` — sblocca override comandi)
-- `E4-S1-T1` (process group pipeline)
+- `E3-S4-T2` (ridurre casi ambigui nel parser)
+- `E3-S5-T1` (built-in `builtin` — sblocca override comandi, ~20 righe)
+- `E4-S1-T1` (process group pipeline — job control robusto)
 
-Se invece vuoi lavorare sull'espressivita del linguaggio (operator overloading):
+Se vuoi completare E3 rapidamente con i quick win rimasti:
 
-- `E3-S3-T1` (bridge shell/object — conversione stdout → value)
-- `E3-S5-T1` (`builtin` command — ~20 righe)
-- ~~`E2-S5-T1..T5` (operatori binari in value context — completato)~~
-- ~~`E3-S2-T1` (built-in puri in pipeline — completato)~~
-- ~~`E3-S2-T5` (fallback `|>` su extension — completato)~~
+- `E3-S5-T1` (`builtin` command — bypassa funzioni shell, chiama direttamente il built-in)
+- `E3-S4-T2` (ridurre casi ambigui nel parser — rafforza il confine shell/object)
+- `E3-S2-T3` (unificare redirection per built-in ed esterni — opzionale, basso impatto)
 
-Se invece vuoi puntare prima all'usabilita quotidiana della REPL:
+Se vuoi puntare prima all'usabilita quotidiana della REPL:
 
-- `E5-S3-T1` (kill/yank)
+- `E5-S3-T1` (kill/yank nell'editor di riga)
 - `E5-S4-T1` (completion avanzata)
 - `E4-S1-T1` (process group pipeline)
 

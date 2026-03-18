@@ -2815,6 +2815,24 @@ static int evaluate_value_source(OoshShell *shell, const OoshValueSourceNode *so
       return execute_capture_source(shell, source->raw_text, 0, value, out, out_size);
     case OOSH_VALUE_SOURCE_CAPTURE_LINES:
       return execute_capture_source(shell, source->raw_text, 1, value, out, out_size);
+    case OOSH_VALUE_SOURCE_CAPTURE_SHELL: {
+      /* E3-S3 bridge: execute source->raw_text as a shell line verbatim and
+         capture stdout as a text value.  Unlike CAPTURE_TEXT, no
+         quote-stripping is applied — raw_text is already the plain command. */
+      char capture_output[OOSH_MAX_OUTPUT];
+
+      capture_output[0] = '\0';
+      if (oosh_shell_execute_line(shell, source->raw_text, capture_output, sizeof(capture_output)) != 0) {
+        if (capture_output[0] != '\0') {
+          copy_string(out, out_size, capture_output);
+        } else {
+          snprintf(out, out_size, "shell command failed in pipeline source: %s", source->raw_text);
+        }
+        return 1;
+      }
+      oosh_value_set_string(value, capture_output);
+      return 0;
+    }
     case OOSH_VALUE_SOURCE_TERNARY:
       return evaluate_expression_text(shell, source->raw_text, value, out, out_size);
     case OOSH_VALUE_SOURCE_RESOLVER_CALL:

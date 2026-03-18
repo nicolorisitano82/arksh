@@ -200,7 +200,12 @@ typedef enum {
      OP is one of '+', '-', '*', '/'.
      Dispatch: numeric operands → native arithmetic;
      other types → extension method __add__ / __sub__ / __mul__ / __div__. */
-  OOSH_VALUE_SOURCE_BINARY_OP
+  OOSH_VALUE_SOURCE_BINARY_OP,
+  /* Shell command line captured as text (E3-S3 bridge): raw_text is passed
+     directly to oosh_shell_execute_line(); stdout becomes a text value.
+     Unlike CAPTURE_TEXT, no quote-stripping is applied — the source text is
+     used verbatim so that `ls -la |> lines` works without extra quoting. */
+  OOSH_VALUE_SOURCE_CAPTURE_SHELL
 } OoshValueSourceKind;
 
 typedef struct {

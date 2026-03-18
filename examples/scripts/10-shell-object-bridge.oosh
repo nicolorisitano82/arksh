@@ -1,0 +1,35 @@
+# oosh example 10
+# Bridge shell/object: usare l'output di un comando esterno come sorgente
+# di una object pipeline (E3-S3).
+#
+# Sintassi: <comando shell multi-word> |> <stage> |> ...
+# La stdout del comando viene catturata come valore text e passa nella pipeline.
+# Per comandi a singola parola usare capture() o capture_lines().
+
+# ── Contare file ──────────────────────────────────────────────────────────────
+
+ls examples/scripts |> lines |> count
+
+# ── Filtrare righe ────────────────────────────────────────────────────────────
+#
+# Solo i file .oosh nella directory:
+
+ls examples/scripts |> lines |> where([:x | text($x) -> ends_with(".oosh")]) |> count
+
+# ── trim + lines ──────────────────────────────────────────────────────────────
+
+echo "  hello world  " |> trim
+
+# ── capture() e capture_lines() (idioma pre-esistente) ────────────────────────
+#
+# Per comandi a singola parola la forma esplicita e piu chiara:
+
+capture("pwd") |> trim
+capture_lines("ls examples/scripts") |> count
+
+# ── Combinare con oggetti typed ───────────────────────────────────────────────
+#
+# L'output del comando shell diventa un valore text che puo essere ridotto
+# con reduce, filtrato con where, o trasformato con join.
+
+ls examples/scripts |> lines |> join(", ")

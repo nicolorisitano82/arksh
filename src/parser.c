@@ -3872,10 +3872,20 @@ int oosh_parse_line(const char *line, OoshAst *out_ast, char *error, size_t erro
     out_ast->kind = OOSH_AST_OBJECT_PIPELINE;
     copy_trimmed_slice(trimmed, 0, stream.tokens[first_object_pipe_index].position, source_text, sizeof(source_text));
     if (parse_value_source_text_ex(source_text, &out_ast->as.pipeline.source, 1, error, error_size) != 0) {
-      if (error[0] == '\0') {
-        snprintf(error, error_size, "invalid pipeline source");
+      /* E3-S3 bridge: unrecognized source → treat as shell command, capture stdout.
+         Enables `ls -la |> lines |> count` without extra quoting. */
+      if (source_text[0] != '\0') {
+        error[0] = '\0';
+        memset(&out_ast->as.pipeline.source, 0, sizeof(out_ast->as.pipeline.source));
+        out_ast->as.pipeline.source.kind = OOSH_VALUE_SOURCE_CAPTURE_SHELL;
+        copy_string(out_ast->as.pipeline.source.text,     sizeof(out_ast->as.pipeline.source.text),     source_text);
+        copy_string(out_ast->as.pipeline.source.raw_text, sizeof(out_ast->as.pipeline.source.raw_text), source_text);
+      } else {
+        if (error[0] == '\0') {
+          snprintf(error, error_size, "invalid pipeline source");
+        }
+        return 1;
       }
-      return 1;
     }
 
     previous_position = stream.tokens[first_object_pipe_index].position + strlen(stream.tokens[first_object_pipe_index].text);

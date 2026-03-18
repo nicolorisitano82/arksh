@@ -196,6 +196,11 @@ if(BUILD_TESTING)
   add_test(NAME oosh_builtin_pipe_history COMMAND oosh -c "history | cat")
   add_test(NAME oosh_builtin_pipe_mutant  COMMAND oosh -c "cd /tmp | cat")
 
+  # E3-S3: shell command as object pipeline source (bridge)
+  add_test(NAME oosh_shell_obj_bridge_count  COMMAND oosh -c "capture(\"ls\") |> lines |> count")
+  add_test(NAME oosh_shell_obj_bridge_words  COMMAND oosh -c "echo hello world |> lines |> count")
+  add_test(NAME oosh_shell_obj_bridge_trim   COMMAND oosh -c "echo hello |> trim")
+
   set_tests_properties(
     oosh_external_command
     oosh_shell_pipeline
@@ -531,6 +536,9 @@ if(BUILD_TESTING)
   set_tests_properties(oosh_builtin_pipe_pwd     PROPERTIES PASS_REGULAR_EXPRESSION ".+")
   set_tests_properties(oosh_builtin_pipe_history PROPERTIES PASS_REGULAR_EXPRESSION ".+")
   set_tests_properties(oosh_builtin_pipe_mutant  PROPERTIES WILL_FAIL TRUE)
+  set_tests_properties(oosh_shell_obj_bridge_count PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
+  set_tests_properties(oosh_shell_obj_bridge_words PROPERTIES PASS_REGULAR_EXPRESSION "1")
+  set_tests_properties(oosh_shell_obj_bridge_trim  PROPERTIES PASS_REGULAR_EXPRESSION "hello")
   set_tests_properties(oosh_binop_add    PROPERTIES PASS_REGULAR_EXPRESSION "7")
   set_tests_properties(oosh_binop_sub    PROPERTIES PASS_REGULAR_EXPRESSION "7")
   set_tests_properties(oosh_binop_mul    PROPERTIES PASS_REGULAR_EXPRESSION "20")
