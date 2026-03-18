@@ -222,11 +222,11 @@ Stato story: `[x]`
 
 ### E3-S4. Confine chiaro tra comando, value expression e object expression
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E3-S4-T1` formalizzare le regole di dispatch in documentazione tecnica
-- `[ ]` `E3-S4-T2` ridurre i casi ambigui nel parser
-- `[ ]` `E3-S4-T3` aggiungere test di regressione su input ambigui
+- `[x]` `E3-S4-T1` formalizzare le regole di dispatch in documentazione tecnica (`docs/parser-dispatch.md`)
+- `[x]` `E3-S4-T2` ridurre i casi ambigui nel parser — riconoscimento `true`/`false` come `BOOLEAN_LITERAL` prima del check `BINDING` in `parse_value_source_text_ex` e `parse_non_object_value_source_tokens`; fix: `true -> value` → `"true"`, `true -> type` → `"bool"`, `while true` / `if true` ancora funzionanti
+- `[x]` `E3-S4-T3` test di regressione: `oosh_bool_lit_true_value`, `oosh_bool_lit_false_type`, `oosh_bool_lit_true_type`, `oosh_bool_lit_if_true`, `oosh_bool_lit_if_false` (126/126 pass)
 
 ### E3-S5. Overloading e hook dei comandi
 
@@ -489,20 +489,19 @@ Stato story: `[ ]`
 
 Se vuoi procedere con il percorso piu lineare (E3 → E4):
 
-- `E3-S4-T2` (ridurre casi ambigui nel parser)
 - `E3-S5-T1` (built-in `builtin` — sblocca override comandi, ~20 righe)
 - `E4-S1-T1` (process group pipeline — job control robusto)
+- `E4-S2-T1` (fg/bg/jobs — gestione job interattiva)
 
 Se vuoi completare E3 rapidamente con i quick win rimasti:
 
 - `E3-S5-T1` (`builtin` command — bypassa funzioni shell, chiama direttamente il built-in)
-- `E3-S4-T2` (ridurre casi ambigui nel parser — rafforza il confine shell/object)
-- `E3-S2-T3` (unificare redirection per built-in ed esterni — opzionale, basso impatto)
+- `E3-S5-T2` (hook pre/post-comando)
 
 Se vuoi puntare prima all'usabilita quotidiana della REPL:
 
-- `E5-S3-T1` (kill/yank nell'editor di riga)
-- `E5-S4-T1` (completion avanzata)
+- `E5-S4-T1` (completion avanzata — tab completion path/comandi)
+- `E5-S5-T1` (syntax highlighting in-line)
 - `E4-S1-T1` (process group pipeline)
 
 ## Regola finale

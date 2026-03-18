@@ -206,6 +206,13 @@ if(BUILD_TESTING)
   add_test(NAME oosh_shell_obj_bridge_words  COMMAND oosh -c "echo hello world |> lines |> count")
   add_test(NAME oosh_shell_obj_bridge_trim   COMMAND oosh -c "echo hello |> trim")
 
+  # E3-S4: boolean literals in object expressions and conditions
+  add_test(NAME oosh_bool_lit_true_value   COMMAND oosh -c "true -> value")
+  add_test(NAME oosh_bool_lit_false_type   COMMAND oosh -c "false -> type")
+  add_test(NAME oosh_bool_lit_true_type    COMMAND oosh -c "true -> type")
+  add_test(NAME oosh_bool_lit_if_true      COMMAND oosh -c "if true ; then echo yes ; fi")
+  add_test(NAME oosh_bool_lit_if_false     COMMAND oosh -c "if false ; then echo wrong ; else echo ok ; fi")
+
   set_tests_properties(
     oosh_external_command
     oosh_shell_pipeline
@@ -547,6 +554,11 @@ if(BUILD_TESTING)
   set_tests_properties(oosh_shell_obj_bridge_count PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
   set_tests_properties(oosh_shell_obj_bridge_words PROPERTIES PASS_REGULAR_EXPRESSION "1")
   set_tests_properties(oosh_shell_obj_bridge_trim  PROPERTIES PASS_REGULAR_EXPRESSION "hello")
+  set_tests_properties(oosh_bool_lit_true_value  PROPERTIES PASS_REGULAR_EXPRESSION "true")
+  set_tests_properties(oosh_bool_lit_false_type  PROPERTIES PASS_REGULAR_EXPRESSION "bool")
+  set_tests_properties(oosh_bool_lit_true_type   PROPERTIES PASS_REGULAR_EXPRESSION "bool")
+  set_tests_properties(oosh_bool_lit_if_true     PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(oosh_bool_lit_if_false    PROPERTIES PASS_REGULAR_EXPRESSION "ok")
   set_tests_properties(oosh_binop_add    PROPERTIES PASS_REGULAR_EXPRESSION "7")
   set_tests_properties(oosh_binop_sub    PROPERTIES PASS_REGULAR_EXPRESSION "7")
   set_tests_properties(oosh_binop_mul    PROPERTIES PASS_REGULAR_EXPRESSION "20")

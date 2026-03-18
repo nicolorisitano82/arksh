@@ -1236,6 +1236,12 @@ static int parse_non_object_value_source_tokens(const OoshTokenStream *stream, O
   }
 
   if (stream->tokens[0].kind == OOSH_TOKEN_WORD && stream->tokens[1].kind == OOSH_TOKEN_EOF) {
+    if (strcmp(stream->tokens[0].text, "true") == 0 || strcmp(stream->tokens[0].text, "false") == 0) {
+      out_source->kind = OOSH_VALUE_SOURCE_BOOLEAN_LITERAL;
+      copy_string(out_source->text, sizeof(out_source->text), stream->tokens[0].text);
+      copy_string(out_source->raw_text, sizeof(out_source->raw_text), stream->tokens[0].raw);
+      return 0;
+    }
     if (is_numeric_text(stream->tokens[0].text)) {
       out_source->kind = OOSH_VALUE_SOURCE_NUMBER_LITERAL;
       copy_string(out_source->text, sizeof(out_source->text), stream->tokens[0].text);
@@ -1269,6 +1275,16 @@ static int parse_value_source_text_ex(const char *line, OoshValueSourceNode *out
     out_source->kind = OOSH_VALUE_SOURCE_BLOCK_LITERAL;
     copy_string(out_source->text, sizeof(out_source->text), out_source->block.source);
     copy_string(out_source->raw_text, sizeof(out_source->raw_text), out_source->block.source);
+    return 0;
+  }
+
+  /* E3-S4 T2: boolean literals must be recognized before binding lookup so that
+     `true -> value` yields boolean(true) rather than a path object, and
+     `while true` / `if true` continue to work correctly. */
+  if (strcmp(trimmed, "true") == 0 || strcmp(trimmed, "false") == 0) {
+    out_source->kind = OOSH_VALUE_SOURCE_BOOLEAN_LITERAL;
+    copy_string(out_source->text, sizeof(out_source->text), trimmed);
+    copy_string(out_source->raw_text, sizeof(out_source->raw_text), trimmed);
     return 0;
   }
 
