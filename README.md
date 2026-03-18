@@ -2,42 +2,46 @@
 
 `oosh` è una shell object-oriented in C, pensata per Linux, macOS e Windows.
 
-L'idea di base e che ogni elemento del sistema sia un oggetto interrogabile tramite proprieta e metodi:
+L'idea di base è che ogni elemento del sistema sia un oggetto interrogabile tramite proprietà e metodi:
 
 ```text
 . -> type
 . -> children()
 README.md -> read_text(256)
+. -> children() |> where(type == "file") |> sort(size desc)
 ```
 
-Lo stato attuale del repository implementa un MVP compilabile con:
+## Funzionalità implementate
 
-- REPL interattiva e modalita `-c`
-- modello oggetti per file, directory, device, mount point e path astratti
-- lexer, AST ed executor base per il linguaggio della shell
-- parser per espressioni `path -> property` e `path -> method(...)`
-- runtime object-aware anche per stringhe, numeri, booleani e liste
-- block literal Smalltalk-style come valori di prima classe, assegnabili con `let`
-- estensioni di oggetti e valori, definibili nel linguaggio con `extend` o da plugin nativi
-- pipeline oggetti con `where`, `sort`, `take`, `first`, `count`, `render`, `lines` e `each`
-- esecuzione nativa di comandi esterni con pipe shell, heredoc e redirection
-- liste di comandi con `;`, `&&`, `||` e background jobs con `&`
-- controllo di flusso base con `if`, `while`, `until`, `for`, `break`, `continue`, `return`, ternario `?:`, `switch` e `case`
-- quoting shell con single quote, double quote e backslash
-- espansioni base con `~`, variabili shell/ambiente, `$(...)` e globbing
-- stato shell con `set`, `export`, `unset`, `alias`, `unalias`, `source`, `type`, `eval`, `exec`, `wait`, `trap`
-- funzioni shell dichiarative con parametri named, `return` e scope locale per variabili e binding
-- classi custom con `class ... endclass`, istanziazione, proprieta, metodi ed ereditarieta multipla a precedenza sinistra
-- job control POSIX migliorato con `jobs`, `fg`, `bg`, `true`, `false`, resume dei job stoppati e `Ctrl-Z` sui job foreground
-- caricamento automatico di `~/.ooshrc` o di un file indicato da `OOSH_RC`
-- editor riga interattivo con frecce, `Tab`, `Ctrl-A`, `Ctrl-E`
-- REPL e `source` con blocchi multilinea per `if` / `while` / `until` / `for` / `switch`
-- REPL e `source` con blocchi multilinea anche per `function ... endfunction`
-- completion contestuale dei membri oggetto dopo `->`
-- history persistente su file con built-in `history`
-- prompt configurabile con segmenti stile theme engine
-- sistema plugin con ABI C stabile per aggiungere comandi
-- documentazione architetturale e proposta di sintassi
+- REPL interattiva e modalità `-c`
+- Modello oggetti per file, directory, device, mount point e path astratti
+- Lexer, AST ed executor completi per il linguaggio della shell
+- Parser per espressioni `path -> property` e `path -> method(...)`
+- Runtime object-aware per stringhe, numeri, booleani, liste e mappe
+- Letterali booleani `true` e `false` come value expression di prima classe
+- Operatori binari `+`, `-`, `*`, `/`, `==`, `!=`, `<`, `>`, `<=`, `>=` in value expressions
+- Operatore ternario `condizione ? valore : valore`
+- Block literal Smalltalk-style `[:param | body]` come valori di prima classe, assegnabili con `let`
+- Estensioni di oggetti e valori con `extend`, definibili nel linguaggio o da plugin nativi
+- Pipeline oggetti `|>` con `where`, `sort`, `take`, `first`, `count`, `render`, `lines`, `trim`, `split`, `join`, `each`, `reduce`, `grep`, `to_json`, `from_json`
+- Bridge shell/object: `<comando esterno> |> <stage>` usa stdout come sorgente object pipeline
+- Esecuzione nativa di comandi esterni con pipe shell `|`, heredoc `<<` / `<<-` e redirection completa
+- Liste di comandi con `;`, `&&`, `||` e background job con `&`
+- Controllo di flusso `if`, `elif`, `else`, `while`, `until`, `for`, `break`, `continue`, `return`, ternario `?:`, `switch` e `case`
+- Quoting shell con single quote, double quote e backslash
+- Espansioni `~`, variabili shell/ambiente `$VAR` / `${VAR}` / `$?`, command substitution `$(...)` e globbing
+- Stato shell con `set`, `export`, `unset`, `alias`, `unalias`, `source`, `type`, `eval`, `exec`, `wait`, `trap`
+- Funzioni shell dichiarative con parametri named, `return` e scope locale per variabili e binding
+- Override di comandi built-in tramite funzioni omonime; `builtin <nome>` per chiamare il built-in originale
+- Classi custom con `class ... endclass`, istanziazione, proprietà, metodi ed ereditarietà multipla a precedenza sinistra
+- Job control POSIX con process group completi per pipeline foreground: `setpgid`, `tcsetpgrp`, `Ctrl-Z` → `jobs`, `fg` (con cessione del terminale al pgid), `bg`
+- Caricamento automatico di `~/.ooshrc` o del file indicato da `OOSH_RC`
+- Editor di riga interattivo con syntax highlighting e autosuggestion da history
+- Tab completion contestuale con indicatori di tipo: comandi, funzioni `(fn)`, alias `(@)`, binding `(let)`, variabili `$`, stage pipeline, proprietà e metodi oggetto
+- History persistente su file con built-in `history`
+- Prompt configurabile con segmenti stile theme engine
+- Sistema plugin con ABI C stabile per aggiungere comandi, proprietà, metodi, resolver e stage
+- Documentazione architetturale e reference manual completo
 
 ## Build
 
@@ -50,65 +54,62 @@ Fallback manuale verificato su macOS:
 
 ```bash
 mkdir -p build
-cc -std=c11 -Wall -Wextra -pedantic -Iinclude src/line_editor.c src/main.c src/executor.c src/expand.c src/lexer.c src/object.c src/parser.c src/platform.c src/plugin.c src/prompt.c src/shell.c -o build/oosh
-cc -std=c11 -Wall -Wextra -pedantic -Iinclude -dynamiclib -undefined dynamic_lookup plugins/sample/sample_plugin.c -o build/oosh_sample_plugin.dylib
-cc -std=c11 -Wall -Wextra -pedantic -Iinclude -dynamiclib -undefined dynamic_lookup plugins/skeleton/skeleton_plugin.c -o build/oosh_skeleton_plugin.dylib
+cc -std=c11 -Wall -Wextra -pedantic -Iinclude \
+   src/line_editor.c src/main.c src/executor.c src/expand.c \
+   src/lexer.c src/object.c src/parser.c src/platform.c \
+   src/plugin.c src/prompt.c src/shell.c -o build/oosh
+cc -std=c11 -Wall -Wextra -pedantic -Iinclude -dynamiclib -undefined dynamic_lookup \
+   plugins/sample/sample_plugin.c -o build/oosh_sample_plugin.dylib
+cc -std=c11 -Wall -Wextra -pedantic -Iinclude -dynamiclib -undefined dynamic_lookup \
+   plugins/skeleton/skeleton_plugin.c -o build/oosh_skeleton_plugin.dylib
 ```
 
-## Esecuzione
+Su Linux sostituire `-dynamiclib -undefined dynamic_lookup` con `-shared -fPIC`; su Windows usare `.dll`.
+
+## Esecuzione rapida
 
 ```bash
-./build/oosh
-./build/oosh -c '. -> type'
-./build/oosh -c 'inspect .'
+./build/oosh                                         # REPL interattiva
+./build/oosh -c '. -> type'                          # singolo comando
 ./build/oosh -c '. -> children() |> where(type == "file") |> sort(size desc)'
-./build/oosh -c '. -> children() |> each(name) |> take(5)'
 ./build/oosh -c 'list(1, 20, 3) |> sort(value desc)'
-./build/oosh -c 'capture("pwd")'
 ./build/oosh -c 'capture("pwd") |> lines() |> first()'
 ./build/oosh -c 'text(" a, b , c ") |> trim() |> split(",") |> join(" | ")'
 ./build/oosh -c 'list(1, 2, 3) |> reduce(number(0), [:acc :n | acc + n])'
 ./build/oosh -c 'list(1, 2, 3) |> to_json()'
 ./build/oosh -c 'text("{\"a\":[1,2,{\"b\":true}]}") |> from_json() |> to_json()'
-./build/oosh -c 'let payload = map("a", list(1, 2, map("b", true))) ; /tmp/oosh.json -> write_json(payload) ; /tmp/oosh.json -> read_json() |> to_json()'
+./build/oosh -c 'capture_lines("ls /usr") |> grep("lib") |> count()'
 ./build/oosh -c 'env() -> HOME'
 ./build/oosh -c 'proc() -> pid'
 ./build/oosh -c 'shell() -> plugins |> count()'
 ./build/oosh -c 'let is_file = [:it | it -> type == "file"] ; . -> children() |> where(is_file) |> each([:it | it -> name]) |> take(5)'
 ./build/oosh -c 'extend directory property child_count = [:it | it -> children() |> count()]'
 ./build/oosh -c '. -> child_count'
-./build/oosh -c 'plugin load build/oosh_sample_plugin.dylib ; sample() -> name'
-./build/oosh -c 'plugin load build/oosh_sample_plugin.dylib ; text("ciao") |> sample_wrap()'
+./build/oosh -c 'true && text("ok") -> print()'
+./build/oosh -c 'false || text("recovered") -> print()'
+./build/oosh -c 'bool(true) ? "yes" : "no"'
+./build/oosh -c 'number(3) + number(4)'
+./build/oosh -c 'if . -> exists ; then text("yes") -> print() ; else text("no") -> print() ; fi'
+./build/oosh -c 'for n in list(1, 2, 3) ; do n -> value ; done'
+./build/oosh -c 'switch . -> type ; case "directory" ; then text("dir") -> print() ; default ; then text("other") -> print() ; endswitch'
+./build/oosh -c 'eval "text(\"hi\") -> print()"'
+./build/oosh -c 'trap "text(\"bye\") -> print()" EXIT ; text("run") -> print()'
 ./build/oosh -c 'ls -1 | wc -l'
 ./build/oosh -c 'cat < README.md | wc -l'
 ./build/oosh -c 'ls missing 2>&1 | wc -l'
 ./build/oosh -c $'./build/oosh_test_count_lines <<EOF\none\ntwo\nEOF'
-./build/oosh -c './build/oosh_test_emit_args hello 3> fd3.out 1>&3 ; fd3.out -> read_text(64)'
-./build/oosh -c 'true && text("ok") -> print()'
-./build/oosh -c 'false || text("recovered") -> print()'
-./build/oosh -c 'bool(true) ? "yes" : "no"'
-./build/oosh -c 'if . -> exists ; then text("yes") -> print() ; else text("no") -> print() ; fi'
-./build/oosh -c 'for n in list(1, 2, 3) ; do n -> value ; done'
-./build/oosh -c 'until true ; do text("retry") -> print() ; done'
-./build/oosh -c 'case text("demo.txt") in *.md) text("md") -> print() ;; *.txt) text("txt") -> print() ;; esac'
-./build/oosh -c 'switch . -> type ; case "directory" ; then text("dir") -> print() ; default ; then text("other") -> print() ; endswitch'
-./build/oosh -c 'eval "text(\"hi\") -> print()"'
-./build/oosh -c 'trap "text(\"bye\") -> print()" EXIT ; text("run") -> print()'
-./build/oosh -c 'source examples/scripts/06-classes.oosh'
-./build/oosh -c 'source examples/scripts/07-case-and-builtins.oosh'
-./build/oosh -c 'source examples/scripts/08-redirections-and-heredoc.oosh'
 ./build/oosh -c 'sleep 1 & jobs'
-./build/oosh -c 'text("%s") -> print("$HOME")'
-./build/oosh -c 'text("%s") -> print($(pwd))'
+./build/oosh -c 'let payload = map("a", list(1, 2, map("b", true))) ; /tmp/oosh.json -> write_json(payload) ; /tmp/oosh.json -> read_json() |> to_json()'
+./build/oosh -c 'plugin load build/oosh_sample_plugin.dylib ; sample() -> name'
+./build/oosh -c 'plugin load build/oosh_sample_plugin.dylib ; text("ciao") |> sample_wrap()'
 ./build/oosh -c 'history'
 ./build/oosh -c 'type ls'
-./build/oosh -c 'source examples/scripts/05-shell-functions.oosh'
 ./build/oosh -c 'prompt load examples/oosh.conf'
 ```
 
 ## Script di esempio
 
-Nel repository trovi otto script `.oosh` gia pronti da leggere o caricare con `source`:
+Nel repository sono presenti undici script `.oosh`:
 
 ```bash
 ./build/oosh -c 'source examples/scripts/01-filesystem-tour.oosh'
@@ -119,134 +120,118 @@ Nel repository trovi otto script `.oosh` gia pronti da leggere o caricare con `s
 ./build/oosh -c 'source examples/scripts/06-classes.oosh'
 ./build/oosh -c 'source examples/scripts/07-case-and-builtins.oosh'
 ./build/oosh -c 'source examples/scripts/08-redirections-and-heredoc.oosh'
+./build/oosh -c 'source examples/scripts/09-binary-operators.oosh'
+./build/oosh -c 'source examples/scripts/10-shell-object-bridge.oosh'
+./build/oosh -c 'source examples/scripts/11-command-override.oosh'
 ```
 
 Coprono:
 
-- object model filesystem e pipeline `|>`
-- valori tipizzati, `let`, block e `extend`
-- stato della shell, prompt, alias, sourcing e controllo di flusso
-- scripting base con `if`, `while`, `until`, `for`, ternario `?:`, `switch`, `case` e blocchi multilinea
-- funzioni shell con definizione, ridefinizione, introspezione e chiamata
-- classi custom con `property`, `method`, `init`, `classes` e ereditarieta multipla
-- built-in shell di scripting come `eval`, `wait` e `trap EXIT`
-- heredoc `<<` / `<<-` e redirection avanzata su file descriptor
+| Script | Contenuto |
+|--------|-----------|
+| `01` | Object model filesystem e pipeline `\|>` |
+| `02` | Valori tipizzati, `let`, block e `extend` |
+| `03` | Stato della shell, prompt, alias, sourcing e controllo di flusso |
+| `04` | Scripting con `if`, `while`, `until`, `for`, ternario `?:`, `switch`, `case` |
+| `05` | Funzioni shell: definizione, ridefinizione, introspezione e chiamata |
+| `06` | Classi custom con `property`, `method`, `init` ed ereditarietà multipla |
+| `07` | Built-in di scripting: `eval`, `wait`, `trap EXIT` |
+| `08` | Heredoc `<<` / `<<-` e redirection avanzata su file descriptor |
+| `09` | Operatori binari `+`, `-`, `*`, `/`, confronto e ternario |
+| `10` | Bridge shell/object: output comandi esterni come sorgente `\|>` |
+| `11` | Override di built-in tramite funzioni e uso di `builtin` |
+
+## Riferimento rapido di sintassi
+
+```text
+# Espressioni oggetto
+. -> type
+README.md -> size
+. -> children()
+README.md -> read_text(256)
+
+# Pipeline oggetti
+. -> children() |> where(type == "file") |> sort(size desc)
+list(1, 20, 3) |> sort(value desc)
+capture("pwd") |> lines() |> first()
+text(" a, b , c ") |> trim() |> split(",") |> join(" | ")
+list(1, 2, 3) |> reduce(number(0), [:acc :n | acc + n])
+capture_lines("ls /usr") |> grep("lib")
+
+# Valori tipizzati
+text("ciao")
+number(42)
+bool(true)
+true
+false
+list(1, 2, "tre")
+map("chiave", "valore")
+capture("cmd")
+
+# Operatori
+number(3) + number(4)
+text("a") + text("b")
+number(5) > number(3)
+true ? "sì" : "no"
+
+# Funzioni e classi
+function greet(name) do
+  text("hello %s") -> print(name)
+endfunction
+greet nicolo
+builtin pwd
+
+# Job control
+sleep 5 &
+jobs
+fg
+bg
+
+# Pipeline shell
+ls -1 | wc -l
+cat < README.md | wc -l
+ls > out.txt
+ls missing 2>&1 | wc -l
+
+# Variabili e alias
+set PROJECT oosh
+export PROJECT_ROOT "$PWD"
+alias ll="ls -1"
+let files = . -> children()
+```
 
 ## Documentazione
 
-- [manuale-utente.md](docs/manuale-utente.md)
-- [sintassi-oosh.md](docs/sintassi-oosh.md)
-- [scelte-implementative.md](docs/scelte-implementative.md)
-- [roadmap-shell-completa.md](docs/roadmap-shell-completa.md)
-- [backlog-implementazione.md](docs/backlog-implementazione.md)
+- [manuale-utente.md](docs/manuale-utente.md) — reference manual completo
+- [sintassi-oosh.md](docs/sintassi-oosh.md) — specifica della sintassi
+- [scelte-implementative.md](docs/scelte-implementative.md) — note architetturali
+- [roadmap-shell-completa.md](docs/roadmap-shell-completa.md) — visione a lungo termine
+- [backlog-implementazione.md](docs/backlog-implementazione.md) — stato e prossimi passi
+- [parser-dispatch.md](docs/parser-dispatch.md) — albero di dispatch del parser
 
-Note rapide:
+## Startup e configurazione
 
-- `|>` resta la pipeline object-aware
-- `text(...)`, `number(...)`, `bool(...)`, `list(...)`, `capture(...)` e `capture_lines(...)` producono valori object-aware
-- `let nome = espressione` crea binding tipizzati per oggetti, liste, stringhe, numeri e block
-- `function nome(param1, param2) do ... endfunction` definisce funzioni shell chiamabili come `nome valore1 valore2`
-- `class Nome extends Base1, Base2 do ... endclass` definisce classi custom con ereditarieta multipla
-- le classi si istanziano come value resolver, per esempio `Documento(text("readme"))`
-- le istanze espongono proprieta con `-> nome`, mutazione con `-> set("nome", valore)` e test di tipo con `-> isa("Base")`
-- i block usano sintassi `[:arg | body]` e sono oggetti interrogabili con `-> type`, `-> arity`, `-> source`
-- dentro i block puoi usare `local nome = espressione ; espressione_finale` per creare binding tipizzati limitati allo scope del block
-- `extend <target> property ... = <block>` e `extend <target> method ... = <block>` aggiungono membri custom
-- `|`, `<`, `>`, `>>`, `2>`, `2>&1`, `<<`, `<<-`, `3>`, `n>&m` e `n<&m` sono la pipeline shell testuale
-- `;`, `&&` e `||` concatenano comandi con semantica shell classica
-- `if`, `while`, `until`, `for`, `switch` e `case` usano sintassi shell classica; sulla singola riga serve `;` prima di `then` e `do`, tra i branch di `switch` e tra i branch `case ... ;;`
-- `case ... in ... esac` usa pattern shell con `*`, `?`, `[]` e alternative separate da `|`
-- nei file `source`, la forma oggi piu stabile per `case` resta quella single-line
-- `eval` riesegue una riga costruita dinamicamente nel contesto shell corrente
-- `exec` esegue un comando esterno e poi termina la shell con lo stesso status
-- `wait` aspetta la fine del job piu recente o di uno specifico come `wait %1`
-- `trap` supporta per ora il trap minimo `EXIT`
-- le funzioni shell usano parametri named, ricevono argomenti shell testuali e ripristinano `vars` e `bindings` al termine della chiamata
-- `&` lancia un comando in background
-- `jobs` mostra stato e pid dei job
-- `fg` porta in foreground il job piu recente o uno specifico come `fg %2`
-- `bg` riprende un job stoppato
-- sui build POSIX, `Ctrl-Z` mentre un job e in `fg` lo ferma e lo rimette nella job table
-- `where(...)` accetta sia `where(type == "file")` sia `where(block)`
-- `each(...)` accetta sia la forma breve `each(name)` sia `each(block)`
-- `lines()` divide una stringa in una lista di stringhe
-- `trim()`, `split(...)`, `join(...)` e `reduce(...)` estendono le pipeline su stringhe e liste
-- `local` dentro i block fa shadowing dei binding esterni e li ripristina a fine valutazione
-- `map(...)`, `env()`, `proc()` e `shell()` introducono namespace e valori strutturati non filesystem
-- `to_json()` serializza un valore come JSON e `from_json()` lo rilegge da una stringa JSON, incluse mappe e annidamenti
-- i file supportano `read_json()` e `write_json(binding)` per round-trip JSON typed
-- `print()` e un metodo disponibile su ogni valore; sulle stringhe funziona come un formatter in stile `printf`
-- i plugin possono aggiungere comandi, proprieta, metodi, value resolver e stage di pipeline
-- `~`, `$VAR`, `${VAR}` e `$(...)` vengono espansi
-- le variabili shell locali hanno precedenza sull'ambiente nelle espansioni
-- `*`, `?` e `[]` vengono espansi come glob nei normali argomenti comando
-- le pipeline shell multi-stage e il globbing degli argomenti comando passano dallo stesso layer cross-platform anche sul build Windows
-- heredoc e supportato anche nei file caricati con `source`
-- i fd custom oltre `0/1/2` sono verificati sui build POSIX; su Windows il supporto resta limitato ai fd standard
-- heredoc e fd custom oggi sono supportati sui comandi esterni; i built-in restano sul set semplice di redirection
-- i built-in funzionano da soli o con redirection singola, ma non ancora dentro pipeline shell multi-stage
+All'avvio oosh carica in ordine:
 
-## Stato shell e startup
+1. `OOSH_RC` se definita nell'ambiente
+2. altrimenti `~/.ooshrc`
 
-`oosh` supporta ora un primo runtime da shell tradizionale:
+La history viene salvata in `OOSH_HISTORY` o in `~/.oosh/history`.
+
+La configurazione del prompt viene cercata in `OOSH_CONFIG`, poi `oosh.conf` locale, poi `~/.oosh/prompt.conf`.
+
+Esempio di `~/.ooshrc` minimale:
 
 ```text
 set PROJECT oosh
 export PROJECT_ROOT "$PWD"
 alias ll="ls -1"
-let files = . -> children()
-let is_file = [:it | it -> type == "file"]
-let get_name = [:it | it -> name]
-function greet(name) do
-  text("hello %s") -> print(name)
-endfunction
-files |> where(is_file) |> each(get_name) |> take(5)
-extend directory property child_count = [:it | it -> children() |> count()]
-extend object method echo = [:it :value | value]
-extend
-history
-function
-functions greet
-sleep 5 &
-jobs
-fg
-bg
-plugin list
-plugin disable sample-plugin
-plugin enable sample-plugin
-type ll
-source examples/ooshrc
+prompt load ~/.oosh/prompt.conf
 ```
 
-All'avvio la shell prova a caricare:
+## Plugin
 
-1. il file indicato da `OOSH_RC`, se presente
-2. altrimenti `~/.ooshrc`
-
-Nel repository c'e anche un esempio minimale in [examples/ooshrc](examples/ooshrc).
-
-In REPL sono ora disponibili anche:
-
-- freccia su/giu per navigare la history
-- freccia sinistra/destra per muovere il cursore
-- `Tab` per completion base di built-in, plugin e path
-- `Tab` dopo `->` per vedere proprieta e metodi dell'oggetto corrente
-
-Per esempio:
-
-```text
-README.md -> <Tab>
-README.md -> par<Tab>
-let entry = . -> children() |> first()
-entry -> <Tab>
-```
-- `Ctrl-A` e `Ctrl-E` per andare a inizio/fine riga
-
-La history viene salvata in `~/.oosh/history`, oppure nel path indicato da `OOSH_HISTORY`.
-
-## Plugin di esempio
-
-Dopo la build, il plugin di esempio e disponibile come libreria dinamica:
+Dopo la build il plugin di esempio è disponibile come libreria dinamica:
 
 - Linux: `build/oosh_sample_plugin.so`
 - macOS: `build/oosh_sample_plugin.dylib`
@@ -258,36 +243,24 @@ Caricamento:
 printf 'plugin load build/oosh_sample_plugin.dylib\nhello-plugin Team\nexit\n' | ./build/oosh
 ```
 
-Il plugin di esempio registra anche:
+Il plugin registra il comando `hello-plugin`, il resolver `sample()`, lo stage `sample_wrap()`, la proprietà `sample_tag` sui directory object e il metodo `sample_label(...)` sugli object filesystem.
 
-- `sample_tag` come proprieta sui directory object
-- `sample_label(...)` come metodo sugli object del filesystem
+```text
+plugin list
+plugin info sample-plugin
+plugin disable sample-plugin
+plugin enable sample-plugin
+```
 
-Il comando `plugin` supporta ora anche:
-
-- `plugin list` per nome, versione, descrizione e stato runtime
-- `plugin info <name|path>` per il dettaglio di un plugin caricato
-- `plugin disable <name|path>` per spegnere comandi ed estensioni del plugin
-- `plugin enable <name|path>` per riattivarli senza ricaricare la libreria
-
-Nel repository trovi anche un template copiabile in [plugins/skeleton](plugins/skeleton), con:
-
-- comando stub
-- proprieta custom stub
-- metodo custom stub
-- README dedicato con build e uso
-
-Su Linux e Windows va usata l'estensione del sistema operativo corrispondente.
+Il template per un nuovo plugin è in [plugins/skeleton](plugins/skeleton).
 
 ## Configurazione prompt
-
-Esempio di file:
 
 ```ini
 theme=aurora
 left=userhost,cwd,plugins
 right=status,os,date,time
-separator= :: 
+separator= ::
 use_color=1
 color.userhost=green
 color.cwd=cyan
@@ -295,8 +268,6 @@ color.status=yellow
 color.date=blue
 color.time=yellow
 ```
-
-Il file puo essere caricato con:
 
 ```bash
 ./build/oosh -c 'prompt load examples/oosh.conf'

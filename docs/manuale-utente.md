@@ -1,1379 +1,3109 @@
 # Manuale Utente di oosh
 
+Versione di riferimento: attuale (marzo 2026)
+
+---
+
+## Indice
+
+1. [Cos'e oosh](#1-cose-oosh)
+2. [Avvio rapido](#2-avvio-rapido)
+3. [Modello mentale](#3-modello-mentale)
+4. [Linguaggio — Sintassi di base](#4-linguaggio--sintassi-di-base)
+   - 4.1 [Token e lessico](#41-token-e-lessico)
+   - 4.2 [Quoting](#42-quoting)
+   - 4.3 [Espansioni](#43-espansioni)
+   - 4.4 [Operatori lista comandi](#44-operatori-lista-comandi)
+   - 4.5 [Operatori binari e confronto](#45-operatori-binari-e-confronto-in-value-expressions)
+   - 4.6 [Operatore ternario](#46-operatore-ternario)
+5. [Espressioni oggetto](#5-espressioni-oggetto)
+   - 5.1 [Sintassi selettore → membro](#51-sintassi-selettore--membro)
+   - 5.2 [Tipi di oggetto filesystem](#52-tipi-di-oggetto-filesystem)
+   - 5.3 [Proprieta filesystem](#53-proprieta-filesystem)
+   - 5.4 [Metodi filesystem](#54-metodi-filesystem)
+6. [Tipi di valore e costruttori](#6-tipi-di-valore-e-costruttori)
+   - 6.1 [text / string](#61-text--string)
+   - 6.2 [number](#62-number)
+   - 6.3 [bool e letterali booleani](#63-bool-e-letterali-booleani)
+   - 6.4 [list / array](#64-list--array)
+   - 6.5 [map](#65-map)
+   - 6.6 [capture e capture_lines](#66-capture-e-capture_lines)
+   - 6.7 [Block literal](#67-block-literal)
+   - 6.8 [env, proc, shell](#68-env-proc-shell)
+7. [Pipeline oggetti (|>)](#7-pipeline-oggetti-)
+   - 7.1 [Concetto e sintassi](#71-concetto-e-sintassi)
+   - 7.2 [Bridge shell/object](#72-bridge-shellobject)
+   - 7.3 [Riferimento completo degli stage](#73-riferimento-completo-degli-stage)
+8. [Pipeline shell e redirection](#8-pipeline-shell-e-redirection)
+   - 8.1 [Operatore |](#81-operatore-)
+   - 8.2 [Redirection](#82-redirection)
+   - 8.3 [Heredoc](#83-heredoc)
+   - 8.4 [Background (&)](#84-background-)
+   - 8.5 [Limiti dei built-in nelle pipeline shell](#85-limiti-dei-built-in-nelle-pipeline-shell)
+9. [Controllo di flusso](#9-controllo-di-flusso)
+   - 9.1 [if / elif / else / fi](#91-if--elif--else--fi)
+   - 9.2 [while / done](#92-while--done)
+   - 9.3 [until / done](#93-until--done)
+   - 9.4 [for / in / do / done](#94-for--in--do--done)
+   - 9.5 [break e continue](#95-break-e-continue)
+   - 9.6 [switch / case / default / endswitch](#96-switch--case--default--endswitch)
+   - 9.7 [case … in … esac](#97-case--in--esac)
+   - 9.8 [return](#98-return)
+   - 9.9 [Ternario](#99-ternario)
+10. [Funzioni](#10-funzioni)
+    - 10.1 [Definizione e chiamata](#101-definizione-e-chiamata)
+    - 10.2 [Parametri e scope](#102-parametri-e-scope)
+    - 10.3 [Override di built-in e uso di builtin](#103-override-di-built-in-e-uso-di-builtin)
+11. [Classi](#11-classi)
+    - 11.1 [Definizione](#111-definizione)
+    - 11.2 [Proprieta e metodi](#112-proprieta-e-metodi)
+    - 11.3 [Istanziazione e metodo init](#113-istanziazione-e-metodo-init)
+    - 11.4 [Ereditarieta multipla](#114-ereditarieta-multipla)
+    - 11.5 [Introspezione](#115-introspezione)
+12. [Estensioni (extend)](#12-estensioni-extend)
+13. [Riferimento comandi built-in](#13-riferimento-comandi-built-in)
+14. [Job control](#14-job-control)
+    - 14.1 [Background job (&)](#141-background-job-)
+    - 14.2 [Visualizzazione (jobs)](#142-visualizzazione-jobs)
+    - 14.3 [Foreground (fg)](#143-foreground-fg)
+    - 14.4 [Background (bg)](#144-background-bg)
+    - 14.5 [Ctrl-Z e process group](#145-ctrl-z-e-process-group)
+15. [Editor di riga interattivo](#15-editor-di-riga-interattivo)
+    - 15.1 [Tasti supportati](#151-tasti-supportati)
+    - 15.2 [Syntax highlighting](#152-syntax-highlighting)
+    - 15.3 [Autosuggestion](#153-autosuggestion)
+16. [Tab completion](#16-tab-completion)
+    - 16.1 [Completion per contesto](#161-completion-per-contesto)
+    - 16.2 [Indicatori di tipo](#162-indicatori-di-tipo)
+17. [Prompt](#17-prompt)
+    - 17.1 [Configurazione](#171-configurazione)
+    - 17.2 [Segmenti disponibili](#172-segmenti-disponibili)
+    - 17.3 [Caricamento automatico](#173-caricamento-automatico)
+18. [Plugin](#18-plugin)
+    - 18.1 [Caricare un plugin](#181-caricare-un-plugin)
+    - 18.2 [Comandi plugin](#182-comandi-plugin)
+    - 18.3 [Creare un plugin (cenni)](#183-creare-un-plugin-cenni)
+19. [Avvio e configurazione](#19-avvio-e-configurazione)
+    - 19.1 [File RC](#191-file-rc)
+    - 19.2 [History](#192-history)
+    - 19.3 [Variabili di ambiente speciali](#193-variabili-di-ambiente-speciali)
+20. [Errori frequenti e diagnostica](#20-errori-frequenti-e-diagnostica)
+21. [Cheat sheet](#21-cheat-sheet)
+
+---
+
 ## 1. Cos'e oosh
 
-`oosh` e una shell object-oriented.
+oosh e una shell interattiva e linguaggio di scripting orientato agli oggetti, progettata per essere compatibile con le abitudini Unix consolidate, pur aggiungendo un livello oggetti ricco e un sistema di tipi integrato.
 
-L'idea di base e semplice:
+L'obiettivo principale e consentire all'utente di trattare le entita del filesystem, i valori di programma e l'output dei processi come oggetti strutturati, senza abbandonare la sintassi tradizionale delle shell POSIX per i comandi di sistema ordinari.
 
-- file, directory, device e mount point vengono trattati come oggetti
-- stringhe, numeri, booleani e liste sono valori object-aware di prima classe
-- ogni oggetto ha proprieta, come `type`, `path`, `size`
-- ogni oggetto ha metodi, come `children()`, `read_text()`, `parent()`
-- le pipeline passano oggetti, valori e liste, non solo testo
+Le caratteristiche principali di oosh sono:
 
-Esempi:
+- **Pipeline oggetti**: un operatore `|>` distinto permette di concatenare trasformazioni su valori tipizzati, separando nettamente il flusso di testo tradizionale dalle elaborazioni strutturate.
+- **Tipi di valore**: stringhe, numeri, booleani, liste, mappe e blocchi sono valori di prima classe, costruibili con costruttori espliciti e manipolabili in espressioni.
+- **Oggetti filesystem**: ogni percorso del filesystem diventa un oggetto con proprieta e metodi, interrogabile con l'operatore `->`.
+- **Classi ed estensioni**: e possibile definire classi con ereditarieta multipla ed estendere qualsiasi tipo built-in con proprieta e metodi aggiuntivi.
+- **Sistema di plugin**: l'ABI C stabile permette di aggiungere comandi, stage pipeline, tipi e resolver senza ricompilare la shell.
+- **Editor di riga avanzato**: syntax highlighting in tempo reale, autosuggestion dalla history e tab completion contestuale.
 
-```text
-. -> type
-. -> children()
-README.md -> read_text(256)
-. -> children() |> where(type == "file")
-list(1, 20, 3) |> sort(value desc)
-capture("pwd") |> lines() |> first()
-```
+oosh non e uno strato di compatibilita su bash o zsh. E una shell autonoma con il proprio interprete, che punta ad essere pienamente usabile come shell di sistema e come linguaggio di automazione.
+
+---
 
 ## 2. Avvio rapido
 
-### 2.1 Build
+### Compilazione
 
-Con `cmake`:
-
-```bash
-cmake -S . -B build
-cmake --build build
-```
-
-Build manuale verificata su macOS:
+Il sorgente di oosh usa un sistema di build basato su CMake. Per compilare:
 
 ```bash
-mkdir -p build
-cc -std=c11 -Wall -Wextra -pedantic -Iinclude src/line_editor.c src/main.c src/executor.c src/expand.c src/lexer.c src/object.c src/parser.c src/platform.c src/plugin.c src/prompt.c src/shell.c -o build/oosh
-cc -std=c11 -Wall -Wextra -pedantic -Iinclude -dynamiclib -undefined dynamic_lookup plugins/sample/sample_plugin.c -o build/oosh_sample_plugin.dylib
+mkdir build
+cd build
+cmake ..
+make
 ```
 
-Su Linux e Windows la build del plugin va adattata all'estensione del sistema:
+In alternativa, se si vuole un build con AddressSanitizer (utile per sviluppo e debug):
 
-- Linux: `.so`
-- macOS: `.dylib`
-- Windows: `.dll`
+```bash
+mkdir build-asan
+cd build-asan
+cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON ..
+make
+```
 
-### 2.2 Avvio interattivo
+L'eseguibile risultante si trova in `build/oosh` (o `build-asan/oosh`).
+
+### Prima esecuzione
+
+Per avviare la shell in modo interattivo:
 
 ```bash
 ./build/oosh
 ```
 
-### 2.3 Eseguire un solo comando
+Il prompt predefinito mostra utente, host e directory corrente. Per uscire:
 
 ```bash
-./build/oosh -c '. -> type'
+exit
 ```
 
-### 2.4 Script di esempio
+oppure con `Ctrl-D` su riga vuota.
 
-Nel repository ci sono otto script `.oosh` pronti da usare:
+### Esecuzione di uno script
+
+Passare il percorso dello script come primo argomento:
 
 ```bash
-./build/oosh -c 'source examples/scripts/01-filesystem-tour.oosh'
-./build/oosh -c 'source examples/scripts/02-values-blocks-and-extensions.oosh'
-./build/oosh -c 'source examples/scripts/03-shell-session.oosh'
-./build/oosh -c 'source examples/scripts/04-control-flow.oosh'
-./build/oosh -c 'source examples/scripts/05-shell-functions.oosh'
-./build/oosh -c 'source examples/scripts/06-classes.oosh'
-./build/oosh -c 'source examples/scripts/07-case-and-builtins.oosh'
-./build/oosh -c 'source examples/scripts/08-redirections-and-heredoc.oosh'
+./build/oosh mio_script.osh
 ```
+
+Lo script viene eseguito nel contesto corrente della shell. Non occorre nessun shebang speciale, ma per rendere lo script eseguibile direttamente e possibile usare:
+
+```bash
+#!/usr/bin/env oosh
+```
+
+### Primo script di esempio
+
+Creare il file `esempio.osh`:
+
+```bash
+#!/usr/bin/env oosh
+
+# Stampa il percorso corrente come oggetto
+let cwd_obj = path(".")
+cwd_obj -> describe()
+
+# Lista tutti i file non nascosti nella directory corrente
+let files = path(".") -> children()
+files |> where(hidden == false) |> sort(name asc) |> each(:it | it -> name) |> render()
+
+# Cattura l'output di un comando e lo elabora
+let righe = capture_lines("ls /usr/bin")
+righe |> grep("ssh") |> count()
+```
+
+Eseguirlo:
+
+```bash
+./build/oosh esempio.osh
+```
+
+---
 
 ## 3. Modello mentale
 
-Quando usi `oosh`, puoi pensare in tre modi:
+Per usare oosh efficacemente e utile comprendere il modello concettuale su cui e costruita.
 
-1. comandi tradizionali, come `pwd` o `inspect .`
-2. espressioni oggetto, come `. -> type`
-3. pipeline oggetti, come `. -> children() |> where(type == "file")`
-4. pipeline shell tradizionali, come `ls -1 | wc -l`
-5. valori object-aware, come `text("ciao")`, `number(42)`, `list(1, 2, 3)` o `map("a", 1)`
-6. namespace di sistema, come `env()`, `proc()` e `shell()`
+### Comandi shell classici
 
-La forma piu importante e questa:
+Tutto cio che sembra un comando tradizionale funziona come ci si aspetta:
 
-```text
-selettore -> membro
+```bash
+ls -la /tmp
+grep "pattern" file.txt
+echo "ciao mondo"
 ```
 
-Il `membro` puo essere:
+Questi comandi vengono eseguiti come processi figli. oosh gestisce l'eredita dell'ambiente, la redirection e le pipeline testuali esattamente come una shell POSIX.
 
-- una proprieta: `. -> type`
-- un metodo: `. -> children()`
+### Espressioni oggetto
 
-La sintassi storica `obj("...").membro` resta supportata, ma non e piu quella consigliata.
+Accanto ai comandi, oosh introduce le **espressioni oggetto**. Un'espressione oggetto e una stringa di token che produce un valore tipizzato anziche eseguire un processo. Le espressioni oggetto compaiono:
 
-## 4. Comandi disponibili
+- nel secondo membro di `let nome = <espressione>`
+- come argomenti di stage pipeline
+- come condizione di `if`, `while`, `for`
+- dentro block literal `[:param | ...]`
 
-### `help`
-
-Mostra i comandi e alcuni esempi di sintassi.
-
-```text
-help
+```bash
+let n = number(42)
+let s = text("ciao")
+let lista = list(1, 2, 3)
 ```
 
-### `exit` e `quit`
+### Pipeline oggetti
 
-Terminano la shell.
+L'operatore `|>` connette una sorgente di valori a una serie di stage che la trasformano:
 
-```text
-exit
-quit
+```bash
+list(10, 3, 7, 1) |> sort(asc) |> take(2) |> render()
 ```
 
-### `pwd`
+La sorgente puo essere un valore tipizzato costruito in linea oppure l'output di un comando esterno (bridge shell/object).
 
-Mostra la directory corrente.
+### Pipeline shell
 
-```text
-pwd
+L'operatore `|` connette lo stdout di un processo allo stdin del successivo, esattamente come in bash:
+
+```bash
+ps aux | grep nginx | wc -l
 ```
 
-### `cd`
+### Valori di prima classe
 
-Cambia la directory corrente.
+Blocchi, liste, mappe e numeri sono valori che possono essere assegnati a binding, passati a funzioni e restituiti da metodi. Non esiste una distinzione sintattica rigida tra "dati" e "codice": un block literal e un valore come gli altri.
 
-```text
-cd src
-cd ..
-cd /tmp
-cd -
+---
+
+## 4. Linguaggio — Sintassi di base
+
+### 4.1 Token e lessico
+
+oosh distingue i seguenti tipi di token:
+
+- **Keyword**: `if`, `then`, `else`, `elif`, `fi`, `while`, `until`, `for`, `in`, `do`, `done`, `function`, `endfunction`, `class`, `extends`, `endclass`, `extend`, `return`, `break`, `continue`, `switch`, `case`, `default`, `endswitch`, `esac`, `true`, `false`
+- **Identificatori**: sequenze di lettere, cifre e `_`, non inizianti con cifra
+- **Letterali stringa**: `'...'` e `"..."`
+- **Letterali numerici**: sequenze di cifre, opzionalmente con punto decimale
+- **Operatori**: `|>`, `|`, `->`, `=`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `+`, `-`, `*`, `/`, `?`, `:`, `;`, `&&`, `||`, `&`, `(`, `)`, `[`, `]`
+- **Commenti**: da `#` a fine riga
+
+I token sono separati da spazi o da operatori. Il newline equivale a `;` come separatore di istruzione in quasi tutti i contesti, con alcune eccezioni (corpo di blocco multilinea, continuazione dopo `\`).
+
+Una riga puo essere continuata sulla successiva terminando con `\`:
+
+```bash
+let risultato = number(1) + \
+                number(2)
 ```
 
-Se non passi un argomento, `oosh` prova a usare `HOME`.
-Con `cd -` prova a usare `OLDPWD`.
+### 4.2 Quoting
 
-### `set`, `export` e `unset`
+Il quoting controlla quali espansioni vengono eseguite su una stringa.
 
-Gestiscono le variabili della shell.
+#### Single quote
 
-```text
-set PROJECT oosh
-set LIMIT=128
-set
-export PROJECT_ROOT "$PWD"
-export PATH
-unset LIMIT
+Il single quote `'...'` e il quoting piu forte: il contenuto e trattato come testo letterale, senza alcuna espansione. Nemmeno il backslash e speciale all'interno.
+
+```bash
+echo 'Il valore di $HOME e letterale'
+# stampa: Il valore di $HOME e letterale
+
+echo 'Nessuna $(sostituzione) qui'
+# stampa: Nessuna $(sostituzione) qui
 ```
 
-Regole pratiche:
+Non e possibile inserire un single quote dentro un single-quoted string. Per farlo si usa la concatenazione:
 
-- `set` crea o aggiorna una variabile locale della shell
-- `export` marca una variabile per i processi figli
-- `unset` la rimuove dal runtime di `oosh` e dall'ambiente esportato
-- nelle espansioni, una variabile locale di `oosh` ha precedenza su una omonima dell'ambiente
-
-### `let`
-
-Crea binding tipizzati per valori object-aware: oggetti filesystem, stringhe, numeri, booleani, liste e block.
-
-```text
-let files = . -> children()
-let is_file = [:it | it -> type == "file"]
-let get_name = [:it | it -> name]
-let
-type is_file
-is_file -> arity
-files |> where(is_file) |> each(get_name) |> take(5)
+```bash
+echo 'it'"'"'s fine'
+# stampa: it's fine
 ```
 
-Regole pratiche:
+#### Double quote
 
-- `let` e separato da `set`: `set` resta per variabili shell testuali, `let` per valori semantici
-- il lato destro puo essere una value expression, una object expression, una object pipeline oppure un block literal
-- `let` senza argomenti mostra i binding tipizzati attivi
-- `unset nome` rimuove sia una variabile shell sia un eventuale binding tipizzato con lo stesso nome
+Il double quote `"..."` permette espansioni di variabili e command substitution, ma inibisce il globbing e la word splitting:
 
-### `function` e `functions`
+```bash
+nome="mondo"
+echo "Ciao $nome"
+# stampa: Ciao mondo
 
-Definiscono e ispezionano funzioni shell dichiarative.
+echo "Directory: $(pwd)"
+# stampa: Directory: /home/utente
 
-Sintassi:
-
-```text
-function <nome>(<parametri...>) do
-...
-endfunction
+echo "Home: $HOME"
+# stampa: Home: /home/utente
 ```
 
-Esempi:
+All'interno dei double quote, il backslash e speciale prima di `$`, `` ` ``, `"`, `\` e newline.
 
-```text
-function greet(name) do
-text("hello %s") -> print(name)
-endfunction
+#### Backslash
 
-function pair(left, right) do
-text("%s:%s") -> print(left, right)
-endfunction
+Fuori dalle stringhe quotate, il backslash escapa il carattere immediatamente successivo, trattandolo come letterale:
 
-greet nicolo
-pair shell demo
-function
-functions greet
-type greet
+```bash
+echo Ciao\ Mondo
+# stampa: Ciao Mondo (lo spazio non e un separatore di token)
+
+ls file\ con\ spazi.txt
 ```
 
-Regole pratiche:
+Un backslash prima del newline continua la riga sulla successiva.
 
-- i parametri sono named e si dichiarano tra parentesi, separati da virgole
-- la chiamata e shell-style, quindi `greet nicolo` e non `greet("nicolo")`
-- ogni parametro viene esposto come variabile shell testuale e come binding tipizzato stringa
-- al termine della funzione, `vars` e `bindings` tornano allo stato precedente
-- ridefinire una funzione con lo stesso nome sostituisce la definizione precedente
-- il valore di ritorno della funzione, per ora, coincide con status e output dell'ultimo comando eseguito nel body
+### 4.3 Espansioni
 
-### `class` e `classes`
+#### Espansione di variabili shell
 
-Definiscono e ispezionano classi custom con proprieta, metodi, istanziazione e ereditarieta multipla.
+`$NOME` o `${NOME}` espande il valore della variabile shell (o di ambiente) chiamata `NOME`. Le variabili locali hanno precedenza su quelle di ambiente.
 
-Sintassi:
+```bash
+set SALUTO ciao
+echo $SALUTO
+# stampa: ciao
 
-```text
-class <Nome> [extends <Base1>, <Base2>, ...] do
-...
-endclass
+export PREFISSO=/usr
+echo ${PREFISSO}/bin
+# stampa: /usr/bin
 ```
 
-Esempi:
+La forma `${NOME}` e utile quando il nome e ambiguo:
 
-```text
-class Named do
-property name = text("unnamed")
-method rename = [:self :next | self -> set("name", next)]
-endclass
+```bash
+set X abc
+echo ${X}def
+# stampa: abcdef
 
-class Document extends Named do
-property kind = text("doc")
-method init = [:self :name | self -> set("name", name)]
-method label = [:self | text("%s:%s") -> print(self -> kind, self -> name)]
-endclass
-
-let doc = Document(text("manuale"))
-doc -> label()
-doc -> isa("Named")
-class
-classes Document
-type Document
+echo $Xdef
+# espande $Xdef (probabilmente vuoto, non $X seguita da def)
 ```
 
-Regole pratiche:
+#### Exit status ($?)
 
-- il corpo classe accetta `property nome = espressione` e `method nome = block`
-- l'istanziazione usa la stessa sintassi dei value resolver, per esempio `Document()` oppure `Document(text("manuale"))`
-- se esiste un metodo `init`, viene invocato automaticamente sul nuovo oggetto
-- dentro i metodi, il receiver arriva tipicamente come primo parametro, per esempio `:self`
-- `self -> set("campo", valore)` aggiorna una proprieta dell'istanza e restituisce l'istanza stessa
-- `istanza -> isa("Base")` verifica ereditarieta diretta o indiretta
-- la risoluzione di proprieta e metodi cerca prima nella classe corrente e poi nelle basi da sinistra verso destra
-- in caso di conflitto tra basi multiple, la base piu a sinistra ha precedenza su quelle a destra
+`$?` si espande all'exit status dell'ultimo comando eseguito. Il valore e `0` in caso di successo, diverso da zero in caso di errore.
 
-### `extend`
+```bash
+ls /tmp
+echo "exit status: $?"
+# stampa: exit status: 0
 
-Aggiunge proprieta e metodi custom a valori e oggetti.
-
-Sintassi:
-
-```text
-extend <target> property <nome> = <block>
-extend <target> method <nome> = <block>
-extend
+ls /percorso/inesistente 2>/dev/null
+echo "exit status: $?"
+# stampa: exit status: 1 (o altro valore non zero)
 ```
 
-Esempi:
+#### Command substitution ($(…))
 
-```text
-extend directory property child_count = [:it | it -> children() |> count()]
-extend object method label = [:it :prefix | prefix]
+`$(comando)` esegue il comando e sostituisce l'intera espressione con lo stdout del comando, con eventuale rimozione del newline finale.
 
-. -> child_count
-README.md -> label("doc")
-extend
+```bash
+echo "Utente corrente: $(whoami)"
+echo "Data: $(date +%Y-%m-%d)"
+
+let lista_file = "$(ls /tmp)"
 ```
 
-Regole pratiche:
+#### Tilde (~)
 
-- per una `property` il block deve avere esattamente un parametro: il receiver
-- per un `method` il primo parametro e il receiver, gli altri sono gli argomenti del metodo
-- i target supportati nell'MVP sono `any`, `string`, `number`, `bool`, `object`, `block`, `list`, `path`, `file`, `directory`, `device`, `mount`
-- il core della shell mantiene precedenza; l'estensione entra in gioco quando una proprieta o un metodo non esistono gia nel runtime base
+`~` si espande nella directory home dell'utente corrente (il valore di `$HOME`).
 
-### `alias` e `unalias`
-
-Definiscono alias testuali in stile shell tradizionale.
-
-```text
-alias ll="ls -1"
-alias gs="git status"
-alias
-type ll
-unalias gs
-```
-
-Gli alias vengono espansi all'inizio della linea e dopo ogni pipeline shell `|`.
-Non vengono applicati alle espressioni object-aware come `. -> children()`.
-
-### `source` e `.`
-
-Eseguono un file di comandi nel contesto della shell corrente.
-
-```text
-source examples/ooshrc
-. examples/ooshrc
-```
-
-Questo e il modo giusto per caricare:
-
-- alias
-- variabili shell
-- export
-- configurazioni condivise tra sessioni
-- blocchi multilinea con `if`, `while`, `until`, `for` e `switch`
-- blocchi multilinea con `function ... endfunction`
-- heredoc shell-style come `<<EOF ... EOF`
-
-All'avvio `oosh` prova a caricare automaticamente:
-
-1. il file indicato da `OOSH_RC`, se la variabile ambiente e presente
-2. altrimenti `~/.ooshrc`
-
-### `if`, `while`, `until`, `for`, `break`, `continue`, `return`, ternario, `switch` e `case`
-
-`oosh` supporta ora un primo blocco di scripting shell-style.
-
-Forme single-line:
-
-```text
-if true ; then text("ok") -> print() ; fi
-if bool(false) ; then text("no") -> print() ; else text("yes") -> print() ; fi
-bool(true) ? "yes" : "no"
-while false ; do text("no") -> print() ; done
-while true ; do text("tick") -> print() ; break ; done
-until true ; do text("retry") -> print() ; done
-for n in list(1, 2, 3) ; do n -> value ; done
-for n in list(1, 2, 3) ; do n -> print() ; continue ; done
-for name in a b c ; do text("%s") -> print($name) ; done
-case text("demo.txt") in *.md) text("md") -> print() ;; *.txt) text("txt") -> print() ;; *) text("other") -> print() ;; esac
-switch . -> type ; case "directory" ; then text("dir") -> print() ; default ; then text("other") -> print() ; endswitch
-
-function greet(name) do
-return text("hi")
-endfunction
-```
-
-Forme multilinea, comode in REPL e nei file `source`:
-
-```text
-if . -> exists
-then
-text("yes") -> print()
-else
-text("no") -> print()
-fi
-
-for entry in . -> children() |> take(3)
-do
-entry -> name
-done
-
-until false
-do
-text("retry") -> print()
-break
-done
-
-switch . -> type
-case "directory"
-then
-text("dir") -> print()
-default
-then
-text("other") -> print()
-endswitch
-```
-
-Regole pratiche:
-
-- sulla singola riga usa `;` prima di `then` e `do`, tra i branch di `switch` e tra i branch `case ... ;;`
-- su piu righe il newline e sufficiente
-- `condizione ? vero : falso` produce un valore e puo essere usato ovunque sia ammessa una value expression
-- `if`, `while` e `until` provano prima a valutare una value expression e ne usano la truthiness
-- se la condizione non e una value expression valida, viene eseguita come comando shell classico e si usa il suo exit status
-- `break [count]` esce dal loop corrente o da piu loop annidati
-- `continue [count]` salta all'iterazione successiva del loop corrente o di un loop esterno
-- `for` accetta sia sorgenti typed, come `list(...)` o `. -> children()`, sia shell words classiche come `a b c`
-- la variabile del `for` esiste sia come binding tipizzato sia come variabile shell testuale, quindi puoi usare sia `entry -> name` sia `$entry`
-- `return [value-expression]` termina la funzione shell corrente; il valore opzionale diventa l'output della chiamata
-- `switch` confronta il valore della expression con i `case` usando il rendering dei valori; `default` e opzionale ma, se presente, deve essere l'ultimo branch
-- `case ... in ... esac` fa pattern matching shell-style con `*`, `?`, `[]` e alternative separate da `|`
-- nei file `source`, la forma oggi piu stabile per `case` resta quella single-line
-
-### `eval`, `exec`, `wait` e `trap`
-
-Completano il primo set di built-in di scripting piu vicini alla shell classica.
-
-```text
-eval "text(\"hi\") -> print()"
-sleep 1 & wait %1
-trap "text(\"bye\") -> print()" EXIT
-```
-
-Regole pratiche:
-
-- `eval "..."` riesegue la stringa nel contesto shell corrente, quindi vede alias, variabili, binding, funzioni e classi gia caricati
-- `exec cmd ...` esegue un comando esterno e poi termina la shell con lo stesso status finale
-- `wait` aspetta il job piu recente; `wait %1` aspetta un job specifico
-- `trap` supporta per ora il caso minimo `EXIT`
-- `trap - EXIT` rimuove il trap registrato
-
-### `plugin`
-
-Gestisce i plugin caricati a runtime.
-
-```text
-plugin list
-plugin info sample-plugin
-plugin disable sample-plugin
-plugin enable sample-plugin
-```
-
-Regole pratiche:
-
-- `plugin list` mostra nome, versione, descrizione, path e stato `enabled/disabled`
-- `plugin disable ...` spegne i comandi e le estensioni registrate da quel plugin senza scaricare la libreria
-- `plugin enable ...` le riattiva
-- `plugin info ...` stampa il dettaglio completo di un plugin caricato
-
-### `type`
-
-Mostra come `oosh` risolve un nome.
-
-```text
-type help
-type ll
-type ls
-```
-
-L'output puo indicare se il nome e:
-
-- un alias
-- un built-in della shell
-- un comando plugin
-- un eseguibile trovato nel `PATH`
-
-### `history`
-
-Mostra la history della sessione interattiva.
-
-```text
-history
-```
-
-La history viene salvata automaticamente in:
-
-1. `OOSH_HISTORY`, se la variabile ambiente e impostata
-2. altrimenti `~/.oosh/history`
-
-### `jobs`, `fg` e `bg`
-
-Gestiscono i background job della shell.
-
-```text
-sleep 5 &
-jobs
-fg
-bg
-```
-
-Stato attuale dell'MVP:
-
-- `&` lancia un comando o una pipeline in background
-- `jobs` mostra i job in esecuzione, stoppati o gia completati, con pid
-- `fg` porta in foreground il job piu recente, o un job specifico con `fg 1` oppure `fg %1`
-- `bg` riprende un job stoppato e lo rimette in esecuzione in background
-- sui build POSIX, `Ctrl-Z` mentre un job e in `fg` lo ferma e lo lascia visibile in `jobs`
-
-Nota pratica:
-
-- il job control migliorato vale oggi soprattutto per i job lanciati con `&` e poi gestiti con `jobs` / `fg` / `bg`
-- la parita completa con `zsh` per tutti i foreground pipeline diretti resta un passo successivo
-
-### `true` e `false`
-
-Sono built-in minimi utili per composizione e scripting base.
-
-```text
-true
-false
-true && text("ok") -> print()
-false || text("recovered") -> print()
-```
-
-### `inspect`
-
-Stampa una descrizione completa di un oggetto del file system.
-
-```text
-inspect .
-inspect README.md
-inspect /tmp
-```
-
-Esempio di output:
-
-```text
-type=file
-path=/Users/nicolo/Desktop/oosh/README.md
-name=README.md
-exists=true
-size=2099
-hidden=false
-readable=true
-writable=true
-```
-
-### `get`
-
-Legge una proprieta specifica di un oggetto.
-
-```text
-get README.md size
-get . type
-get . path
-```
-
-### `call`
-
-Invoca un metodo su un oggetto.
-
-```text
-call . children
-call README.md read_text 128
-call README.md parent
-```
-
-### `prompt`
-
-Gestisce la configurazione del prompt.
-
-```text
-prompt show
-prompt load examples/oosh.conf
-```
-
-### `plugin`
-
-Carica plugin dinamici e mostra quelli gia caricati.
-
-```text
-plugin list
-plugin load build/oosh_sample_plugin.dylib
-```
-
-### `run`
-
-Esegue un comando esterno in modo nativo.
-
-```text
-run ls
-run git status
-```
-
-Oggi puoi anche lanciare direttamente comandi esterni senza `run`:
-
-```text
-ls
-git status
-```
-
-`run` resta utile come alias esplicito quando vuoi distinguere un comando esterno da un built-in o da un'espressione oggetto.
-
-### Quoting ed espansioni
-
-`oosh` supporta ora:
-
-- single quote: testo letterale
-- double quote: testo con espansioni
-- backslash: escape del carattere successivo
-- espansione `~`
-- espansione variabili shell/ambiente: `$VAR`, `${VAR}`, `$?`
-- command substitution: `$(...)`
-- globbing base su argomenti comando: `*`, `?`, `[]`
-
-Esempi:
-
-```text
+```bash
 cd ~
-text("%s") -> print("$HOME")
-text("%s") -> print('$HOME')
-text("%s") -> print(hello\ world)
-text("%s") -> print($(pwd))
-ls *.md
-"$PWD/README.md" -> type
-README.md -> read_text($LIMIT)
+ls ~/documenti
 ```
 
-Regole pratiche:
+#### Globbing
 
-- nelle single quote non viene espanso nulla
-- nelle double quote vengono espansi variabili e `$(...)`, ma non il globbing
-- il globbing si applica solo agli argomenti comando normali, non ai selettori oggetto e non ai target di redirection
-- i selettori object-aware supportano `~`, variabili e command substitution
-- se una variabile esiste sia in `oosh` sia nell'ambiente, vince quella definita nella shell
+I caratteri `*`, `?` e `[...]` negli argomenti dei comandi vengono espansi in elenchi di percorsi corrispondenti.
 
-### Liste di comandi e controllo di flusso base
+```bash
+ls *.txt
+# lista tutti i file .txt nella directory corrente
 
-`oosh` supporta ora anche gli operatori shell classici:
+rm foto_?.jpg
+# rimuove foto_1.jpg, foto_a.jpg, ecc.
 
-```text
-pwd ; ls
-true && text("ok") -> print()
-false || text("fallback") -> print()
-sleep 5 & jobs
+ls [abc]*.md
+# file che iniziano con a, b o c e terminano con .md
 ```
 
-Regole pratiche:
+Il globbing e attivo negli argomenti dei comandi ordinari. Non e attivo all'interno dei selettori oggetto (dopo `->`) ne nei target di redirection.
 
-- `cmd1 ; cmd2`: esegue sempre `cmd2` dopo `cmd1`
-- `cmd1 && cmd2`: esegue `cmd2` solo se `cmd1` ha successo
-- `cmd1 || cmd2`: esegue `cmd2` solo se `cmd1` fallisce
-- `cmd &`: lancia `cmd` in background
-- su POSIX puoi poi usare `fg`, `bg` e `Ctrl-Z` sui job lanciati con `&`
+### 4.4 Operatori lista comandi
 
-## 4.1 Editing interattivo
+I seguenti operatori separano o condizionano l'esecuzione di comandi in sequenza.
 
-In REPL `oosh` supporta ora un editor riga di base:
+#### Punto e virgola (;)
 
-- freccia su e giu: navigazione history
-- freccia sinistra e destra: movimento del cursore
-- `Backspace`: cancellazione a sinistra
-- `Tab`: completion base di built-in, alias, plugin e path
-- `Tab` dopo `->`: mostra proprieta e metodi disponibili per l'oggetto corrente
-- `Ctrl-A`: inizio riga
-- `Ctrl-E`: fine riga
-- `Ctrl-C`: interrompe il comando foreground o cancella la riga corrente
-- `Ctrl-Z`: su POSIX ferma un job in `fg` e lo rimette nella job table
-- `Ctrl-D`: esce dalla shell se la riga e vuota
+Esegue i comandi in sequenza, indipendentemente dall'exit status:
+
+```bash
+mkdir /tmp/prova ; cd /tmp/prova ; ls
+```
+
+#### AND logico (&&)
+
+Il secondo comando viene eseguito solo se il primo ha avuto successo (exit status 0):
+
+```bash
+mkdir /tmp/nuova_dir && echo "Directory creata"
+cd /tmp/nuova_dir && ls
+```
+
+#### OR logico (||)
+
+Il secondo comando viene eseguito solo se il primo ha fallito (exit status non zero):
+
+```bash
+ls /percorso/inesistente || echo "Percorso non trovato"
+mkdir /tmp/dir || echo "Impossibile creare la directory"
+```
+
+#### Combinazioni
+
+Gli operatori possono essere concatenati:
+
+```bash
+mkdir /tmp/test && cd /tmp/test && touch file.txt || echo "Qualcosa e andato storto"
+```
+
+#### Ampersand (&)
+
+Lancia il comando in background (vedi sezione 14):
+
+```bash
+sleep 60 &
+```
+
+### 4.5 Operatori binari e confronto in value expressions
+
+All'interno delle espressioni oggetto (value expressions) sono disponibili operatori binari per aritmetica e confronto.
+
+#### Operatori aritmetici
+
+Operano su valori `number`:
+
+```bash
+let a = number(10)
+let b = number(3)
+let somma = a + b       # 13
+let diff  = a - b       # 7
+let prod  = a * b       # 30
+let quot  = a / b       # 3.333...
+```
+
+#### Concatenazione di stringhe (+)
+
+L'operatore `+` su valori `text` o `string` produce concatenazione:
+
+```bash
+let saluto = text("Ciao") + text(", ") + text("mondo")
+saluto -> print()
+# stampa: Ciao, mondo
+```
+
+#### Operatori di confronto
+
+Producono un valore `bool`:
+
+```bash
+let uguale   = number(5) == number(5)    # true
+let diverso  = number(5) != number(3)    # true
+let minore   = number(2) < number(8)     # true
+let maggiore = number(9) > number(4)     # true
+let minEq    = number(5) <= number(5)    # true
+let magEq    = number(6) >= number(7)    # false
+```
+
+Il risultato di un confronto puo essere usato come condizione in `if` e `while`:
+
+```bash
+let x = number(42)
+if x > number(10)
+then
+  echo "x e maggiore di 10"
+fi
+```
+
+### 4.6 Operatore ternario
+
+La sintassi e:
+
+```
+condizione ? valore_vero : valore_falso
+```
+
+Produce `valore_vero` se la condizione e truthy, altrimenti `valore_falso`. Puo essere usato in qualsiasi punto in cui e attesa una value expression.
+
+```bash
+let eta = number(20)
+let stato = eta >= number(18) ? text("maggiorenne") : text("minorenne")
+stato -> print()
+# stampa: maggiorenne
+```
+
+Il ternario e valutato eager: entrambi i rami vengono parsati, ma solo quello scelto viene valutato a runtime. Puo essere annidato, sebbene per chiarezza si preferisca `switch` o `if` in casi complessi.
+
+```bash
+let n = number(0)
+let descr = n > number(0) ? text("positivo") : n < number(0) ? text("negativo") : text("zero")
+```
+
+---
 
 ## 5. Espressioni oggetto
 
-### 5.1 Sintassi base
+### 5.1 Sintassi selettore → membro
 
-```text
-path -> property
-path -> method()
-path -> method(arg1)
-"My File.txt" -> size
+L'operatore `->` accede a una proprieta o invoca un metodo su un oggetto. La sintassi generale e:
+
+```
+oggetto -> proprieta
+oggetto -> metodo(argomenti)
 ```
 
-### 5.2 Proprieta supportate
+Dove `oggetto` e un valore (binding, percorso, risultato di espressione) e `proprieta` o `metodo` e il nome del membro da accedere.
 
-Le proprieta base attualmente disponibili sono:
+```bash
+let f = path("/etc/hosts")
+f -> name
+# risultato: "hosts"
 
-- `type`
-- `path`
-- `name`
-- `exists`
-- `size`
-- `hidden`
-- `readable`
-- `writable`
+f -> size
+# risultato: numero (dimensione in byte)
+
+f -> read_text(10)
+# risultato: prime 10 righe del file come stringa
+```
+
+L'operatore `->` puo essere concatenato:
+
+```bash
+path("/etc") -> children() -> first() -> name
+```
+
+Nella shell interattiva, il tab completion dopo `->` mostra le proprieta e i metodi disponibili per il tipo dell'oggetto.
+
+### 5.2 Tipi di oggetto filesystem
+
+oosh riconosce i seguenti tipi di oggetto filesystem, usati come valore della proprieta `type`:
+
+| Tipo | Descrizione |
+|------|-------------|
+| `file` | File regolare |
+| `directory` | Directory |
+| `device` | File di dispositivo (block o char) |
+| `mount` | Punto di mount |
+| `path` | Percorso generico (tipo non ancora determinato o inesistente) |
+| `unknown` | Tipo non riconoscibile |
+
+Il costruttore `path("...")` crea un oggetto che rappresenta il percorso specificato. La proprieta `type` riflette il tipo reale rilevato a runtime.
+
+```bash
+let p = path("/etc/hosts")
+p -> type
+# file
+
+let d = path("/etc")
+d -> type
+# directory
+
+let np = path("/percorso/inesistente")
+np -> exists
+# false
+np -> type
+# path (o unknown)
+```
+
+### 5.3 Proprieta filesystem
+
+Le seguenti proprieta sono disponibili su tutti gli oggetti filesystem:
+
+| Proprieta | Tipo restituito | Descrizione |
+|-----------|-----------------|-------------|
+| `type` | string | Tipo dell'oggetto (`file`, `directory`, ecc.) |
+| `path` | string | Percorso assoluto completo |
+| `name` | string | Nome (ultima componente del percorso) |
+| `exists` | bool | `true` se il percorso esiste nel filesystem |
+| `size` | number | Dimensione in byte |
+| `hidden` | bool | `true` se il nome inizia con `.` |
+| `readable` | bool | `true` se il processo ha permesso di lettura |
+| `writable` | bool | `true` se il processo ha permesso di scrittura |
 
 Esempi:
 
-```text
-. -> type
-. -> path
-README.md -> size
-. -> exists
+```bash
+let f = path("/etc/passwd")
+f -> name
+# passwd
+
+f -> hidden
+# false
+
+f -> readable
+# true (dipende dai permessi reali)
+
+f -> size
+# numero di byte
+
+let nascosto = path("/home/utente/.bashrc")
+nascosto -> hidden
+# true
 ```
 
-### 5.3 Tipi oggetto principali
+### 5.4 Metodi filesystem
 
-I tipi principali oggi sono:
+#### children()
 
-- `file`
-- `directory`
-- `device`
-- `mount`
-- `path`
-- `unknown`
+Disponibile sugli oggetti `directory`. Restituisce una lista di oggetti filesystem che rappresentano il contenuto della directory.
 
-### 5.4 Metodi supportati
+```bash
+let dir = path("/etc")
+let contenuto = dir -> children()
+contenuto |> count()
+# numero di voci nella directory
 
-#### `children()`
-
-Disponibile per directory e mount point.
-
-```text
-. -> children()
+contenuto |> where(type == "file") |> sort(name asc)
 ```
 
-Restituisce i figli dell'oggetto.
+#### read_text(limit)
 
-Fuori da una pipeline produce una vista testuale.
-Dentro una pipeline produce una lista di oggetti.
+Disponibile sugli oggetti `file`. Legge il contenuto testuale del file. Il parametro `limit` (opzionale) specifica il numero massimo di righe da leggere.
 
-#### `read_text(limit)`
+```bash
+let f = path("/etc/hosts")
+f -> read_text()
+# intero contenuto come stringa
 
-Disponibile per file.
-
-```text
-README.md -> read_text(128)
+f -> read_text(5)
+# prime 5 righe
 ```
 
-Legge fino a `limit` byte di testo dal file.
+#### read_json()
 
-#### `read_json()`
+Disponibile sugli oggetti `file`. Legge il contenuto del file e lo interpreta come JSON, restituendo un valore tipizzato (map, list, ecc.).
 
-Disponibile per file JSON o path file-like.
-
-```text
-data.json -> read_json()
+```bash
+let conf = path("config.json")
+let dati = conf -> read_json()
+dati -> get("chiave")
 ```
 
-Legge il file, lo interpreta come JSON e restituisce un valore tipizzato.
-Supporta scalari JSON, array annidati e object JSON annidati.
+#### write_json(binding)
 
-#### `write_json(binding)`
+Disponibile sugli oggetti `file`. Serializza il valore `binding` come JSON e lo scrive nel file.
 
-Disponibile per file e path file-like.
-
-```text
-let payload = list(1, 2, 3)
-data.json -> write_json(payload)
+```bash
+let conf = path("output.json")
+let dati = map("nome", text("oosh"), "versione", number(1))
+conf -> write_json(dati)
 ```
 
-Serializza il valore passato in JSON e lo scrive sul file di destinazione.
+#### parent()
 
-#### `print(...)`
+Restituisce l'oggetto filesystem che rappresenta la directory padre del percorso corrente.
 
-Disponibile per ogni valore object-aware.
+```bash
+let f = path("/etc/hosts")
+f -> parent()
+# oggetto directory per /etc
 
-```text
-text("ciao") -> print()
-text("%s:%d") -> print("file", 3)
-. -> print()
+f -> parent() -> name
+# etc
 ```
 
-Se il receiver e una stringa, `print(...)` usa quella stringa come formato stile `printf`.
-Se il receiver non e una stringa, `print()` senza argomenti rende il valore e lo restituisce come output finale della riga.
+#### describe()
 
-#### `parent()`
+Stampa una descrizione leggibile dell'oggetto con tutte le proprieta principali. Utile per l'esplorazione interattiva.
 
-Disponibile per ogni path risolto.
-
-```text
-README.md -> parent()
-. -> parent()
+```bash
+path("/etc/hosts") -> describe()
+# stampa tipo, percorso, dimensione, permessi, ecc.
 ```
 
-Fuori da una pipeline restituisce il path padre come testo.
-Dentro una pipeline restituisce un oggetto.
+#### print(…)
 
-#### `describe()`
+Disponibile su tutti i valori. Stampa il valore. Se il ricevitore e una stringa, accetta un formato printf-style.
 
-Stampa una descrizione completa dell'oggetto.
+```bash
+let s = text("Ciao %s, hai %d messaggi")
+s -> print("Mario", 5)
+# stampa: Ciao Mario, hai 5 messaggi
 
-```text
-. -> describe()
+let n = number(42)
+n -> print()
+# stampa: 42
 ```
 
-## 6. Pipeline oggetti
+---
 
-## 6.1 Concetto
+## 6. Tipi di valore e costruttori
 
-Le pipeline usano l'operatore:
+### 6.1 text / string
 
-```text
-|>
+`text("...")` e `string("...")` creano un valore stringa tipizzato. Le due forme sono equivalenti.
+
+```bash
+let s1 = text("Ciao mondo")
+let s2 = string("altro testo")
+
+s1 -> print()
+# stampa: Ciao mondo
 ```
 
-Esempio:
+Le stringhe tipizzate supportano l'operatore `+` per la concatenazione e possono essere passate alle pipeline oggetti:
 
-```text
-. -> children() |> where(type == "file") |> sort(size desc)
-list(1, 20, 3) |> sort(value desc)
-capture("pwd") |> lines() |> first()
-text(" a, b , c ") |> trim() |> split(",") |> join(" | ")
-list(1, 2, 3) |> reduce(number(0), [:acc :n | acc + n])
+```bash
+let frase = text("  testo con spazi  ")
+frase |> trim() |> render()
+# stampa: testo con spazi
+
+text("uno:due:tre") |> split(":") |> count()
+# 3
 ```
 
-La pipeline:
+### 6.2 number
 
-1. parte da un valore object-aware o da un'espressione oggetto
-2. produce un valore intermedio
-3. applica trasformazioni
-4. renderizza il risultato finale
+`number(n)` crea un valore numerico. Accetta un intero o un decimale.
 
-## 6.2 Regole importanti
-
-- la pipeline puo iniziare con un'espressione oggetto oppure con costruttori come `text(...)`, `number(...)`, `bool(...)`, `list(...)`, `capture(...)`, `capture_lines(...)`
-- `where`, `sort`, `take`, `first` ed `each` lavorano su liste
-- `count()` funziona su valori singoli, liste e mappe
-- `render()` forza la conversione in testo
-- `lines()` divide una stringa in una lista di stringhe
-- `trim()` pulisce spazi iniziali e finali
-- `split()` e `join()` convertono tra stringhe e liste
-- `reduce()` combina una lista in un singolo valore usando un block
-- `to_json()` serializza un valore come JSON
-- `from_json()` interpreta una stringa come JSON
-- dopo `render()`, gli stage che si aspettano liste o oggetti non hanno piu senso
-
-## 6.3 Sorgenti di valore supportate
-
-```text
-text("ciao")
-number(42)
-bool(true)
-list(1, 2, "tre")
-capture("pwd")
-capture_lines("ls -1")
-env()
-proc()
-shell()
+```bash
+let intero   = number(42)
+let decimale = number(3.14)
+let negativo = number(-7)
 ```
 
-Note pratiche:
+I valori numerici supportano gli operatori aritmetici `+`, `-`, `*`, `/` e i confronti `==`, `!=`, `<`, `>`, `<=`, `>=`.
 
-- `text(...)` e `string(...)` sono equivalenti
-- `array(...)` e un alias di `list(...)`
-- `capture(...)` restituisce una stringa con l'output del comando
-- `capture_lines(...)` restituisce una lista di stringhe, una per riga
-- `env()` restituisce una mappa con l'ambiente effettivo della shell e `env("PATH")` legge una singola chiave
-- `proc()` restituisce una mappa sul processo corrente, per esempio `pid`, `ppid`, `cwd`, `host`, `os`
-- `shell()` restituisce una mappa con stato runtime, alias, binding, plugin e job
-- dentro liste eterogenee puoi usare `type` o `value_type`; sugli item filesystem `type` continua a significare `file`, `directory`, `device`, ...
-
-## 6.3.1 Block literal
-
-I block usano una sintassi ispirata a Smalltalk:
-
-```text
-[:it | it -> name]
-[:it | it -> type == "file"]
-[:n | local next = n + 1 ; next]
+```bash
+let a = number(10)
+let b = number(4)
+let c = a * b + number(2)
+c -> print()
+# stampa: 42
 ```
 
-Sono valori di prima classe:
+### 6.3 bool e letterali booleani
 
-- possono essere assegnati con `let`
-- possono essere passati a `where(...)` ed `each(...)`
-- possono essere interrogati come oggetti con proprieta come `type`, `arity`, `source`, `body`
+`bool(true)` e `bool(false)` creano valori booleani. I letterali `true` e `false` possono essere usati direttamente come value expression senza il costruttore `bool(...)`.
 
-Esempi:
-
-```text
-let is_file = [:it | it -> type == "file"]
-let get_name = [:it | it -> name]
-let sum_step = [:acc :n | local next = acc + n ; next]
-is_file -> type
-is_file -> source
-. -> children() |> where(is_file) |> each(get_name)
-list(1, 2, 3) |> reduce(number(0), sum_step)
+```bash
+let vero  = true
+let falso = false
+let esplicito = bool(true)
 ```
 
-Scope locale nei block:
+I valori booleani sono usati come risultato dei confronti e come condizioni nei costrutti di controllo del flusso.
 
-- `local nome = espressione ; espressione_finale` crea un binding tipizzato visibile solo dentro il block corrente
-- i `local` vengono valutati in ordine, quindi un `local` successivo puo usare quelli precedenti
-- un `local` puo fare shadowing di un binding esterno o di un parametro del block
-- a fine valutazione il binding precedente viene ripristinato automaticamente
+La **truthiness** di un valore in un contesto condizionale segue queste regole:
+- `bool(false)` e falsy
+- `number(0)` e falsy
+- `text("")` (stringa vuota) e falsy
+- Tutti gli altri valori tipizzati sono truthy
+- Un exit status 0 e truthy (successo del comando)
+- Un exit status non zero e falsy
 
-## 6.4 Stage supportati
-
-### `where(property == value)`
-
-Filtra una lista.
-
-```text
-. -> children() |> where(type == "file")
-. -> children() |> where(name == "README.md")
+```bash
+let flag = true
+if flag
+then
+  echo "flag e vero"
+fi
 ```
 
-Limitazione attuale:
+### 6.4 list / array
 
-- supporta solo il confronto `==`
+`list(v1, v2, ...)` e `array(v1, v2, ...)` creano una lista eterogenea. I due costruttori sono equivalenti. Gli elementi possono essere di qualsiasi tipo.
 
-Forma aggiuntiva supportata:
-
-```text
-let is_file = [:it | it -> type == "file"]
-. -> children() |> where(is_file)
-. -> children() |> where([:it | it -> type == "file"])
+```bash
+let numeri  = list(number(1), number(2), number(3))
+let mista   = list(text("a"), number(1), true)
+let vuota   = list()
 ```
 
-### `sort(property asc|desc)`
+Le liste sono la sorgente primaria per le pipeline oggetti:
 
-Ordina una lista per proprieta.
-
-```text
-. -> children() |> sort(name asc)
-. -> children() |> sort(size desc)
+```bash
+list(number(5), number(1), number(3)) |> sort(asc) |> render()
+# 1
+# 3
+# 5
 ```
 
-Se la proprieta e numerica, come `size`, l'ordinamento e numerico.
-Negli altri casi e lessicografico.
+### 6.5 map
 
-### `take(n)`
+`map("k1", v1, "k2", v2, ...)` crea una mappa chiave-valore. Le chiavi devono essere stringhe, i valori possono essere di qualsiasi tipo.
 
-Mantiene solo i primi `n` elementi.
-
-```text
-. -> children() |> take(5)
-. -> children() |> where(type == "file") |> sort(size desc) |> take(3)
+```bash
+let persona = map(
+  "nome",   text("Mario"),
+  "eta",    number(30),
+  "attivo", true
+)
 ```
 
-### `first()`
+Le mappe possono essere lette con `->` (accesso alla proprieta per chiave) oppure serializzate in JSON:
 
-Estrae il primo elemento di una lista e lo trasforma in valore singolo.
+```bash
+persona -> get("nome")
+# Mario
 
-```text
-. -> children() |> first()
-. -> children() |> where(type == "file") |> sort(size desc) |> first()
+persona |> to_json() |> render()
+# {"nome":"Mario","eta":30,"attivo":true}
 ```
 
-Se la lista e vuota, il comando fallisce.
+### 6.6 capture e capture_lines
 
-### `count()`
+`capture("cmd ...")` esegue il comando specificato e restituisce l'intero stdout come valore `text` (stringa tipizzata), con il newline finale rimosso.
 
-Conta gli elementi.
+```bash
+let versione = capture("uname -r")
+versione -> print()
+# stampa il kernel corrente, es: 6.1.0
 
-```text
-. -> children() |> count()
-. -> children() |> where(type == "file") |> count()
+let data_oggi = capture("date +%Y-%m-%d")
 ```
 
-Su un valore singolo restituisce `1`.
+`capture_lines("cmd ...")` esegue il comando e restituisce lo stdout come `list` di righe (una stringa per riga).
 
-### `lines()`
+```bash
+let processi = capture_lines("ps aux")
+processi |> count()
+# numero di righe
 
-Divide una stringa in una lista di stringhe.
-
-```text
-capture("pwd") |> lines()
-capture("printf 'one\\ntwo\\n'") |> lines() |> count()
+processi |> grep("nginx") |> render()
+# filtra le righe che contengono "nginx"
 ```
 
-### `trim()`
+Differenze rispetto a `$(...)`:
+- `$(...)` e una variabile shell (stringa grezza)
+- `capture(...)` restituisce un valore `text` tipizzato usabile in pipeline oggetti
+- `capture_lines(...)` restituisce direttamente una `list`, evitando uno split manuale
 
-Rimuove spazi iniziali e finali da una stringa.
-Se applicato a una lista, rifinisce ogni elemento stringa.
+### 6.7 Block literal
 
-```text
-text("  ciao  ") |> trim()
-capture("printf '  one  '") |> trim()
+Un block literal e una funzione anonima come valore di prima classe. La sintassi e:
+
+```
+[:param1 :param2 | corpo]
 ```
 
-### `split(separator?)`
+I parametri sono prefissati con `:`. Il corpo e una sequenza di espressioni. Il valore del block e il risultato dell'ultima espressione.
 
-Divide una stringa in una lista.
-
-```text
-text("a,b,c") |> split(",")
-text("uno due tre") |> split()
+```bash
+let raddoppia = [:x | x * number(2)]
+let triplica  = [:x | x * number(3)]
 ```
 
-Se ometti il separatore, `split()` usa whitespace.
+I block possono essere passati a stage come `each` e `reduce`, o a metodi che accettano un block come argomento:
 
-### `join(separator?)`
+```bash
+list(number(1), number(2), number(3)) |> each([:it | it * number(2)])
+# 2, 4, 6
 
-Unisce una lista in una stringa.
-
-```text
-list("a", "b", "c") |> join("-")
-. -> children() |> each(name) |> join(", ")
+list(number(1), number(2), number(3)) |> reduce(number(0), [:acc :it | acc + it])
+# 6
 ```
 
-Se ometti il separatore, `join()` concatena senza separatore.
+#### Variabili locali dentro un block
 
-### `reduce(block)` e `reduce(init, block)`
+Dentro un block si puo usare `local nome = expr` per creare binding con scope limitato al block stesso. La visibilita e quella del block corrente, non del contesto chiamante.
 
-Riduce una lista a un singolo valore.
-
-```text
-list(1, 2, 3) |> reduce(number(0), [:acc :n | acc + n])
-list("a", "b", "c") |> reduce(text(""), [:acc :it | acc + it])
+```bash
+let calcola = [:x |
+  local quadrato = x * x
+  local cubo = quadrato * x
+  cubo
+]
 ```
 
-Senza valore iniziale, il primo elemento della lista diventa l'accumulatore iniziale.
+#### Proprieta dei block
 
-### `from_json()`
+I block hanno le seguenti proprieta accessibili con `->`:
 
-Interpreta una stringa JSON e la converte in valore tipizzato.
+| Proprieta | Descrizione |
+|-----------|-------------|
+| `type` | Sempre `"block"` |
+| `arity` | Numero di parametri |
+| `source` | Stringa con il sorgente del block |
+| `body` | Rappresentazione interna del corpo |
 
-```text
-text("{\"a\": [1, 2, {\"b\": true}]}") |> from_json() |> to_json()
+```bash
+let b = [:a :b | a + b]
+b -> arity
+# 2
+b -> type
+# block
 ```
 
-### `to_json()`
+### 6.8 env, proc, shell
+
+#### env()
+
+`env()` restituisce una mappa dell'intero ambiente del processo corrente. `env("CHIAVE")` restituisce il valore della singola variabile di ambiente come stringa tipizzata.
+
+```bash
+let tutto_env = env()
+tutto_env |> to_json() |> render()
+
+let home = env("HOME")
+home -> print()
+# stampa la home directory
+
+let path_val = env("PATH")
+path_val |> split(":") |> count()
+# numero di directory nel PATH
+```
+
+#### proc()
+
+`proc()` restituisce una mappa con informazioni sul processo corrente:
+
+| Chiave | Descrizione |
+|--------|-------------|
+| `pid` | PID del processo oosh corrente |
+| `ppid` | PID del processo padre |
+| `cwd` | Directory di lavoro corrente |
+| `host` | Nome host |
+| `os` | Sistema operativo |
+
+```bash
+let info = proc()
+info -> get("pid") -> print()
+info -> get("cwd") -> print()
+info -> get("host") -> print()
+```
+
+#### shell()
+
+`shell()` restituisce una mappa con informazioni sullo stato runtime della shell corrente:
+
+| Chiave | Descrizione |
+|--------|-------------|
+| `alias` | Lista degli alias definiti |
+| `binding` | Lista dei binding `let` attivi |
+| `plugin` | Lista dei plugin caricati |
+| `job` | Lista dei job attivi |
+
+```bash
+let stato = shell()
+stato -> get("plugin") -> render()
+stato -> get("binding") -> render()
+```
+
+---
+
+## 7. Pipeline oggetti (|>)
+
+### 7.1 Concetto e sintassi
+
+L'operatore `|>` e il cuore del sistema di trasformazione strutturata di oosh. Prende un **valore sorgente** sul lato sinistro e lo passa a una serie di **stage** separati da `|>`.
+
+```
+sorgente |> stage1 |> stage2 |> ... |> stageN
+```
+
+Il valore prodotto da ogni stage diventa l'ingresso dello stage successivo. Il risultato finale e il valore prodotto dall'ultimo stage.
+
+Una pipeline oggetti non e una pipeline testuale: non crea processi figli e non si basa su pipe Unix. Lavora interamente in-process su valori tipizzati.
+
+```bash
+# Esempio completo: filtra, ordina, prende i primi 3, stampa il nome
+path("/etc") -> children()
+  |> where(type == "file")
+  |> sort(name asc)
+  |> take(3)
+  |> each(:it | it -> name)
+  |> render()
+```
+
+### 7.2 Bridge shell/object
+
+Quando un **comando esterno** (o una pipeline shell) appare come sorgente prima di `|>`, oosh cattura automaticamente lo stdout del processo e lo tratta come una stringa, convertendola in ingresso per la pipeline oggetti.
+
+```bash
+ls /usr/bin |> grep("ssh") |> count()
+# conta i file in /usr/bin che contengono "ssh" nel nome
+
+ps aux |> lines() |> grep("python") |> count()
+```
+
+In questo contesto, il bridge si comporta come se si fosse usato `capture_lines(...)` sulla pipeline shell, producendo una lista di righe su cui applicare gli stage. Lo stage `lines()` e spesso il primo stage usato dopo un comando esterno per spezzare lo stdout in righe.
+
+Nota: la sorgente del bridge deve essere un comando esterno, non un built-in. I built-in non possono stare nella posizione sorgente di una pipeline shell (`builtin | wc -l` da errore, vedi sezione 8.5).
+
+### 7.3 Riferimento completo degli stage
+
+#### where(condizione)
+
+Filtra gli elementi di una lista. Accetta due forme:
+
+**Forma selettore**: `where(proprieta == valore)` o `where(proprieta != valore)`. Confronta la proprieta dell'elemento con il valore dato.
+
+```bash
+path("/etc") -> children()
+  |> where(type == "file")
+
+path("/home/utente") -> children()
+  |> where(hidden == false)
+```
+
+**Forma block**: `where([:it | condizione])`. Il block riceve l'elemento e deve restituire un bool.
+
+```bash
+list(number(1), number(2), number(3), number(4))
+  |> where([:it | it > number(2)])
+# restituisce: 3, 4
+```
+
+Limite attuale: nella forma selettore sono supportati solo `==` e `!=`. Per confronti `<`, `>`, `<=`, `>=` usare la forma block.
+
+#### sort(proprieta asc|desc)
+
+Ordina una lista in base alla proprieta specificata. La direzione puo essere `asc` (crescente) o `desc` (decrescente).
+
+```bash
+path("/tmp") -> children()
+  |> sort(size desc)
+
+path("/etc") -> children()
+  |> sort(name asc)
+```
+
+Per liste di valori semplici (numeri, stringhe) la direzione puo essere specificata direttamente:
+
+```bash
+list(number(3), number(1), number(2))
+  |> sort(asc)
+```
+
+#### take(n)
+
+Restituisce i primi `n` elementi della lista.
+
+```bash
+path("/etc") -> children()
+  |> sort(name asc)
+  |> take(5)
+```
+
+Se la lista ha meno di `n` elementi, restituisce tutti gli elementi disponibili senza errore.
+
+#### first()
+
+Restituisce il primo elemento della lista come valore singolo (non come lista di un elemento).
+
+```bash
+path("/etc") -> children()
+  |> sort(name asc)
+  |> first()
+  |> name
+```
+
+#### count()
+
+Conta gli elementi della lista. Se applicato a un valore singolo (non lista), restituisce sempre `1`.
+
+```bash
+path("/etc") -> children() |> count()
+# numero di voci nella directory
+
+capture_lines("ps aux") |> grep("python") |> count()
+```
+
+#### lines()
+
+Divide una stringa in una lista di righe, usando il newline come separatore. Usato spesso come primo stage dopo un bridge shell/object.
+
+```bash
+capture("cat /etc/hosts") |> lines() |> count()
+
+ls /usr/bin |> lines() |> grep("git") |> sort(asc)
+```
+
+#### trim()
+
+Su una stringa: rimuove gli spazi (e altri whitespace) all'inizio e alla fine.
+
+Su una lista: applica `trim()` a ogni elemento stringa della lista.
+
+```bash
+text("  ciao  ") |> trim() |> render()
+# stampa: ciao
+
+capture_lines("cat /etc/hosts") |> trim() |> grep("localhost")
+```
+
+#### split(sep?)
+
+Divide una stringa in una lista di parti usando il separatore `sep`. Se `sep` non e specificato, divide sullo whitespace (spazi, tab).
+
+```bash
+text("a:b:c") |> split(":") |> count()
+# 3
+
+text("uno due tre") |> split() |> render()
+# uno
+# due
+# tre
+
+env("PATH") |> split(":") |> sort(asc) |> render()
+```
+
+#### join(sep?)
+
+Unisce una lista di stringhe in una singola stringa, usando `sep` come separatore. Se `sep` non e specificato, concatena senza separatore.
+
+```bash
+list(text("a"), text("b"), text("c")) |> join(":") |> render()
+# a:b:c
+
+list(text("uno"), text("due")) |> join() |> render()
+# unoddue
+```
+
+#### reduce(init, block) / reduce(block)
+
+Applica il block di accumulazione a ogni elemento della lista, accumulando un risultato. La forma con `init` usa il valore fornito come accumulatore iniziale. La forma senza `init` usa il primo elemento come accumulatore iniziale.
+
+Il block riceve due parametri: l'accumulatore e l'elemento corrente. Deve restituire il nuovo accumulatore.
+
+```bash
+list(number(1), number(2), number(3), number(4))
+  |> reduce(number(0), [:acc :it | acc + it])
+# 10 (somma)
+
+list(number(1), number(2), number(3))
+  |> reduce([:acc :it | acc * it])
+# 6 (prodotto, usando il primo elemento come accumulatore)
+```
+
+Esempio: costruire una stringa da una lista:
+
+```bash
+list(text("uno"), text("due"), text("tre"))
+  |> reduce(text(""), [:acc :it | acc + text(" ") + it])
+  |> trim()
+  |> render()
+# uno due tre
+```
+
+#### each(proprieta) / each(metodo()) / each(block)
+
+Trasforma ogni elemento della lista applicando una proprieta, un metodo o un block.
+
+**Forma proprieta**: estrae la proprieta indicata da ogni elemento.
+
+```bash
+path("/etc") -> children() |> each(name)
+# lista dei nomi dei file
+```
+
+**Forma metodo**: chiama il metodo indicato su ogni elemento.
+
+```bash
+path("/etc") -> children() |> each(describe())
+```
+
+**Forma block**: applica il block a ogni elemento.
+
+```bash
+list(number(1), number(2), number(3))
+  |> each([:it | it * number(2)])
+# 2, 4, 6
+```
+
+#### render()
+
+Forza la conversione del valore corrente in testo e lo stampa sullo stdout. Se il valore e una lista, ogni elemento viene stampato su una riga separata. Termina sempre la pipeline stampando il risultato.
+
+```bash
+list(text("a"), text("b"), text("c")) |> render()
+# a
+# b
+# c
+
+text("ciao") |> render()
+# ciao
+```
+
+#### from_json()
+
+Interpreta una stringa come JSON e restituisce il valore tipizzato corrispondente (map, list, number, text, bool).
+
+```bash
+text('{"nome":"Mario","eta":30}')
+  |> from_json()
+  |> get("nome")
+  |> render()
+# Mario
+```
+
+#### to_json()
 
 Serializza il valore corrente in una stringa JSON.
 
-```text
-list(1, 2, 3) |> to_json()
-map("a", list(1, 2, map("b", true))) |> to_json()
-text("ciao") |> to_json()
+```bash
+map("a", number(1), "b", text("due"))
+  |> to_json()
+  |> render()
+# {"a":1,"b":"due"}
+
+list(number(1), number(2), number(3))
+  |> to_json()
+  |> render()
+# [1,2,3]
 ```
 
-### `each(selector)`
+#### grep("pattern")
 
-Applica una trasformazione a ogni elemento della lista.
+Filtra le righe o gli elementi di una lista che contengono il pattern come sottostringa. La corrispondenza e case-sensitive.
 
-```text
-. -> children() |> each(name)
-. -> children() |> each(type) |> take(5)
-. -> children() |> where(type == "file") |> each(parent()) |> first()
-capture_lines("printf 'one\\ntwo\\n'") |> each(length)
-list(1, 2, "tre") |> each(render())
+```bash
+capture_lines("ps aux") |> grep("nginx") |> render()
+
+path("/etc") -> children()
+  |> each(name)
+  |> grep("conf")
+  |> render()
 ```
 
-Forme supportate:
+Per corrispondenze piu complesse (case-insensitive, regex avanzate) usare `where(block)`.
 
-- `each(name)` per leggere una proprieta
-- `each(parent())` per chiamare un metodo sugli oggetti filesystem
-- `each(render())` per forzare la resa testuale di ogni elemento
-- `each(binding)` per usare un block assegnato con `let`
-- `each([:it | ...])` per usare un block inline
+---
 
-Le proprieta lette dentro `where`, `sort` ed `each` possono arrivare anche da `extend`, non solo dal core built-in.
+## 8. Pipeline shell e redirection
 
-### `render()`
+### 8.1 Operatore |
 
-Converte il valore corrente in testo esplicito.
+L'operatore `|` connette lo stdout di un processo allo stdin del successivo, creando una pipeline testuale tra processi. E la pipeline classica Unix.
 
-```text
-README.md -> parent() |> render()
-. -> children() |> where(type == "file") |> render()
+```bash
+ls -la /etc | grep "^d" | wc -l
+# conta le directory in /etc
+
+cat /var/log/syslog | grep "ERROR" | tail -50
 ```
 
-Di default il risultato finale di una pipeline viene comunque renderizzato, ma `render()` e utile quando vuoi forzare il passaggio a testo in uno stage intermedio o rendere piu esplicita l'intenzione.
+I comandi in una pipeline shell vengono eseguiti in parallelo come processi figli separati, connessi da pipe del sistema operativo.
 
-## 7. Pipeline shell e redirection
+### 8.2 Redirection
 
-## 7.1 Concetto
+oosh supporta la redirection completa in stile POSIX.
 
-`oosh` ora supporta anche la pipeline shell classica per i processi esterni.
+#### Redirection in input (<)
 
-Operatori disponibili:
+Redirige lo stdin del comando da un file:
 
-- `|`
-- `<`
-- `>`
-- `>>`
-- `2>`
-- `2>&1`
-- `<<`
-- `<<-`
-- `3>`
-- `n>&m`
-- `n<&m`
+```bash
+sort < lista.txt
+wc -l < documento.txt
+```
 
-Regola pratica:
+#### Redirection in output (>)
 
-- usa `|>` quando vuoi trasformare oggetti
-- usa `|` quando vuoi collegare processi testuali classici
+Redirige lo stdout verso un file, sovrascrivendolo:
 
-## 7.2 Esempi
+```bash
+ls /tmp > lista.txt
+echo "nuovo contenuto" > file.txt
+```
 
-```text
-ls -1 | wc -l
-cat < README.md | wc -l
-ls > out.txt
-printf hello >> out.txt
-ls missing 2> err.txt
-ls missing 2>&1 | wc -l
-./oosh_test_count_lines <<EOF
-one
-two
+#### Append (>>)
+
+Redirige lo stdout verso un file, aggiungendo alla fine:
+
+```bash
+echo "riga aggiuntiva" >> log.txt
+date >> timestamp.log
+```
+
+#### Redirection stderr (2>)
+
+Redirige lo stderr verso un file:
+
+```bash
+comando_pericoloso 2> errori.log
+ls /percorso/inesistente 2> /dev/null
+```
+
+#### Redirection stderr su stdout (2>&1)
+
+Unisce stderr e stdout nello stesso flusso:
+
+```bash
+comando 2>&1 | tee tutto.log
+ls /tmp /inesistente > tutto.txt 2>&1
+```
+
+#### Redirection file descriptor arbitrari (n>, n>&m, n<&m)
+
+Disponibile solo su sistemi POSIX (Linux, macOS, BSD):
+
+```bash
+comando 3> file_fd3.txt
+comando 4>&1
+```
+
+### 8.3 Heredoc
+
+L'heredoc permette di fornire un blocco di testo multilinea come stdin di un comando.
+
+#### Heredoc standard (<<EOF...EOF)
+
+```bash
+cat <<EOF
+Riga uno
+Riga due
+Riga tre
 EOF
-./oosh_test_echo_stdin <<-EOF
-	one
-	two
+```
+
+Le espansioni di variabili e command substitution sono attive all'interno dell'heredoc:
+
+```bash
+nome="Mario"
+cat <<EOF
+Ciao $nome
+La data e: $(date)
 EOF
-./oosh_test_emit_args hello 3> fd3.out 1>&3
-./oosh_test_count_lines 3< fdin.txt 0<&3
 ```
 
-## 7.3 Note operative
+#### Heredoc con indentazione (<<-EOF...EOF)
 
-- per i comandi esterni la shell usa esecuzione nativa, non `system()`
-- l'exit status finale segue l'ultimo processo della pipeline
-- se l'ultimo comando non redirige `stdout`, `oosh` ne cattura il testo e lo mostra
-- `stderr` resta sul terminale, a meno che tu usi `2>` o `2>&1`
-- `<<EOF ... EOF` invia il testo al `stdin` del comando come heredoc
-- `<<-EOF ... EOF` fa la stessa cosa ma rimuove i tab iniziali da ogni riga del body
-- i redirection su fd arbitrari, come `3>` e `0<&3`, sono verificati oggi sui build POSIX
-- su Windows il supporto avanzato resta limitato ai fd standard `0`, `1` e `2`
-- heredoc e fd custom oggi sono pensati per i comandi esterni; i built-in restano sul supporto di redirection semplice
+Il carattere `-` dopo `<<` fa si che i tab iniziali di ogni riga siano rimossi, utile per l'indentazione nei script:
 
-## 7.4 Limite attuale dei built-in
-
-I built-in di `oosh`, come `help` o `prompt`, oggi possono:
-
-- essere eseguiti normalmente
-- essere rediretti su file, per esempio `help > help.txt`
-
-Non possono ancora stare dentro una pipeline shell multi-stage:
-
-```text
-help | wc -l
+```bash
+if true
+then
+  cat <<-EOF
+    Questa riga e indentata nel codice
+    ma non nell'output
+  EOF
+fi
 ```
 
-Questo oggi produce un errore esplicito.
+### 8.4 Background (&)
 
-## 8. Esempi pratici
+Aggiungere `&` alla fine di un comando o pipeline lo esegue in background, restituendo immediatamente il controllo al prompt:
 
-### Elencare solo i file della directory corrente
+```bash
+sleep 120 &
+# [1] 12345
 
-```text
-. -> children() |> where(type == "file")
+rsync -av /sorgente /destinazione &
+# [2] 12346
 ```
 
-### Ordinare i file per dimensione decrescente
+Il job viene aggiunto alla lista dei job (vedi sezione 14). oosh segnala il completamento del job quando diventa rilevabile.
 
-```text
-. -> children() |> where(type == "file") |> sort(size desc)
+### 8.5 Limiti dei built-in nelle pipeline shell
+
+I comandi built-in di oosh non possono essere usati nelle posizioni intermedie o finali di una pipeline shell multi-stage. Il motivo e che i built-in non sono processi separati e non hanno uno stdin/stdout connettibile a pipe del sistema operativo.
+
+```bash
+# ERRORE: cd non e un processo, non puo stare in una pipeline
+ls | cd /tmp
+
+# ERRORE: let non puo ricevere dati da pipe
+cat file.txt | let contenuto
 ```
 
-### Prendere i tre file piu grandi
+Per lavorare con l'output di un comando in un built-in, usare la command substitution o le pipeline oggetti:
 
-```text
-. -> children() |> where(type == "file") |> sort(size desc) |> take(3)
+```bash
+# Corretto: cattura l'output e lo usa in un let
+let righe = capture_lines("ls /tmp")
+
+# Corretto: pipeline oggetti
+ls /tmp |> grep("test") |> count()
 ```
 
-### Ottenere il file piu grande
+---
 
-```text
-. -> children() |> where(type == "file") |> sort(size desc) |> first()
+## 9. Controllo di flusso
+
+### 9.1 if / elif / else / fi
+
+La struttura `if` valuta una condizione e, a seconda del risultato, esegue uno o l'altro ramo.
+
+La condizione puo essere:
+1. Una value expression (viene valutata per truthiness)
+2. Un comando shell (viene valutato per exit status: 0 = successo = true)
+
+**Forma su una riga** (con `;`):
+
+```bash
+if test -f /etc/hosts ; then echo "esiste" ; fi
 ```
 
-### Contare quanti elementi ci sono
+**Forma multilinea** (con newline):
 
-```text
-. -> children() |> count()
+```bash
+if test -f /etc/hosts
+then
+  echo "il file esiste"
+fi
 ```
 
-## 9. Prompt
+**Con else**:
 
-Il prompt e configurabile tramite file `key=value`.
+```bash
+let x = number(10)
+if x > number(5)
+then
+  echo "x e maggiore di 5"
+else
+  echo "x e al massimo 5"
+fi
+```
 
-Esempio:
+**Con elif**:
 
-```ini
+```bash
+let voto = number(75)
+if voto >= number(90)
+then
+  echo "Ottimo"
+elif voto >= number(70)
+then
+  echo "Buono"
+elif voto >= number(60)
+then
+  echo "Sufficiente"
+else
+  echo "Insufficiente"
+fi
+```
+
+### 9.2 while / done
+
+Esegue il corpo ripetutamente finche la condizione e vera.
+
+```bash
+let i = number(0)
+while i < number(5)
+do
+  i -> print()
+  let i = i + number(1)
+done
+```
+
+Con un comando come condizione:
+
+```bash
+while test -f /tmp/lock
+do
+  echo "In attesa..."
+  sleep 1
+done
+```
+
+### 9.3 until / done
+
+Esegue il corpo ripetutamente finche la condizione diventa vera (l'opposto di `while`).
+
+```bash
+let i = number(10)
+until i == number(0)
+do
+  i -> print()
+  let i = i - number(1)
+done
+```
+
+### 9.4 for / in / do / done
+
+Itera su una sorgente. La sorgente puo essere una lista tipizzata o un insieme di shell words.
+
+**Iterazione su lista tipizzata**:
+
+```bash
+let nomi = list(text("Mario"), text("Luigi"), text("Giovanni"))
+for nome in nomi
+do
+  echo "Ciao $nome"
+done
+```
+
+**Iterazione su shell words** (espansione glob, array shell):
+
+```bash
+for file in *.txt
+do
+  echo "File: $file"
+  wc -l $file
+done
+```
+
+**Iterazione su output di comando**:
+
+```bash
+for dir in $(ls -d /etc/*/); do
+  echo "Directory: $dir"
+done
+```
+
+**Iterazione su range numerico esplicito**:
+
+```bash
+for i in 1 2 3 4 5
+do
+  echo "Iterazione $i"
+done
+```
+
+### 9.5 break e continue
+
+`break [n]` interrompe il loop corrente. Se `n` e specificato, interrompe gli `n` loop piu interni.
+
+`continue [n]` salta alla prossima iterazione. Se `n` e specificato, agisce sugli `n` loop piu interni.
+
+```bash
+let i = number(0)
+while i < number(10)
+do
+  let i = i + number(1)
+  if i == number(5)
+  then
+    continue
+  fi
+  if i == number(8)
+  then
+    break
+  fi
+  i -> print()
+done
+# stampa: 1 2 3 4 6 7
+```
+
+**break con argomento numerico**:
+
+```bash
+for i in 1 2 3
+do
+  for j in a b c
+  do
+    if test "$i" = "2" -a "$j" = "b"
+    then
+      break 2
+    fi
+    echo "$i-$j"
+  done
+done
+# interrompe entrambi i loop quando i=2 e j=b
+```
+
+### 9.6 switch / case / default / endswitch
+
+`switch` confronta un valore con una serie di casi. Ogni caso viene eseguito se il valore corrisponde. `default` cattura tutti i casi non corrispondenti.
+
+```bash
+let giorno = text("lunedi")
+
+switch giorno
+case "lunedi"
+then
+  echo "Inizio settimana"
+case "venerdi"
+then
+  echo "Fine settimana lavorativa"
+case "sabato"
+case "domenica"
+then
+  echo "Weekend"
+default
+then
+  echo "Giorno intermedio"
+endswitch
+```
+
+### 9.7 case … in … esac
+
+La forma `case ... in ... esac` e la sintassi POSIX classica per pattern matching. Supporta glob pattern nelle espressioni.
+
+```bash
+case $variabile in
+  "valore_esatto")
+    echo "corrisponde esattamente"
+    ;;
+  pattern*)
+    echo "inizia con 'pattern'"
+    ;;
+  *.txt|*.md)
+    echo "file testo o markdown"
+    ;;
+  *)
+    echo "default: nessun pattern corrisponde"
+    ;;
+esac
+```
+
+Esempio pratico:
+
+```bash
+case $(uname -s) in
+  Linux)
+    echo "Sistema Linux"
+    ;;
+  Darwin)
+    echo "macOS"
+    ;;
+  *)
+    echo "Sistema sconosciuto"
+    ;;
+esac
+```
+
+### 9.8 return
+
+`return [espressione]` termina la funzione corrente e, se specificato, restituisce il valore dell'espressione come risultato della funzione.
+
+```bash
+function massimo(a, b) do
+  if a > b
+  then
+    return a
+  fi
+  return b
+endfunction
+
+let m = massimo 10 7
+m -> print()
+# 10
+```
+
+Senza argomento, `return` termina la funzione con il valore prodotto dall'ultima espressione eseguita.
+
+```bash
+function saluta(nome) do
+  text("Ciao ") + text($nome)
+endfunction
+```
+
+### 9.9 Ternario
+
+Il ternario e gia descritto nella sezione 4.6. Puo essere usato in qualsiasi posizione dove e attesa una value expression, anche all'interno di altri costrutti:
+
+```bash
+for file in *.txt
+do
+  let tipo = path($file) -> size > number(1000) ? text("grande") : text("piccolo")
+  echo "$file e $tipo"
+done
+```
+
+---
+
+## 10. Funzioni
+
+### 10.1 Definizione e chiamata
+
+Le funzioni si definiscono con la parola chiave `function`:
+
+```bash
+function saluta(nome) do
+  echo "Ciao, $nome!"
+endfunction
+```
+
+La chiamata usa la sintassi shell-style: nome della funzione seguito dagli argomenti separati da spazi:
+
+```bash
+saluta Mario
+# stampa: Ciao, Mario!
+```
+
+Le funzioni possono accettare piu parametri:
+
+```bash
+function somma(a, b) do
+  let risultato = number($a) + number($b)
+  risultato -> print()
+endfunction
+
+somma 10 32
+# stampa: 42
+```
+
+Per visualizzare tutte le funzioni definite:
+
+```bash
+function
+# oppure
+functions
+```
+
+Per visualizzare il corpo di una funzione specifica:
+
+```bash
+function saluta
+```
+
+### 10.2 Parametri e scope
+
+Ogni parametro della funzione e disponibile:
+1. Come variabile shell con il nome del parametro (accessibile con `$nome`)
+2. Come binding tipizzato stringa (accessibile come value expression con il nome diretto)
+
+Al termine della chiamata, le variabili shell e i binding vengono ripristinati al loro stato prima della chiamata. Le funzioni non inquinano il contesto chiamante.
+
+```bash
+function mostra_info(percorso) do
+  let p = path($percorso)
+  echo "Percorso: $percorso"
+  echo "Tipo: $(p -> type)"
+  echo "Esiste: $(p -> exists)"
+endfunction
+
+mostra_info /etc/hosts
+```
+
+Le variabili create con `set` dentro una funzione sono locali alla chiamata:
+
+```bash
+function test_scope() do
+  set VARIABILE_LOCALE "solo qui"
+  echo $VARIABILE_LOCALE
+endfunction
+
+test_scope
+echo "$VARIABILE_LOCALE"
+# stringa vuota: la variabile non e visibile fuori dalla funzione
+```
+
+### 10.3 Override di built-in e uso di builtin
+
+E possibile ridefinire qualsiasi built-in creando una funzione con lo stesso nome:
+
+```bash
+function pwd() do
+  echo "Directory corrente: $(builtin pwd)"
+endfunction
+
+pwd
+# stampa: Directory corrente: /home/utente
+```
+
+Per chiamare il built-in originale anche quando esiste una funzione omonima, usare il comando `builtin`:
+
+```bash
+builtin pwd
+# chiama il built-in pwd originale, ignorando la funzione
+
+builtin cd /tmp
+builtin echo "testo"
+```
+
+`builtin` e utile anche per distinguere esplicitamente nel codice quando si intende usare la funzionalita nativa della shell, non un eventuale override.
+
+---
+
+## 11. Classi
+
+### 11.1 Definizione
+
+Una classe si definisce con la parola chiave `class`:
+
+```bash
+class Persona do
+  property nome = text("sconosciuto")
+  property eta  = number(0)
+
+  method saluta = [:self |
+    text("Ciao, sono ") + self -> nome
+  ]
+endclass
+```
+
+La definizione specifica:
+- `property nome = espressione` — proprieta con valore iniziale
+- `method nome = [:self :arg | ...]` — metodo; il primo parametro e sempre `self`
+
+### 11.2 Proprieta e metodi
+
+Le proprieta sono accessibili con `->` sull'istanza:
+
+```bash
+let p = Persona()
+p -> nome
+# sconosciuto
+
+p -> eta
+# 0
+```
+
+I metodi vengono chiamati allo stesso modo:
+
+```bash
+p -> saluta()
+# Ciao, sono sconosciuto
+```
+
+Per modificare una proprieta si usa `-> set("campo", valore)`. Il metodo restituisce l'istanza aggiornata:
+
+```bash
+let p2 = p -> set("nome", text("Mario")) -> set("eta", number(30))
+p2 -> nome
+# Mario
+p2 -> eta
+# 30
+```
+
+### 11.3 Istanziazione e metodo init
+
+Per creare un'istanza si usa il nome della classe come funzione:
+
+```bash
+let p = Persona()
+```
+
+Se la classe definisce un metodo `init`, viene chiamato automaticamente durante l'istanziazione con gli argomenti forniti:
+
+```bash
+class Punto do
+  property x = number(0)
+  property y = number(0)
+
+  method init = [:self :x :y |
+    self -> set("x", x) -> set("y", y)
+  ]
+
+  method distanza_quadrata_origine = [:self |
+    (self -> x * self -> x) + (self -> y * self -> y)
+  ]
+endclass
+
+let p = Punto(number(3), number(4))
+p -> x
+# 3
+p -> y
+# 4
+p -> distanza_quadrata_origine()
+# 25
+```
+
+### 11.4 Ereditarieta multipla
+
+Una classe puo estendere una o piu classi base:
+
+```bash
+class Animale do
+  property nome = text("animale")
+  method voce = [:self | text("...") ]
+endclass
+
+class Cane extends Animale do
+  method voce = [:self | text("Bau!") ]
+  method abbaia = [:self | self -> voce() -> print() ]
+endclass
+
+class Gatto extends Animale do
+  method voce = [:self | text("Miao!") ]
+endclass
+
+class CaneGatto extends Cane, Gatto do
+  # eredita da Cane e Gatto
+endclass
+```
+
+La risoluzione dei metodi cerca prima nella classe corrente, poi nelle basi da sinistra a destra. In caso di conflitto tra due basi, vince quella specificata per prima nell'elenco `extends`.
+
+```bash
+let cg = CaneGatto()
+cg -> voce()
+# Bau! (da Cane, prima nell'elenco extends)
+```
+
+### 11.5 Introspezione
+
+Il metodo `-> isa("NomeClasse")` verifica se un'istanza e di una certa classe o ne discende:
+
+```bash
+let d = Cane()
+d -> isa("Cane")
+# true
+d -> isa("Animale")
+# true (per ereditarieta)
+d -> isa("Gatto")
+# false
+```
+
+Per visualizzare tutte le classi definite:
+
+```bash
+class
+# oppure
+classes
+```
+
+Per visualizzare la definizione di una classe specifica:
+
+```bash
+class Persona
+```
+
+---
+
+## 12. Estensioni (extend)
+
+Il comando `extend` permette di aggiungere proprieta e metodi a tipi esistenti, senza modificarne il codice sorgente. E il meccanismo di monkey-patching tipizzato di oosh.
+
+**Sintassi**:
+
+```bash
+extend target property nome = [:it | espressione]
+extend target method nome = [:it :arg | espressione]
+```
+
+Il primo parametro e sempre `:it` (il ricevitore), seguito dagli eventuali argomenti per i metodi.
+
+**Target supportati**:
+
+| Target | Descrizione |
+|--------|-------------|
+| `any` | Qualsiasi valore |
+| `string` | Valori text/string |
+| `number` | Valori numerici |
+| `bool` | Valori booleani |
+| `object` | Oggetti generici |
+| `block` | Block literal |
+| `list` | Liste |
+| `path` | Oggetti path generico |
+| `file` | File |
+| `directory` | Directory |
+| `device` | Device |
+| `mount` | Mount point |
+
+**Esempi**:
+
+```bash
+# Aggiunge una proprieta "doppio" ai numeri
+extend number property doppio = [:it |
+  it * number(2)
+]
+
+number(21) -> doppio
+# 42
+
+# Aggiunge un metodo "ripeti" alle stringhe
+extend string method ripeti = [:it :n |
+  list() |> reduce(number($n), [:acc :_ | acc + it])
+]
+
+# Aggiunge una proprieta alle directory
+extend directory property file_count = [:it |
+  it -> children() |> where(type == "file") |> count()
+]
+
+path("/etc") -> file_count
+# numero di file regolari in /etc
+
+# Aggiunge una proprieta a tutti i valori
+extend any property tipo_stringa = [:it |
+  text(it -> type)
+]
+```
+
+**Priorita**: il core ha precedenza. `extend` entra in gioco solo per proprieta e metodi che non esistono nel core. Non e possibile sovrascrivere proprieta native con `extend`.
+
+Per visualizzare tutte le estensioni definite:
+
+```bash
+extend
+```
+
+---
+
+## 13. Riferimento comandi built-in
+
+I built-in sono comandi implementati direttamente nella shell, non come processi esterni. Vengono eseguiti nel contesto corrente della shell e possono modificare lo stato interno (variabili, directory corrente, ecc.).
+
+### alias
+
+Definisce un alias che sostituisce un comando. La sintassi e `alias nome="comando"`.
+
+```bash
+alias ls="ls --color=auto"
+alias ll="ls -la"
+alias ..="cd .."
+alias grep="grep --color=auto"
+```
+
+Senza argomenti, lista tutti gli alias definiti:
+
+```bash
+alias
+```
+
+### bg
+
+Riprende in background un job stoppato (vedi sezione 14.4).
+
+```bash
+bg        # riprende il job piu recente
+bg %2     # riprende il job numero 2
+```
+
+### break
+
+Interrompe il loop corrente. Con argomento numerico, interrompe gli `n` loop piu interni:
+
+```bash
+break     # interrompe il loop interno
+break 2   # interrompe i 2 loop piu interni
+```
+
+### builtin
+
+Chiama il built-in originale bypassando eventuali funzioni omonime:
+
+```bash
+builtin pwd
+builtin cd /tmp
+builtin echo "testo"
+```
+
+Utile quando si ridefinisce un built-in con una funzione e si vuole comunque accedere all'implementazione nativa.
+
+### call
+
+Invoca un metodo su un oggetto filesystem dal contesto shell:
+
+```bash
+call /etc/hosts read_text
+call /etc describe
+call /tmp children
+```
+
+### cd
+
+Cambia la directory di lavoro corrente.
+
+```bash
+cd /tmp           # vai a /tmp
+cd                # vai alla HOME
+cd ~              # equivalente a cd
+cd -              # torna alla directory precedente (usa OLDPWD)
+cd percorso/rel   # percorso relativo alla directory corrente
+```
+
+Aggiorna automaticamente le variabili `PWD` e `OLDPWD`.
+
+### class / classes
+
+Senza argomenti, lista tutte le classi definite. Con un nome, mostra la definizione della classe:
+
+```bash
+class               # lista tutte le classi
+class Persona       # mostra la definizione di Persona
+classes             # alias di class
+classes Punto
+```
+
+### continue
+
+Avanza alla prossima iterazione del loop corrente:
+
+```bash
+continue      # prossima iterazione del loop interno
+continue 2    # agisce sui 2 loop piu interni
+```
+
+### eval
+
+Valuta la stringa fornita come codice oosh nel contesto corrente:
+
+```bash
+eval "echo ciao"
+eval "let x = number(42)"
+
+# Utile per costruire comandi dinamicamente
+let cmd = text("echo ") + text("dinamico")
+eval "$cmd"
+```
+
+### exec
+
+Sostituisce il processo shell corrente con il comando specificato (non crea un processo figlio). Dopo `exec`, il processo oosh non esiste piu:
+
+```bash
+exec /bin/bash    # sostituisce oosh con bash
+exec env -i sh    # shell pulita senza ambiente
+```
+
+### exit / quit
+
+Esce dalla shell con il codice di uscita specificato (default 0):
+
+```bash
+exit        # esce con status 0
+exit 1      # esce con status 1
+exit 42     # esce con status 42
+quit        # alias per exit
+```
+
+### export
+
+Esporta una variabile all'ambiente dei processi figli:
+
+```bash
+export PATH="/usr/local/bin:$PATH"
+export EDITOR=vim
+export VARIABILE valore
+```
+
+Senza argomenti, lista le variabili esportate.
+
+### extend
+
+Gestisce le estensioni (vedi sezione 12). Senza argomenti, lista tutte le estensioni definite:
+
+```bash
+extend
+extend string property maiuscolo = [:it | ...]
+```
+
+### false
+
+Esce con status 1 (fallimento). Utile nelle condizioni e nei test:
+
+```bash
+false
+echo $?    # 1
+```
+
+### fg
+
+Porta un job in foreground, cedendogli il terminale (vedi sezione 14.3):
+
+```bash
+fg        # job piu recente
+fg %1     # job numero 1
+```
+
+### function / functions
+
+Senza argomenti, lista le funzioni definite. Con un nome, mostra il corpo:
+
+```bash
+function               # lista tutte le funzioni
+function saluta        # mostra il corpo di "saluta"
+functions              # alias di function
+```
+
+### get
+
+Legge una proprieta di un oggetto filesystem:
+
+```bash
+get /etc/hosts name
+get /tmp size
+get /etc type
+```
+
+### help
+
+Mostra l'aiuto generale della shell o di un comando specifico:
+
+```bash
+help
+help cd
+help let
+```
+
+### history
+
+Mostra la history dei comandi della sessione corrente:
+
+```bash
+history
+```
+
+### inspect
+
+Stampa tutte le proprieta di un oggetto filesystem in modo leggibile:
+
+```bash
+inspect /etc/hosts
+inspect /tmp
+inspect /dev/null
+```
+
+### jobs
+
+Lista i job attivi, stoppati e completati con PID e PGID:
+
+```bash
+jobs
+# [1]  Running    sleep 100  (pid: 1234, pgid: 1234)
+# [2]  Stopped    vim file   (pid: 5678, pgid: 5678)
+```
+
+### let
+
+Crea un binding tipizzato. Senza argomenti, lista tutti i binding attivi:
+
+```bash
+let x = number(42)
+let nome = text("Mario")
+let flag = true
+let lista = list(number(1), number(2), number(3))
+
+let          # lista tutti i binding attivi
+```
+
+### plugin
+
+Gestisce i plugin della shell:
+
+```bash
+plugin load /percorso/plugin.so   # carica un plugin
+plugin list                        # lista i plugin caricati
+plugin info nome_plugin            # informazioni su un plugin
+plugin disable nome_plugin         # disabilita un plugin
+plugin enable nome_plugin          # riabilita un plugin
+```
+
+### prompt
+
+Gestisce la configurazione del prompt:
+
+```bash
+prompt show                     # mostra la configurazione attuale
+prompt load /percorso/conf      # carica una configurazione prompt
+```
+
+### pwd
+
+Stampa la directory di lavoro corrente:
+
+```bash
+pwd
+# /home/utente
+```
+
+### return
+
+Termina la funzione corrente, opzionalmente con un valore:
+
+```bash
+return              # termina senza valore esplicito
+return number(42)   # termina con il valore 42
+return text("ok")   # termina con la stringa "ok"
+```
+
+### run
+
+Esegue esplicitamente un comando esterno, bypassando alias e funzioni:
+
+```bash
+run ls -la
+run /usr/bin/env python3 script.py
+```
+
+Utile quando un alias o una funzione hanno lo stesso nome di un eseguibile e si vuole chiamare direttamente l'eseguibile.
+
+### set
+
+Imposta una variabile shell. Senza argomenti, lista tutte le variabili:
+
+```bash
+set NOME valore
+set NUMERO 42
+set           # lista tutte le variabili shell
+```
+
+Le variabili impostate con `set` non sono esportate automaticamente ai processi figli; usare `export` per quello.
+
+### source / .
+
+Esegue un file nel contesto corrente della shell (non in un sottoprocesso):
+
+```bash
+source ~/.ooshrc
+source /percorso/script.osh argomento1 argomento2
+. ~/.profile
+```
+
+Gli argomenti opzionali sono disponibili come `$1`, `$2`, ecc. dentro il file sorgente.
+
+### trap
+
+Registra un comando da eseguire quando si verifica un evento:
+
+```bash
+trap "echo 'Uscita!'" EXIT     # esegui alla chiusura della shell
+trap - EXIT                     # rimuove il trap EXIT
+```
+
+Limite attuale: e supportato solo l'evento `EXIT`.
+
+### true
+
+Esce con status 0 (successo). Utile nelle condizioni:
+
+```bash
+true
+echo $?    # 0
+
+while true
+do
+  # loop infinito controllato da break
+  sleep 1
+  break
+done
+```
+
+### type
+
+Mostra come oosh risolve un nome (in quale categoria cade):
+
+```bash
+type ls
+# ls is /bin/ls (external)
+
+type cd
+# cd is a built-in
+
+type ll
+# ll is an alias for 'ls -la'
+
+type saluta
+# saluta is a function
+```
+
+### unalias
+
+Rimuove un alias definito:
+
+```bash
+unalias ll
+unalias ..
+```
+
+### unset
+
+Rimuove una variabile shell e/o un binding tipizzato:
+
+```bash
+unset VARIABILE
+unset nome_binding
+```
+
+### wait
+
+Attende il completamento di un job in background:
+
+```bash
+wait        # attende il job piu recente
+wait %2     # attende il job numero 2
+```
+
+Restituisce l'exit status del job atteso.
+
+---
+
+## 14. Job control
+
+### 14.1 Background job (&)
+
+Qualsiasi comando o pipeline puo essere eseguito in background aggiungendo `&` alla fine:
+
+```bash
+wget https://example.com/file.zip &
+# [1] 12345
+
+find / -name "*.log" -mtime +30 &
+# [2] 12346
+```
+
+oosh assegna un numero progressivo al job (mostrato in `[n]`) e il PID del processo. Il controllo torna immediatamente al prompt.
+
+### 14.2 Visualizzazione (jobs)
+
+Il comando `jobs` mostra lo stato di tutti i job della sessione corrente:
+
+```bash
+jobs
+# [1]  Running    wget https://example.com/file.zip  (pid: 12345, pgid: 12345)
+# [2]  Stopped    vim documento.txt                   (pid: 12346, pgid: 12346)
+# [3]  Done       sleep 5                             (pid: 12347, pgid: 12347)
+```
+
+Gli stati possibili sono:
+- `Running`: il processo e in esecuzione in background
+- `Stopped`: il processo e stato fermato (con Ctrl-Z o SIGSTOP)
+- `Done`: il processo e terminato (rimane visibile finche non viene raccolto)
+
+`shell()` restituisce anche la lista dei job attivi come valore tipizzato:
+
+```bash
+shell() -> get("job") |> render()
+```
+
+### 14.3 Foreground (fg)
+
+`fg` porta un job in foreground, cedendogli il controllo del terminale:
+
+```bash
+fg         # porta il job piu recente in foreground
+fg %1      # porta il job numero 1 in foreground
+fg %2      # porta il job numero 2 in foreground
+```
+
+oosh usa `tcsetpgrp` per cedere correttamente il terminale al process group del job, e lo riprende al termine o quando il job viene stoppato di nuovo.
+
+### 14.4 Background (bg)
+
+`bg` riprende l'esecuzione in background di un job stoppato:
+
+```bash
+bg         # riprende il job piu recente stoppato
+bg %2      # riprende il job numero 2
+```
+
+Il job riceve il segnale `SIGCONT` e torna in stato `Running`.
+
+### 14.5 Ctrl-Z e process group
+
+Premere `Ctrl-Z` su un job in foreground gli invia il segnale `SIGTSTP`, che lo ferma. Il job viene automaticamente aggiunto alla lista dei job con stato `Stopped`:
+
+```
+vim documento.txt
+^Z
+[1]  Stopped    vim documento.txt
+```
+
+oosh gestisce i process group correttamente: quando una pipeline e in foreground, tutti i processi della pipeline appartengono allo stesso process group (il PGID coincide con il PID del primo processo). Alla fermata, l'intero gruppo viene fermato, non solo il primo processo.
+
+oosh rileva il segnale `WIFSTOPPED` nella risposta di `waitpid` e aggiunge automaticamente il job alla lista senza richiedere azioni esplicite dell'utente.
+
+---
+
+## 15. Editor di riga interattivo
+
+### 15.1 Tasti supportati
+
+L'editor di riga interattivo di oosh supporta i seguenti comandi da tastiera:
+
+| Tasto | Azione |
+|-------|--------|
+| Freccia su | Comando precedente nella history |
+| Freccia giu | Comando successivo nella history |
+| Freccia sinistra | Muove il cursore a sinistra di un carattere |
+| Freccia destra | Muove il cursore a destra di un carattere |
+| `Ctrl-A` | Sposta il cursore all'inizio della riga |
+| `Ctrl-E` | Sposta il cursore alla fine della riga |
+| `Ctrl-C` | Annulla la riga corrente (se nessun job in foreground); interrompe il job in foreground |
+| `Ctrl-D` | Esce dalla shell se la riga e vuota; cancella il carattere sotto il cursore altrimenti |
+| `Ctrl-Z` | Ferma il job in foreground (POSIX) e lo aggiunge ai job stoppati |
+| `Backspace` | Cancella il carattere immediatamente a sinistra del cursore |
+| `Tab` | Attiva il completion contestuale (vedi sezione 16) |
+
+### 15.2 Syntax highlighting
+
+oosh evidenzia la riga di input in tempo reale, colorando i token in base al loro tipo:
+
+| Categoria | Colore |
+|-----------|--------|
+| Comandi noti (built-in, funzioni, alias, eseguibili PATH) | Verde |
+| Keyword (`if`, `then`, `while`, `function`, ecc.) | Grassetto |
+| Stringhe (single e double quote) | Giallo |
+| Commenti (da `#` a fine riga) | Grigio |
+| Variabili (`$VAR`, `${VAR}`) | Ciano |
+
+Il colore verde dei comandi indica che oosh ha risolto il nome con successo. Un comando non riconosciuto (non built-in, non in PATH, non funzione, non alias) viene mostrato senza colore speciale.
+
+### 15.3 Autosuggestion
+
+oosh mostra un suggerimento grigio dopo il cursore: e il suffisso della voce di history piu recente che inizia con il testo corrente nel buffer.
+
+Esempio: se la history contiene `ls -la /home/utente` e l'utente scrive `ls`, il suggerimento mostra ` -la /home/utente` in grigio.
+
+Per accettare il suggerimento:
+- Freccia destra: accetta il suggerimento carattere per carattere
+- `Ctrl-E`: accetta l'intero suggerimento
+
+Se nessuna voce di history corrisponde, nessun suggerimento viene mostrato.
+
+---
+
+## 16. Tab completion
+
+### 16.1 Completion per contesto
+
+La pressione di `Tab` attiva il completion contestuale, che offre suggerimenti diversi a seconda di dove si trova il cursore nella riga di input.
+
+**All'inizio della riga** (posizione del comando):
+
+Il completion offre:
+- Comandi built-in, con indicatore `(cmd)`
+- Funzioni definite, con indicatore `(fn)`
+- Alias definiti, con indicatore `(@)`
+- Eseguibili trovati nel `PATH`
+
+```
+oosh> ls<Tab>
+ls        (cmd)
+lsblk     /usr/bin/lsblk
+lscpu     /usr/bin/lscpu
+lsof      /usr/bin/lsof
+```
+
+**Dopo `$`** (espansione variabile):
+
+Mostra le variabili shell disponibili, con il prefisso `$`:
+
+```
+oosh> echo $H<Tab>
+$HOME
+$HISTFILE
+$HOST
+```
+
+**Dopo `let nome =`** (posizione di binding):
+
+Mostra i binding tipizzati attivi, con indicatore `(let)`:
+
+```
+oosh> let nuova = <Tab>
+x     (let)
+lista (let)
+nome  (let)
+```
+
+**Dopo `|>`** (stage pipeline):
+
+Mostra gli stage disponibili per la pipeline oggetti:
+
+```
+oosh> list() |> <Tab>
+where(
+sort(
+take(
+first()
+count()
+lines()
+trim()
+split(
+join(
+reduce(
+each(
+render()
+from_json()
+to_json()
+grep(
+```
+
+**Dopo `->`** (accesso membro):
+
+Mostra le proprieta e i metodi disponibili per il tipo dell'oggetto corrente, con il tipo indicato tra parentesi:
+
+```
+oosh> path("/etc") -><Tab>
+name         (string)
+type         (string)
+size         (number)
+exists       (bool)
+hidden       (bool)
+readable     (bool)
+writable     (bool)
+children()   (method)
+parent()     (method)
+describe()   (method)
+read_text(   (method)
+```
+
+### 16.2 Indicatori di tipo
+
+Il completion mostra indicatori di tipo accanto a ogni voce per aiutare l'utente a capire la natura del suggerimento:
+
+| Indicatore | Significato |
+|------------|-------------|
+| `(cmd)` | Comando built-in |
+| `(fn)` | Funzione definita dall'utente |
+| `(@)` | Alias |
+| `(let)` | Binding tipizzato attivo |
+| `(string)` | Proprieta di tipo stringa |
+| `(number)` | Proprieta di tipo numero |
+| `(bool)` | Proprieta di tipo booleano |
+| `(method)` | Metodo |
+
+---
+
+## 17. Prompt
+
+### 17.1 Configurazione
+
+Il prompt di oosh e configurabile tramite un file di testo in formato `chiave=valore`. I parametri principali sono:
+
+```
 theme=aurora
 left=userhost,cwd,plugins
 right=status,os,date,time
-separator= :: 
+separator= ::
 use_color=1
 color.userhost=green
 color.cwd=cyan
 color.status=yellow
-color.os=magenta
-color.date=blue
-color.time=yellow
+color.os=blue
+color.date=white
+color.time=white
 ```
 
-Caricamento:
+**Parametri disponibili**:
 
-```text
-prompt load examples/oosh.conf
+| Parametro | Valori esempio | Descrizione |
+|-----------|----------------|-------------|
+| `theme` | `aurora`, `minimal`, `classic` | Tema grafico globale |
+| `left` | lista separata da virgole | Segmenti del prompt sinistro |
+| `right` | lista separata da virgole | Segmenti del prompt destro |
+| `separator` | stringa | Separatore tra segmenti |
+| `use_color` | `0` o `1` | Abilita/disabilita i colori ANSI |
+| `color.SEGMENTO` | `green`, `cyan`, `red`, ecc. | Colore per il segmento specificato |
+
+I colori disponibili sono i nomi ANSI standard: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, piu i varianti `bright_*`.
+
+### 17.2 Segmenti disponibili
+
+I segmenti sono le unita di informazione mostrate nel prompt. Ogni segmento puo essere inserito nel prompt sinistro o destro.
+
+| Segmento | Descrizione | Esempio di output |
+|----------|-------------|-------------------|
+| `user` | Nome utente corrente | `mario` |
+| `host` | Nome host (hostname) | `mio-pc` |
+| `userhost` | Utente e host combinati | `mario@mio-pc` |
+| `cwd` | Directory di lavoro corrente | `/home/mario/progetto` |
+| `status` | Exit status dell'ultimo comando | `0` o `1` |
+| `os` | Sistema operativo | `Linux` |
+| `plugins` | Lista plugin caricati | `git ssh` |
+| `theme` | Nome del tema attivo | `aurora` |
+| `date` | Data corrente | `2026-03-19` |
+| `time` | Ora corrente | `14:32:07` |
+| `datetime` | Data e ora combinate | `2026-03-19 14:32:07` |
+
+**Formati data e ora**:
+- `date`: sempre nel formato `YYYY-MM-DD`
+- `time`: sempre nel formato `HH:MM:SS`
+
+### 17.3 Caricamento automatico
+
+oosh cerca la configurazione del prompt nel seguente ordine:
+
+1. Il percorso specificato dalla variabile di ambiente `OOSH_CONFIG`
+2. `oosh.conf` nella directory corrente (o nella directory del progetto)
+3. `~/.oosh/prompt.conf` (configurazione utente globale)
+
+Se nessuno di questi file esiste, viene usata la configurazione di default.
+
+Per caricare manualmente una configurazione:
+
+```bash
+prompt load /percorso/mia-configurazione.conf
 ```
 
-Visualizzazione della configurazione attiva:
+Per visualizzare la configurazione attiva:
 
-```text
+```bash
 prompt show
 ```
 
-### Segmenti supportati
+---
 
-I segmenti base disponibili sono:
+## 18. Plugin
 
-- `user`
-- `host`
-- `userhost`
-- `cwd`
-- `status`
-- `os`
-- `plugins`
-- `theme`
-- `date`
-- `time`
-- `datetime`
+### 18.1 Caricare un plugin
 
-Formati attuali:
+I plugin sono librerie condivise (`.so` su Linux, `.dylib` su macOS) compilate contro l'ABI C stabile di oosh. Per caricare un plugin:
 
-- `date`: `YYYY-MM-DD`
-- `time`: `HH:MM:SS`
-- `datetime`: `YYYY-MM-DD HH:MM:SS`
-
-### Configurazione automatica
-
-All'avvio, `oosh` prova a caricare in quest'ordine:
-
-1. il file puntato da `OOSH_CONFIG`
-2. `oosh.conf` nella directory corrente
-3. `~/.oosh/prompt.conf`
-
-## 10. Plugin
-
-I plugin possono aggiungere:
-
-- nuovi comandi
-- nuove proprieta e metodi object-aware
-- nuovi value resolver come `sample()`
-- nuovi stage di pipeline come `sample_wrap()`
-
-### 10.1 Caricare un plugin
-
-```text
-plugin load build/oosh_sample_plugin.dylib
+```bash
+plugin load /percorso/al/plugin.so
 ```
 
-Su Linux:
+oosh verifica la compatibilita dell'ABI e carica il plugin nel contesto corrente. I simboli esportati dal plugin diventano immediatamente disponibili.
 
-```text
-plugin load build/oosh_sample_plugin.so
-```
+Un plugin puo essere caricato automaticamente aggiungendo la riga `plugin load ...` al file RC di avvio.
 
-Su Windows:
+### 18.2 Comandi plugin
 
-```text
-plugin load build/oosh_sample_plugin.dll
-```
-
-### 10.2 Elencare i plugin caricati
-
-```text
+```bash
 plugin list
+# mostra tutti i plugin caricati con nome e versione
+
+plugin info nome_plugin
+# informazioni dettagliate: versione, comandi aggiunti, stage, proprieta, ecc.
+
+plugin disable nome_plugin
+# disabilita il plugin (rimane caricato ma i suoi simboli non sono attivi)
+
+plugin enable nome_plugin
+# riabilita un plugin precedentemente disabilitato
 ```
 
-### 10.3 Plugin di esempio
+### 18.3 Creare un plugin (cenni)
 
-Il repository include un plugin di esempio che aggiunge:
+Un plugin oosh e una libreria C che esporta una struttura di registrazione. Il template di partenza si trova in `plugins/skeleton/` nel sorgente di oosh.
 
-```text
-hello-plugin
-sample()
-sample_wrap()
+Un plugin puo registrare:
+- **Nuovi comandi built-in**: funzioni C che vengono chiamate come comandi shell
+- **Nuove proprieta**: accessibili con `->` su tipi specifici
+- **Nuovi metodi**: invocabili con `->nome()` su tipi specifici
+- **Nuovi value resolver**: logica per interpretare espressioni come valori tipizzati
+- **Nuovi stage pipeline**: stage aggiuntivi usabili dopo `|>`
+
+L'ABI e stabile: i plugin compilati per una versione di oosh rimangono compatibili con versioni future (salvo aggiornamenti maggiori dell'ABI documentati nel changelog).
+
+Struttura minima di un plugin:
+
+```c
+#include "oosh_plugin.h"
+
+static int cmd_mio_comando(oosh_ctx *ctx, int argc, char **argv) {
+    oosh_print(ctx, "Ciao dal plugin!\n");
+    return 0;
+}
+
+static oosh_plugin_def plugin = {
+    .name    = "mio_plugin",
+    .version = "1.0.0",
+    .commands = (oosh_command_def[]) {
+        { "mio_comando", cmd_mio_comando, "Descrizione del comando" },
+        { NULL }
+    },
+};
+
+OOSH_PLUGIN_EXPORT(&plugin);
 ```
 
-Esempio:
+---
 
-```text
-hello-plugin Team
-sample() -> name
-text("ciao") |> sample_wrap()
+## 19. Avvio e configurazione
+
+### 19.1 File RC
+
+All'avvio, oosh esegue automaticamente un file di inizializzazione. L'ordine di ricerca e:
+
+1. Il percorso specificato dalla variabile di ambiente `OOSH_RC`
+2. `~/.ooshrc` (file RC utente standard)
+
+Se nessuno dei due esiste, la shell si avvia senza file RC.
+
+Il file RC puo contenere qualsiasi comando oosh valido: alias, funzioni, binding, caricamento plugin, configurazione del prompt, esportazione di variabili.
+
+Esempio di `~/.ooshrc`:
+
+```bash
+# Alias comuni
+alias ll="ls -la"
+alias la="ls -A"
+alias grep="grep --color=auto"
+
+# Esportazioni
+export EDITOR=vim
+export PAGER=less
+export LANG=it_IT.UTF-8
+
+# Funzioni utili
+function mkcd(dir) do
+  mkdir -p $dir && cd $dir
+endfunction
+
+# Plugin
+plugin load ~/.oosh/plugins/git.so
+
+# Prompt
+prompt load ~/.oosh/prompt.conf
+
+# Binding globali
+let home_dir = path("~")
 ```
 
-## 11. Flussi d'uso consigliati
+### 19.2 History
 
-### Esplorare una directory
+La history dei comandi viene salvata in un file. L'ordine di ricerca del file di history e:
 
-```text
-. -> children()
+1. Il percorso specificato dalla variabile di ambiente `OOSH_HISTORY`
+2. `~/.oosh/history` (percorso di default)
+
+La history e condivisa tra sessioni: i comandi di una sessione diventano disponibili nelle sessioni successive. L'editor di riga usa la history per l'autosuggestion e per la navigazione con le frecce.
+
+Il comando `history` mostra la history della sessione corrente:
+
+```bash
+history
 ```
 
-### Leggere le proprieta di un file
+### 19.3 Variabili di ambiente speciali
 
-```text
-README.md -> type
-README.md -> size
-README.md -> path
+Le seguenti variabili di ambiente hanno significato speciale per oosh:
+
+| Variabile | Descrizione |
+|-----------|-------------|
+| `OOSH_RC` | Percorso alternativo al file RC di avvio |
+| `OOSH_HISTORY` | Percorso alternativo al file di history |
+| `OOSH_CONFIG` | Percorso alternativo alla configurazione prompt |
+| `HOME` | Directory home dell'utente (usata da `cd` senza argomenti e da `~`) |
+| `PATH` | Percorsi in cui cercare eseguibili |
+| `PWD` | Directory di lavoro corrente (aggiornata automaticamente da `cd`) |
+| `OLDPWD` | Directory precedente (usata da `cd -`) |
+| `EDITOR` | Editor di testo preferito (usato da alcuni plugin) |
+| `PAGER` | Pager preferito (usato da alcuni comandi) |
+
+---
+
+## 20. Errori frequenti e diagnostica
+
+Questa sezione raccoglie gli errori piu comuni e come interpretarli.
+
+### Built-in in posizione intermedia di pipeline shell
+
+**Errore**: tentativo di usare un built-in come stadio intermedio o finale di una pipeline shell.
+
+```bash
+ls | cd /tmp
+# ERRORE: cd e un built-in e non puo ricevere dati da una pipe
 ```
 
-### Ispezionare un file in modo completo
+**Soluzione**: usare una pipeline oggetti o la command substitution.
 
-```text
-inspect README.md
+```bash
+# Corretto: usa il bridge shell/object
+let items = capture_lines("ls -d /tmp/*/")
+items |> first() |> render()
 ```
 
-### Leggere le prime righe di un file
+### Confronto con operatori relazionali in where() forma selettore
 
-```text
-README.md -> read_text(256)
+**Errore**: usare `<`, `>`, `<=`, `>=` nella forma selettore di `where()`.
+
+```bash
+lista |> where(size > number(1000))
+# ERRORE: la forma selettore supporta solo == e !=
 ```
 
-### Trovare il file piu grande nella directory corrente
+**Soluzione**: usare la forma block.
 
-```text
-. -> children() |> where(type == "file") |> sort(size desc) |> first()
+```bash
+lista |> where([:it | it -> size > number(1000)])
 ```
 
-## 12. Errori comuni
+### Trap con eventi non supportati
 
-### `unknown command`
+**Errore**: registrare un trap per un evento diverso da `EXIT`.
 
-Hai scritto un comando non registrato oppure hai usato una sintassi non riconosciuta come comando.
-
-Controlla con:
-
-```text
-help
+```bash
+trap "comando" INT
+# ERRORE o ignorato: solo EXIT e supportato attualmente
 ```
 
-### `parse error`
+**Soluzione**: usare solo `trap "cmd" EXIT`.
 
-La sintassi non rispetta il formato atteso.
+### Redirection avanzata su sistemi non POSIX
 
-Controlla:
+**Errore**: usare file descriptor > 2 su sistemi che non supportano la redirection POSIX di fd arbitrari.
 
-- parentesi tonde chiuse
-- virgolette abbinate
-- uso corretto di `|>`
-
-### `where() expects a list`
-
-Stai usando `where()` su un valore che non e una lista.
-
-Esempio errato:
-
-```text
-README.md -> type |> where(type == "file")
+```bash
+comando 3> file.txt
+# puo non funzionare su sistemi non POSIX
 ```
 
-Esempio corretto:
+**Nota**: questa funzionalita e supportata solo su sistemi POSIX (Linux, macOS, BSD).
 
-```text
-. -> children() |> where(type == "file")
+### Confusione tra pipeline shell (|) e pipeline oggetti (|>)
+
+Un errore comune e usare `|` dove si intende `|>` o viceversa.
+
+```bash
+# SBAGLIATO: tenta di passare l'output di ls come testo a where()
+ls /etc | where(type == "file")
+
+# CORRETTO: usa il bridge shell/object con |>
+ls /etc |> where(type == "file")
+# oppure
+path("/etc") -> children() |> where(type == "file")
 ```
 
-### `first() cannot be used on an empty list`
+### Variabile shell vs binding tipizzato
 
-Hai filtrato una lista fino a renderla vuota.
+Le variabili shell (`set NOME valore`) sono stringhe grezze. I binding (`let nome = espressione`) sono valori tipizzati. Non confondere i due sistemi:
 
-## 13. Limiti attuali dell'MVP
+```bash
+set N 42
+# N e una stringa shell "42"
 
-Questa versione non implementa ancora:
+let n = number(42)
+# n e un numero tipizzato
 
-- confronti `>`, `<`, `>=`, `<=` in `where()`
-- pipeline object-aware verso processi esterni
-- built-in dentro pipeline shell multi-stage
-- field splitting e semantica POSIX completa dopo espansioni
-- nuovi tipi di oggetto risolti da plugin oltre ai resolver/stage gia supportati
-
-Quindi il manuale descrive soprattutto l'uso dell'MVP reale, non la visione completa futura.
-
-## 14. Cheat sheet
-
-```text
- . -> type
-help
-pwd
-cd src
-inspect .
-get README.md size
-call . children
-. -> children()
-README.md -> read_text(128)
-. -> children() |> where(type == "file")
-. -> children() |> where(type == "file") |> sort(size desc)
-. -> children() |> where(type == "file") |> sort(size desc) |> take(3)
-. -> children() |> first()
-. -> children() |> count()
-ls -1 | wc -l
-cat < README.md | wc -l
-ls > out.txt
-ls missing 2>&1 | wc -l
-prompt show
-prompt load examples/oosh.conf
-plugin list
+# Per operazioni aritmetiche, usare sempre number():
+let n = number($N)
+let risultato = n + number(1)
 ```
+
+### extend non sovrascrive il core
+
+```bash
+extend string property name = [:it | text("sovrascrittura") ]
+# NON funziona: il core ha sempre la precedenza
+```
+
+Il core ha sempre la precedenza. `extend` aggiunge proprieta e metodi nuovi, non sostituisce quelli esistenti.
+
+### Diagnostica con type e inspect
+
+Per capire come oosh risolve un nome:
+
+```bash
+type ls
+type mia_funzione
+type alias_definito
+```
+
+Per ispezionare le proprieta di un oggetto filesystem:
+
+```bash
+inspect /etc/hosts
+inspect /tmp
+```
+
+Per vedere lo stato completo della shell come valore tipizzato:
+
+```bash
+shell() |> to_json() |> render()
+```
+
+Per verificare i binding attivi:
+
+```bash
+let
+```
+
+Per verificare le funzioni definite:
+
+```bash
+function
+```
+
+---
+
+## 21. Cheat sheet
+
+Tabella compatta di riferimento rapido per i costrutti piu usati.
+
+### Costruttori di valore
+
+| Costrutto | Risultato |
+|-----------|-----------|
+| `text("...")` | Stringa tipizzata |
+| `string("...")` | Stringa tipizzata (alias) |
+| `number(n)` | Numero tipizzato |
+| `true` / `false` | Booleano (letterale) |
+| `bool(true)` | Booleano (costruttore) |
+| `list(v1, v2)` | Lista eterogenea |
+| `array(v1, v2)` | Lista eterogenea (alias) |
+| `map("k", v)` | Mappa chiave-valore |
+| `capture("cmd")` | stdout come text |
+| `capture_lines("cmd")` | stdout come list di righe |
+| `[:p | body]` | Block literal |
+| `env()` | Mappa ambiente |
+| `env("K")` | Valore singolo ambiente |
+| `proc()` | Mappa processo |
+| `shell()` | Mappa runtime shell |
+| `path("...")` | Oggetto filesystem |
+
+### Stage pipeline oggetti
+
+| Stage | Effetto |
+|-------|---------|
+| `where(prop == val)` | Filtra per proprieta (solo == e !=) |
+| `where(block)` | Filtra con logica custom |
+| `sort(prop asc)` / `sort(prop desc)` | Ordina |
+| `take(n)` | Primi n elementi |
+| `first()` | Primo elemento singolo |
+| `count()` | Conta elementi |
+| `lines()` | Stringa in lista di righe |
+| `trim()` | Rimuove whitespace iniziale e finale |
+| `split(sep)` | Stringa in lista di parti |
+| `join(sep)` | Lista in stringa |
+| `reduce(init, block)` | Accumulazione con valore iniziale |
+| `reduce(block)` | Accumulazione usando il primo elemento |
+| `each(prop)` | Estrae proprieta da ogni elemento |
+| `each(block)` | Trasforma ogni elemento con block |
+| `render()` | Stampa e termina la pipeline |
+| `from_json()` | Stringa JSON in valore tipizzato |
+| `to_json()` | Valore in stringa JSON |
+| `grep("pat")` | Filtra per sottostringa (case-sensitive) |
+
+### Controllo di flusso
+
+| Costrutto | Sintassi compatta |
+|-----------|-------------------|
+| if | `if cond ; then ... ; fi` |
+| if/else | `if cond ; then ... ; else ... ; fi` |
+| if/elif/else | `if cond ; then ... ; elif cond ; then ... ; else ... ; fi` |
+| while | `while cond ; do ... ; done` |
+| until | `until cond ; do ... ; done` |
+| for | `for v in sorgente ; do ... ; done` |
+| switch | `switch v ; case "x" ; then ... ; default ; then ... ; endswitch` |
+| case/esac | `case $v in pat) ... ;; *) ... ;; esac` |
+| ternario | `cond ? v_vero : v_falso` |
+| break | `break [n]` |
+| continue | `continue [n]` |
+| return | `return [espressione]` |
+
+### Operatori
+
+| Operatore | Significato |
+|-----------|-------------|
+| `\|` | Pipeline testuale tra processi |
+| `\|>` | Pipeline oggetti (typed) |
+| `->` | Accesso membro oggetto |
+| `;` | Sequenza comandi |
+| `&&` | AND: esegui se il precedente ha avuto successo |
+| `\|\|` | OR: esegui se il precedente ha fallito |
+| `&` | Esegui in background |
+| `<` | Redirection input da file |
+| `>` | Redirection output su file (sovrascrittura) |
+| `>>` | Redirection output su file (append) |
+| `2>` | Redirection stderr su file |
+| `2>&1` | Unisci stderr su stdout |
+| `+` | Addizione numerica o concatenazione stringa |
+| `-` | Sottrazione |
+| `*` | Moltiplicazione |
+| `/` | Divisione |
+| `==` | Uguaglianza |
+| `!=` | Diversita |
+| `<` `>` `<=` `>=` | Confronto relazionale |
+
+### Proprieta filesystem comuni
+
+| Proprieta | Tipo | Descrizione |
+|-----------|------|-------------|
+| `type` | string | Tipo: `file`, `directory`, `device`, `mount`, `path`, `unknown` |
+| `path` | string | Percorso assoluto |
+| `name` | string | Nome (ultima componente) |
+| `exists` | bool | Esiste nel filesystem |
+| `size` | number | Dimensione in byte |
+| `hidden` | bool | Nome inizia con `.` |
+| `readable` | bool | Permesso di lettura |
+| `writable` | bool | Permesso di scrittura |
+
+### Built-in principali
+
+| Comando | Uso rapido |
+|---------|------------|
+| `cd path` | Cambia directory |
+| `pwd` | Stampa directory corrente |
+| `set NOME val` | Variabile shell |
+| `export NOME val` | Esporta variabile all'ambiente figlio |
+| `unset NOME` | Rimuove variabile o binding |
+| `let nome = expr` | Binding tipizzato |
+| `alias n="cmd"` | Definisce alias |
+| `unalias n` | Rimuove alias |
+| `source path` | Esegue file nel contesto corrente |
+| `eval "str"` | Valuta stringa come codice oosh |
+| `exec cmd` | Sostituisce shell con il comando |
+| `exit [n]` | Esce con status n |
+| `type nome` | Risolve nome: built-in, funzione, alias, eseguibile |
+| `inspect path` | Stampa proprieta oggetto filesystem |
+| `history` | History della sessione corrente |
+| `jobs` | Lista job attivi, stoppati, completati |
+| `fg [%n]` | Porta job in foreground |
+| `bg [%n]` | Riprende job stoppato in background |
+| `wait [%n]` | Attende completamento job |
+| `trap "cmd" EXIT` | Esegue cmd alla chiusura della shell |
+| `builtin nome` | Bypassa funzioni omonime e chiama il built-in |
+| `true` / `false` | Exit status 0 / 1 |
+| `plugin load path` | Carica plugin da file .so |
+| `prompt load path` | Carica configurazione prompt |
+| `help [cmd]` | Aiuto generale o su un comando specifico |
+
+### Tasti editor di riga
+
+| Tasto | Azione |
+|-------|--------|
+| Freccia su / giu | Naviga la history |
+| Freccia sinistra / destra | Muove il cursore |
+| `Ctrl-A` | Inizio della riga |
+| `Ctrl-E` | Fine della riga |
+| `Ctrl-C` | Annulla la riga corrente o interrompe il job in foreground |
+| `Ctrl-D` | Esce dalla shell (su riga vuota) |
+| `Ctrl-Z` | Ferma il job in foreground |
+| `Tab` | Completion contestuale |
+| `Backspace` | Cancella il carattere a sinistra del cursore |
+
+---
+
+*Fine del manuale utente di oosh.*

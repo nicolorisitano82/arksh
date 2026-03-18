@@ -456,6 +456,42 @@ Esempi: `Integer(2) + Float(1.5)` → `Float(3.5)`; `Float(1) * Double(2)` → `
 - Divisione per zero: `Imaginary(a) / Imaginary(0)` → errore `"division by zero"`.
 - Conversione a `Integer`: troncamento della parte immaginaria con warning; `Integer(Imaginary(3))` → `0` (parte reale) con messaggio `"imaginary part discarded"`.
 
+### E6-S6. Tipo Dict — array associativo chiave-valore
+
+Stato story: `[ ]`
+
+Introduce `Dict()` come tipo di primo livello nell'object model di oosh: un array associativo
+con chiavi stringa e valori di qualsiasi `OoshValue`. Supporta getter, setter, cancellazione di
+chiavi e round-trip JSON (import da stringa JSON, export verso stringa JSON).
+
+Il tipo è immutabile per default — ogni operazione di scrittura restituisce una nuova istanza —
+coerentemente con la filosofia degli altri tipi oosh. Non esiste aliasing né condivisione di
+stato interno tra istanze.
+
+**Interfaccia prevista**
+
+```oosh
+let d = Dict()                        # dizionario vuoto
+let d2 = d -> set("nome", "alice")    # nuovo dict con "nome"="alice"
+let v = d2 -> get("nome")             # "alice"
+let d3 = d2 -> delete("nome")         # rimuove la chiave
+let ok = d2 -> has("nome")            # true
+let ks = d2 -> keys                   # ["nome"]
+let vs = d2 -> values                 # ["alice"]
+let n = d2 -> count                   # 1
+let j = d2 -> to_json                 # '{"nome":"alice"}'
+let d4 = Dict() -> from_json(j)       # importa da stringa JSON
+```
+
+**Task**
+
+- `[ ]` `E6-S6-T1` **Struttura interna** — aggiungere `OOSH_VALUE_DICT` a `OoshValueKind` in `object.h`; definire `OoshDict` come array di `{char key[OOSH_MAX_TOKEN]; OoshValue value;}` con un campo `count` e limite `OOSH_MAX_DICT_ENTRIES` (es. 128); aggiornare `oosh_value_free` (ricorsivo sulle entry), `oosh_value_copy` (deep copy), `oosh_value_render` (formato `{k1: v1, k2: v2}`) e `value_is_truthy` (`count > 0`)
+- `[ ]` `E6-S6-T2` **Resolver `Dict()`** — registrare il resolver in `executor.c`; senza argomenti restituisce un dict vuoto; con argomenti a coppie `"chiave", valore` (argc pari) costruisce il dict inline; errore se argc dispari o una chiave non è stringa
+- `[ ]` `E6-S6-T3` **Metodi di scrittura** — implementare come pipeline-method o class-method in `executor.c`/`shell.c`: `set(key, value)` → nuovo dict con entry aggiunta o sovrascritta; `delete(key)` → nuovo dict senza quella chiave (no-op se assente); i metodi non mutano il receiver
+- `[ ]` `E6-S6-T4` **Metodi e proprietà di lettura** — `get(key)` → valore o stringa vuota se assente; `has(key)` → `true`/`false`; proprietà `keys` → `OoshValue` lista di stringhe; `values` → `OoshValue` lista dei valori; `count` → numero intero; `type` → `"dict"`
+- `[ ]` `E6-S6-T5` **Bridge JSON** — `-> to_json` serializza il dict come oggetto JSON (usando l'infrastruttura esistente in `object.c`/`oosh_value_to_json`); `-> from_json(str)` parsa una stringa JSON-object e costruisce un `OOSH_VALUE_DICT` (usa il parser JSON esistente); errore chiaro se la stringa non è un oggetto JSON (`"from_json: expected JSON object"`)
+- `[ ]` `E6-S6-T6` **Test** — `Dict() -> count` → `0`; `Dict() -> set("x", 1) -> get("x")` → `1`; `Dict() -> has("y")` → `false`; `-> keys` e `-> values` su dict con 2 entry; `-> delete` su chiave esistente e inesistente; round-trip `-> to_json | Dict() -> from_json -> get("k")` restituisce il valore originale
+
 ---
 
 ## E7. JSON e dati strutturati a livello prodotto
@@ -577,20 +613,19 @@ Stato story: `[ ]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`
-**In corso:** E5 `[~]` — solo E5-S5 rimane
-**Aperte:** E4 (job control), E6 (object model), E7 (JSON), E8 (qualità), E9 (release)
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E5 `[x]`
+**In corso:** E4 `[~]` — E4-S1 completato, restano E4-S2/S3/S4
+**Aperte:** E6 (object model), E7 (JSON), E8 (qualità), E9 (release)
 
 ---
 
-### Percorso A — chiudi E5 e poi attacca E4 (raccomandato)
+### Percorso A — chiudi E4 (raccomandato — job control affidabile)
 
-1. `E5-S5` (migliorie UX opzionali — syntax highlighting e autosuggestion; decide se nel core o come plugin)
-2. `E4-S1` (process group completi per pipeline foreground — prerequisito per job control affidabile)
-3. `E4-S2` (reporting robusto di `wait` e exit status)
-4. `E4-S3` (TTY e segnali — `SIGTSTP`, `SIGCONT`, `SIGPIPE` corretti)
+1. `E4-S2` (reporting robusto di `wait` e exit status — exit code da segnali, status multipli)
+2. `E4-S3` (TTY e segnali — `SIGPIPE` nei processi intermedi, `Ctrl-C` in blocchi annidati)
+3. `E4-S4` (comportamento equivalente su Windows — job groups con `CREATE_NEW_PROCESS_GROUP`)
 
-### Percorso B — tipi numerici (nuovo, alta visibilità)
+### Percorso B — tipi numerici (E6-S5, alta visibilità)
 
 1. `E6-S5-T1` (aggiungere i value kind `INTEGER`, `FLOAT`, `DOUBLE`, `IMAGINARY` all'enum)
 2. `E6-S5-T2` (implementare resolver `Integer()`, `Float()`, `Double()`, `Imaginary()`)

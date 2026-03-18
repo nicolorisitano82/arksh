@@ -990,22 +990,32 @@ static int evaluate_line_value_heap(OoshShell *shell, const char *line, OoshValu
 static int evaluate_binary_expr_iterative(OoshShell *shell, const char *text, OoshValue *value, char *out, size_t out_size);
 
 static int evaluate_value_text_core(OoshShell *shell, const char *text, OoshValue *out_value, char *out, size_t out_size) {
-  OoshAst ast;
+  OoshAst *ast;
   char parse_error[OOSH_MAX_OUTPUT];
+  int result;
 
   if (shell == NULL || text == NULL || out_value == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
+  ast = (OoshAst *) malloc(sizeof(OoshAst));
+  if (ast == NULL) {
+    snprintf(out, out_size, "out of memory");
+    return 1;
+  }
+
   parse_error[0] = '\0';
-  if (oosh_parse_value_line(text, &ast, parse_error, sizeof(parse_error)) != 0) {
+  if (oosh_parse_value_line(text, ast, parse_error, sizeof(parse_error)) != 0) {
+    free(ast);
     if (parse_error[0] != '\0') {
       copy_string(out, out_size, parse_error);
     }
     return 1;
   }
 
-  return evaluate_ast_value(shell, &ast, out_value, out, out_size);
+  result = evaluate_ast_value(shell, ast, out_value, out, out_size);
+  free(ast);
+  return result;
 }
 
 static int evaluate_expression_atom(OoshShell *shell, const char *text, OoshValue *out_value, char *out, size_t out_size) {
@@ -4838,39 +4848,10 @@ cleanup:
 }
 
 int oosh_evaluate_line_value(OoshShell *shell, const char *line, OoshValue *value, char *out, size_t out_size) {
-  OoshAst ast;
-  char trimmed[OOSH_MAX_LINE];
-  char parse_error[OOSH_MAX_OUTPUT];
-  const OoshValue *binding;
-
-  if (shell == NULL || line == NULL || value == NULL || out == NULL || out_size == 0) {
-    return 1;
-  }
-
-  out[0] = '\0';
-  copy_string(trimmed, sizeof(trimmed), line);
-  trim_in_place(trimmed);
-  oosh_value_init(value);
-
-  if (trimmed[0] == '\0') {
-    return 0;
-  }
-
-  binding = oosh_shell_get_binding(shell, trimmed);
-  if (binding != NULL) {
-    return oosh_value_copy(value, binding);
-  }
-  if (oosh_shell_find_class(shell, trimmed) != NULL) {
-    oosh_value_set_class(value, trimmed);
-    return 0;
-  }
-
-  if (oosh_parse_value_line(trimmed, &ast, parse_error, sizeof(parse_error)) != 0) {
-    snprintf(out, out_size, "%s", parse_error[0] == '\0' ? "parse error" : parse_error);
-    return 1;
-  }
-
-  return evaluate_ast_value(shell, &ast, value, out, out_size);
+  /* Delegate to the heap-allocated variant to avoid placing the 691 KB OoshAst
+     on the call stack.  Nested resolver evaluation (map inside list inside map…)
+     would otherwise overflow the stack after just two or three levels. */
+  return evaluate_line_value_heap(shell, line, value, out, out_size);
 }
 
 static int should_run_list_entry(OoshListCondition condition, int previous_status) {
