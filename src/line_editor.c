@@ -43,9 +43,22 @@ enum {
   OOSH_KEY_CTRL_UNDERSCORE   /* undo                  (^_, 0x1f) */
 };
 
+typedef enum {
+  OOSH_CMATCH_CMD     = 0, /* registered built-in */
+  OOSH_CMATCH_FN      = 1, /* shell function */
+  OOSH_CMATCH_ALIAS   = 2, /* alias */
+  OOSH_CMATCH_PATHCMD = 3, /* external command in $PATH */
+  OOSH_CMATCH_FILE    = 4, /* file */
+  OOSH_CMATCH_DIR     = 5, /* directory */
+  OOSH_CMATCH_VAR     = 6, /* shell variable */
+  OOSH_CMATCH_BINDING = 7, /* typed binding (let) */
+  OOSH_CMATCH_STAGE   = 8  /* pipeline stage */
+} OoshCompletionKind;
+
 typedef struct {
   char items[OOSH_MAX_COMPLETION_MATCHES][OOSH_MAX_PATH];
-  int count;
+  int  kinds[OOSH_MAX_COMPLETION_MATCHES];
+  int  count;
 } OoshCompletionMatches;
 
 /* Kill ring: single-slot buffer shared across calls within one session. */
@@ -70,7 +83,7 @@ static int starts_with(const char *text, const char *prefix) {
   return strncmp(text, prefix, prefix_len) == 0;
 }
 
-static int append_match(OoshCompletionMatches *matches, const char *value) {
+static int append_match_kind(OoshCompletionMatches *matches, const char *value, OoshCompletionKind kind) {
   int i;
 
   if (matches == NULL || value == NULL || value[0] == '\0') {
@@ -88,8 +101,13 @@ static int append_match(OoshCompletionMatches *matches, const char *value) {
   }
 
   copy_string(matches->items[matches->count], sizeof(matches->items[matches->count]), value);
+  matches->kinds[matches->count] = (int) kind;
   matches->count++;
   return 0;
+}
+
+static int append_match(OoshCompletionMatches *matches, const char *value) {
+  return append_match_kind(matches, value, OOSH_CMATCH_CMD);
 }
 
 static int is_token_delimiter(char c) {
@@ -190,6 +208,19 @@ static void redraw_line(const char *prompt, const char *buffer, size_t length, s
 }
 
 static void print_completion_matches(const OoshCompletionMatches *matches) {
+  /* Short suffix shown after each match when multiple options are listed.
+     Empty string means no indicator. Order must match OoshCompletionKind. */
+  static const char *kind_suffix[] = {
+    "",       /* CMD     — built-in, obvious from context */
+    "(fn)",   /* FN      — user-defined shell function */
+    "(@)",    /* ALIAS   — alias */
+    "",       /* PATHCMD — external command */
+    "",       /* FILE    — file */
+    "",       /* DIR     — already has '/' suffix */
+    "",       /* VAR     — already has '$' prefix */
+    "(let)",  /* BINDING — typed binding */
+    ""        /* STAGE   — context already implies stage */
+  };
   int i;
 
   if (matches == NULL || matches->count == 0) {
@@ -198,7 +229,12 @@ static void print_completion_matches(const OoshCompletionMatches *matches) {
 
   fputc('\n', stdout);
   for (i = 0; i < matches->count; ++i) {
+    int kind = matches->kinds[i];
     fputs(matches->items[i], stdout);
+    if (kind >= 0 && kind < (int)(sizeof(kind_suffix) / sizeof(kind_suffix[0])) &&
+        kind_suffix[kind][0] != '\0') {
+      fputs(kind_suffix[kind], stdout);
+    }
     if (i + 1 < matches->count) {
       fputs("  ", stdout);
     }
@@ -329,7 +365,7 @@ static void append_path_match(
     snprintf(value, sizeof(value), "%s%s%s", raw_dir_prefix, name, is_directory ? oosh_platform_path_separator() : "");
   }
 
-  append_match(matches, value);
+  append_match_kind(matches, value, is_directory ? OOSH_CMATCH_DIR : OOSH_CMATCH_FILE);
 }
 
 static void collect_file_matches(OoshShell *shell, const char *prefix, OoshCompletionMatches *matches) {
@@ -375,19 +411,19 @@ static void collect_registered_command_matches(OoshShell *shell, const char *pre
 
   for (i = 0; i < shell->command_count; ++i) {
     if (starts_with(shell->commands[i].name, prefix)) {
-      append_match(matches, shell->commands[i].name);
+      append_match_kind(matches, shell->commands[i].name, OOSH_CMATCH_CMD);
     }
   }
 
   for (i = 0; i < shell->alias_count; ++i) {
     if (starts_with(shell->aliases[i].name, prefix)) {
-      append_match(matches, shell->aliases[i].name);
+      append_match_kind(matches, shell->aliases[i].name, OOSH_CMATCH_ALIAS);
     }
   }
 
   for (i = 0; i < shell->function_count; ++i) {
     if (starts_with(shell->functions[i].name, prefix)) {
-      append_match(matches, shell->functions[i].name);
+      append_match_kind(matches, shell->functions[i].name, OOSH_CMATCH_FN);
     }
   }
 }
@@ -448,7 +484,7 @@ static void collect_path_command_matches(OoshShell *shell, const char *prefix, O
           continue;
         }
 
-        append_match(matches, names[i]);
+        append_match_kind(matches, names[i], OOSH_CMATCH_PATHCMD);
       }
     }
 
@@ -458,12 +494,96 @@ static void collect_path_command_matches(OoshShell *shell, const char *prefix, O
   }
 }
 
-static void collect_completion_matches(OoshShell *shell, const char *prefix, int command_position, OoshCompletionMatches *matches) {
+/* T3: shell variables — activated when prefix starts with '$'. */
+static void collect_env_var_matches(OoshShell *shell, const char *name_prefix, OoshCompletionMatches *matches) {
+  char candidate[OOSH_MAX_PATH];
+  size_t i;
+
+  if (shell == NULL || name_prefix == NULL || matches == NULL) {
+    return;
+  }
+
+  for (i = 0; i < shell->var_count; ++i) {
+    if (starts_with(shell->vars[i].name, name_prefix)) {
+      snprintf(candidate, sizeof(candidate), "$%s", shell->vars[i].name);
+      append_match_kind(matches, candidate, OOSH_CMATCH_VAR);
+    }
+  }
+}
+
+/* T4: typed bindings created with `let` — activated in non-command context. */
+static void collect_binding_matches(OoshShell *shell, const char *prefix, OoshCompletionMatches *matches) {
+  size_t i;
+
+  if (shell == NULL || prefix == NULL || matches == NULL) {
+    return;
+  }
+
+  for (i = 0; i < shell->binding_count; ++i) {
+    if (starts_with(shell->bindings[i].name, prefix)) {
+      append_match_kind(matches, shell->bindings[i].name, OOSH_CMATCH_BINDING);
+    }
+  }
+}
+
+/* T5: detect if cursor is positioned right after a '|>' operator. */
+static int is_pipeline_stage_position(const char *buffer, size_t token_start) {
+  size_t i = token_start;
+
+  while (i > 0 && isspace((unsigned char) buffer[i - 1])) {
+    i--;
+  }
+
+  return i >= 2 && buffer[i - 1] == '>' && buffer[i - 2] == '|';
+}
+
+/* Known built-in pipeline stages (must stay in sync with apply_pipeline_stage). */
+static const char *s_builtin_stages[] = {
+  "count", "each", "filter", "first", "from_json", "grep", "join", "lines",
+  "reduce", "render", "sort", "split", "take", "to_json", "trim", "where",
+  NULL
+};
+
+/* T5: pipeline stage completion — activated after '|>'. */
+static void collect_stage_matches(OoshShell *shell, const char *prefix, OoshCompletionMatches *matches) {
+  const char **s;
+  size_t i;
+
+  if (shell == NULL || prefix == NULL || matches == NULL) {
+    return;
+  }
+
+  for (s = s_builtin_stages; *s != NULL; ++s) {
+    if (starts_with(*s, prefix)) {
+      append_match_kind(matches, *s, OOSH_CMATCH_STAGE);
+    }
+  }
+
+  for (i = 0; i < shell->pipeline_stage_count; ++i) {
+    if (starts_with(shell->pipeline_stages[i].name, prefix)) {
+      append_match_kind(matches, shell->pipeline_stages[i].name, OOSH_CMATCH_STAGE);
+    }
+  }
+}
+
+static void collect_completion_matches(OoshShell *shell, const char *prefix, int command_position, int stage_position, OoshCompletionMatches *matches) {
   if (matches == NULL) {
     return;
   }
 
   memset(matches, 0, sizeof(*matches));
+
+  /* T3: env var — activated by '$' prefix in any context. */
+  if (prefix[0] == '$') {
+    collect_env_var_matches(shell, prefix + 1, matches);
+    return;
+  }
+
+  /* T5: pipeline stage — activated after '|>'. */
+  if (stage_position) {
+    collect_stage_matches(shell, prefix, matches);
+    return;
+  }
 
   if (command_position) {
     collect_registered_command_matches(shell, prefix, matches);
@@ -471,6 +591,9 @@ static void collect_completion_matches(OoshShell *shell, const char *prefix, int
     if (prefix[0] == '\0') {
       return;
     }
+  } else {
+    /* T4: typed bindings — in non-command, non-stage positions. */
+    collect_binding_matches(shell, prefix, matches);
   }
 
   collect_file_matches(shell, prefix, matches);
@@ -523,6 +646,7 @@ static void handle_completion(
   OoshCompletionMatches matches;
   size_t prefix_len;
   int command_position;
+  int stage_position;
   int member_context;
 
   if (shell == NULL || prompt == NULL || buffer == NULL || length == NULL || cursor == NULL) {
@@ -541,11 +665,12 @@ static void handle_completion(
   memcpy(prefix, buffer + start, prefix_len);
   prefix[prefix_len] = '\0';
   command_position = is_command_position(buffer, start);
+  stage_position   = is_pipeline_stage_position(buffer, start);
 
   if (member_context) {
     collect_member_completion_matches(shell, buffer, receiver_start, receiver_end, prefix, &matches);
   } else {
-    collect_completion_matches(shell, prefix, command_position, &matches);
+    collect_completion_matches(shell, prefix, command_position, stage_position, &matches);
   }
   if (matches.count == 0) {
     fputc('\a', stdout);

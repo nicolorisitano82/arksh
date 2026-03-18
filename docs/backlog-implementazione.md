@@ -282,7 +282,7 @@ Stato story: `[ ]`
 
 ## E5. UX interattiva di livello quotidiano
 
-Stato epoca: `[ ]`
+Stato epoca: `[~]`
 
 ### E5-S1. Modello editor multilinea
 
@@ -310,21 +310,22 @@ Stato story: `[x]`
 
 ### E5-S4. Completion avanzata
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-La completion attuale (in `line_editor.c`) gestisce tre sorgenti:
-- `collect_registered_command_matches` — built-in registrati
+La completion (in `line_editor.c`) gestisce le seguenti sorgenti:
+- `collect_registered_command_matches` — built-in, alias, funzioni (in posizione comando)
 - `collect_path_command_matches` — eseguibili nel `$PATH`
 - `collect_file_matches` — path di file/directory
+- `collect_env_var_matches` — variabili shell (`shell->vars`), attivata da prefisso `$`
+- `collect_binding_matches` — binding typed `let` (`shell->bindings`), in contesto non-comando
+- `collect_stage_matches` — stage built-in + stage plugin, attivata dopo `|>`
 
-Le seguenti sorgenti sono ancora mancanti:
-
-- `[ ]` `E5-S4-T1` aggiungere `collect_function_matches` — funzioni shell definite dall'utente (`oosh_shell_find_function` / iterazione `shell->functions`); completate in posizione comando esattamente come i built-in
-- `[ ]` `E5-S4-T2` aggiungere `collect_alias_matches` — alias definiti (`shell->aliases`); completati in posizione comando con la stessa priorità delle funzioni
-- `[ ]` `E5-S4-T3` aggiungere `collect_env_var_matches` — variabili d'ambiente e shell (`shell->variables`); attivata quando il prefisso inizia con `$`
-- `[ ]` `E5-S4-T4` aggiungere `collect_binding_matches` — binding typed creati con `let`; attivata in contesto non-comando (sorgente pipeline o argomento)
-- `[ ]` `E5-S4-T5` aggiungere `collect_pipeline_stage_matches` — stage built-in (`where`, `count`, `lines`, `trim`, `grep`, `join`, `sort`, …) e stage plugin; attivata quando il token corrente segue `|>`
-- `[ ]` `E5-S4-T6` migliorare la presentazione: indicare nell'elenco il tipo di ciascun match (built-in, funzione, alias, file, stage) con un prefisso visivo breve
+- `[x]` `E5-S4-T1` `collect_function_matches` — già inclusa in `collect_registered_command_matches` che itera `shell->functions`; kind `OOSH_CMATCH_FN`, mostrato come `(fn)` nell'elenco multi-match
+- `[x]` `E5-S4-T2` `collect_alias_matches` — già inclusa; kind `OOSH_CMATCH_ALIAS`, mostrato come `(@)`
+- `[x]` `E5-S4-T3` `collect_env_var_matches` — nuova; itera `shell->vars`, prefisso `$`; attivata quando il token inizia con `$`
+- `[x]` `E5-S4-T4` `collect_binding_matches` — nuova; itera `shell->bindings`; attivata in contesto non-comando e non-stage; kind `OOSH_CMATCH_BINDING`, mostrato come `(let)`
+- `[x]` `E5-S4-T5` `collect_stage_matches` — nuova; array statico dei 16 stage built-in + iterazione `shell->pipeline_stages`; attivata da `is_pipeline_stage_position` (token preceduto da `|>`)
+- `[x]` `E5-S4-T6` `OoshCompletionKind` enum + campo `kinds[]` in `OoshCompletionMatches`; `print_completion_matches` mostra suffisso tipo quando ci sono più match: `(fn)`, `(@)`, `(let)`; file, dir, var, stage e comandi non hanno suffisso (contesto già chiaro)
 
 ### E5-S5. Migliorie opzionali di UX
 
@@ -573,22 +574,38 @@ Stato story: `[ ]`
 
 ## Prossimi punti consigliati
 
-Se vuoi procedere con il percorso piu lineare (E3 → E4):
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`
+**In corso:** E5 `[~]` — solo E5-S5 rimane
+**Aperte:** E4 (job control), E6 (object model), E7 (JSON), E8 (qualità), E9 (release)
 
-- `E3-S5-T1` (built-in `builtin` — sblocca override comandi, ~20 righe)
-- `E4-S1-T1` (process group pipeline — job control robusto)
-- `E4-S2-T1` (fg/bg/jobs — gestione job interattiva)
+---
 
-Se vuoi completare E3 rapidamente con i quick win rimasti:
+### Percorso A — chiudi E5 e poi attacca E4 (raccomandato)
 
-- `E3-S5-T1` (`builtin` command — bypassa funzioni shell, chiama direttamente il built-in)
-- `E3-S5-T2` (hook pre/post-comando)
+1. `E5-S5` (migliorie UX opzionali — syntax highlighting e autosuggestion; decide se nel core o come plugin)
+2. `E4-S1` (process group completi per pipeline foreground — prerequisito per job control affidabile)
+3. `E4-S2` (reporting robusto di `wait` e exit status)
+4. `E4-S3` (TTY e segnali — `SIGTSTP`, `SIGCONT`, `SIGPIPE` corretti)
 
-Se vuoi puntare prima all'usabilita quotidiana della REPL:
+### Percorso B — tipi numerici (nuovo, alta visibilità)
 
-- `E5-S4-T1` (completion avanzata — tab completion path/comandi)
-- `E5-S5-T1` (syntax highlighting in-line)
-- `E4-S1-T1` (process group pipeline)
+1. `E6-S5-T1` (aggiungere i value kind `INTEGER`, `FLOAT`, `DOUBLE`, `IMAGINARY` all'enum)
+2. `E6-S5-T2` (implementare resolver `Integer()`, `Float()`, `Double()`, `Imaginary()`)
+3. `E6-S5-T3` (proprietà e metodi di conversione)
+4. `E6-S5-T4` (regole di promozione in espressioni miste)
+
+### Percorso C — pipeline object più ricca (quick wins su E6-S3)
+
+1. `E6-S3-T1` (aggiungere stage `map`)
+2. `E6-S3-T2` (aggiungere stage `filter` come alias di `where` con block)
+3. `E6-S3-T3` (aggiungere stage `flat_map`)
+4. `E6-S3-T5` (aggregati `sum`, `min`, `max`)
+
+### Percorso D — qualità e CI (E8, utile prima di E9)
+
+1. `E8-S1-T1` (test unitari mirati su parser e expander)
+2. `E8-S3-T1` (AddressSanitizer / UBSan in CI)
+3. `E8-S4-T1` (CI multipiattaforma — macOS + Linux + Windows)
 
 ## Regola finale
 
