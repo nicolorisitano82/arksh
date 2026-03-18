@@ -87,7 +87,8 @@ int oosh_platform_run_process_pipeline(
   size_t spec_count,
   char *out,
   size_t out_size,
-  int *out_exit_code
+  int *out_exit_code,
+  OoshPlatformAsyncProcess *out_stopped
 );
 int oosh_platform_glob(
   const char *pattern,

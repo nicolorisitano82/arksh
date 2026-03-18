@@ -1055,7 +1055,8 @@ int oosh_platform_run_process_pipeline(
   size_t spec_count,
   char *out,
   size_t out_size,
-  int *out_exit_code
+  int *out_exit_code,
+  OoshPlatformAsyncProcess *out_stopped
 ) {
   if (out == NULL || out_size == 0) {
     return 1;
@@ -1064,6 +1065,9 @@ int oosh_platform_run_process_pipeline(
   out[0] = '\0';
   if (out_exit_code != NULL) {
     *out_exit_code = 0;
+  }
+  if (out_stopped != NULL) {
+    memset(out_stopped, 0, sizeof(*out_stopped));
   }
 
   if (specs == NULL || spec_count == 0) {
@@ -1080,6 +1084,7 @@ int oosh_platform_run_process_pipeline(
     size_t process_count = 0;
     DWORD exit_code = 0;
     size_t i;
+    (void) out_stopped;
     int status = 0;
 
     memset(&security_attributes, 0, sizeof(security_attributes));
@@ -1362,12 +1367,17 @@ windows_stage_cleanup:
     size_t pid_count = 0;
     int previous_read = -1;
     int capture_read = -1;
+    int interactive;
+    pid_t pgid_leader = 0;
     size_t i;
+
+    interactive = isatty(STDIN_FILENO);
 
     for (i = 0; i < spec_count; ++i) {
       int next_pipe[2] = {-1, -1};
       int capture_pipe[2] = {-1, -1};
-      int should_capture_output = (i + 1 == spec_count);
+      int should_capture_output = (!interactive) && (i + 1 == spec_count);
+      pid_t target_pgid = (pid_count == 0) ? 0 : pids[0];
       pid_t pid;
 
       if (i + 1 < spec_count && pipe(next_pipe) != 0) {
@@ -1416,6 +1426,9 @@ windows_stage_cleanup:
         signal(SIGINT, SIG_DFL);
         signal(SIGQUIT, SIG_DFL);
         signal(SIGTSTP, SIG_DFL);
+        if (interactive) {
+          setpgid(0, target_pgid);
+        }
 #endif
         if (cwd != NULL && cwd[0] != '\0' && chdir(cwd) != 0) {
           _exit(127);
@@ -1426,7 +1439,7 @@ windows_stage_cleanup:
         }
         if (i + 1 < spec_count && next_pipe[1] != -1) {
           dup2(next_pipe[1], STDOUT_FILENO);
-        } else if (capture_pipe[1] != -1) {
+        } else if (!interactive && capture_pipe[1] != -1) {
           dup2(capture_pipe[1], STDOUT_FILENO);
         }
 
@@ -1529,6 +1542,16 @@ windows_stage_cleanup:
 
       pids[pid_count++] = pid;
 
+      /* E4-S1: assign process group (race-free: both child and parent call setpgid) */
+      if (interactive) {
+        if (pid_count == 1) {
+          pgid_leader = pid;
+          setpgid(pid, pid);
+        } else {
+          setpgid(pid, pgid_leader);
+        }
+      }
+
       if (previous_read != -1) {
         close(previous_read);
       }
@@ -1549,25 +1572,53 @@ windows_stage_cleanup:
       close(previous_read);
     }
 
+    /* E4-S1: hand terminal control to the foreground pipeline */
+    if (interactive && pgid_leader > 0) {
+      tcsetpgrp(STDIN_FILENO, pgid_leader);
+    }
+
     if (capture_read != -1) {
       read_fd_to_buffer(capture_read, out, out_size);
       close(capture_read);
     }
 
-    for (i = 0; i < pid_count; ++i) {
-      int wait_status = 0;
+    {
+      int any_stopped = 0;
 
-      if (waitpid(pids[i], &wait_status, 0) < 0) {
-        continue;
-      }
+      for (i = 0; i < pid_count; ++i) {
+        int wait_status = 0;
+        int wflags = interactive ? WUNTRACED : 0;
 
-      if (i + 1 == pid_count && out_exit_code != NULL) {
-        if (WIFEXITED(wait_status)) {
-          *out_exit_code = WEXITSTATUS(wait_status);
-        } else {
-          *out_exit_code = 1;
+        if (waitpid(pids[i], &wait_status, wflags) < 0) {
+          continue;
+        }
+
+        if (interactive && WIFSTOPPED(wait_status)) {
+          any_stopped = 1;
+        }
+
+        if (i + 1 == pid_count) {
+          if (any_stopped) {
+            if (out_stopped != NULL) {
+              out_stopped->pid  = (long long) pids[pid_count - 1];
+              out_stopped->pgid = (long long) pgid_leader;
+            }
+          } else if (out_exit_code != NULL) {
+            if (WIFEXITED(wait_status)) {
+              *out_exit_code = WEXITSTATUS(wait_status);
+            } else if (WIFSIGNALED(wait_status)) {
+              *out_exit_code = 128 + WTERMSIG(wait_status);
+            } else {
+              *out_exit_code = 1;
+            }
+          }
         }
       }
+    }
+
+    /* E4-S1: restore terminal control to the shell */
+    if (interactive) {
+      tcsetpgrp(STDIN_FILENO, getpgrp());
     }
 
     return 0;

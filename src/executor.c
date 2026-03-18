@@ -3919,6 +3919,7 @@ static int apply_inherited_input_redirection(
 
 int oosh_execute_external_command(OoshShell *shell, int argc, char **argv, char *out, size_t out_size) {
   OoshPlatformProcessSpec spec;
+  OoshPlatformAsyncProcess stopped_process;
   int exit_code = 0;
   int status;
   int i;
@@ -3937,11 +3938,24 @@ int oosh_execute_external_command(OoshShell *shell, int argc, char **argv, char 
     return 1;
   }
 
-  status = oosh_platform_run_process_pipeline(shell->cwd, &spec, 1, out, out_size, &exit_code);
+  memset(&stopped_process, 0, sizeof(stopped_process));
+  status = oosh_platform_run_process_pipeline(shell->cwd, &spec, 1, out, out_size, &exit_code, &stopped_process);
   if (status != 0) {
     if (out[0] == '\0') {
       snprintf(out, out_size, "unable to execute external command: %s", argv[0]);
     }
+    return 1;
+  }
+
+  /* E4-S1: foreground pipeline stopped — add to job table */
+  if (stopped_process.pgid != 0 && shell->job_count < OOSH_MAX_JOBS) {
+    memset(&shell->jobs[shell->job_count], 0, sizeof(shell->jobs[0]));
+    shell->jobs[shell->job_count].id      = shell->next_job_id++;
+    shell->jobs[shell->job_count].state   = OOSH_JOB_STOPPED;
+    shell->jobs[shell->job_count].process = stopped_process;
+    copy_string(shell->jobs[shell->job_count].command, sizeof(shell->jobs[0].command), argv[0]);
+    shell->job_count++;
+    out[0] = '\0';
     return 1;
   }
 
@@ -4158,6 +4172,7 @@ static int execute_simple_command(OoshShell *shell, const OoshSimpleCommandNode 
 
 static int execute_shell_pipeline(OoshShell *shell, const OoshCommandPipelineNode *pipeline, char *out, size_t out_size) {
   OoshPlatformProcessSpec specs[OOSH_MAX_PIPELINE_STAGES];
+  OoshPlatformAsyncProcess stopped_process;
   size_t i;
   int exit_code = 0;
 
@@ -4184,8 +4199,19 @@ static int execute_shell_pipeline(OoshShell *shell, const OoshCommandPipelineNod
     if (apply_inherited_input_redirection(shell, &specs[0], out, out_size) != 0) {
       return 1;
     }
-    if (oosh_platform_run_process_pipeline(shell->cwd, specs, 1, out, out_size, &exit_code) != 0) {
+    memset(&stopped_process, 0, sizeof(stopped_process));
+    if (oosh_platform_run_process_pipeline(shell->cwd, specs, 1, out, out_size, &exit_code, &stopped_process) != 0) {
       if (out[0] == '\0') snprintf(out, out_size, "failed to execute shell pipeline");
+      return 1;
+    }
+    if (stopped_process.pgid != 0 && shell->job_count < OOSH_MAX_JOBS) {
+      memset(&shell->jobs[shell->job_count], 0, sizeof(shell->jobs[0]));
+      shell->jobs[shell->job_count].id      = shell->next_job_id++;
+      shell->jobs[shell->job_count].state   = OOSH_JOB_STOPPED;
+      shell->jobs[shell->job_count].process = stopped_process;
+      copy_string(shell->jobs[shell->job_count].command, sizeof(shell->jobs[0].command), specs[0].argv[0]);
+      shell->job_count++;
+      out[0] = '\0';
       return 1;
     }
     return exit_code == 0 ? 0 : 1;
@@ -4248,8 +4274,19 @@ static int execute_shell_pipeline(OoshShell *shell, const OoshCommandPipelineNod
           copy_string(stdin_inject->text, sizeof(stdin_inject->text), builtin_out);
         }
 
-        if (oosh_platform_run_process_pipeline(shell->cwd, specs, pipeline->stage_count - 1, out, out_size, &exit_code) != 0) {
+        memset(&stopped_process, 0, sizeof(stopped_process));
+        if (oosh_platform_run_process_pipeline(shell->cwd, specs, pipeline->stage_count - 1, out, out_size, &exit_code, &stopped_process) != 0) {
           if (out[0] == '\0') snprintf(out, out_size, "failed to execute shell pipeline");
+          return 1;
+        }
+        if (stopped_process.pgid != 0 && shell->job_count < OOSH_MAX_JOBS) {
+          memset(&shell->jobs[shell->job_count], 0, sizeof(shell->jobs[0]));
+          shell->jobs[shell->job_count].id      = shell->next_job_id++;
+          shell->jobs[shell->job_count].state   = OOSH_JOB_STOPPED;
+          shell->jobs[shell->job_count].process = stopped_process;
+          copy_string(shell->jobs[shell->job_count].command, sizeof(shell->jobs[0].command), specs[0].argv[0]);
+          shell->job_count++;
+          out[0] = '\0';
           return 1;
         }
         return exit_code == 0 ? 0 : 1;
@@ -4279,10 +4316,22 @@ static int execute_shell_pipeline(OoshShell *shell, const OoshCommandPipelineNod
     return 1;
   }
 
-  if (oosh_platform_run_process_pipeline(shell->cwd, specs, pipeline->stage_count, out, out_size, &exit_code) != 0) {
+  memset(&stopped_process, 0, sizeof(stopped_process));
+  if (oosh_platform_run_process_pipeline(shell->cwd, specs, pipeline->stage_count, out, out_size, &exit_code, &stopped_process) != 0) {
     if (out[0] == '\0') {
       snprintf(out, out_size, "failed to execute shell pipeline");
     }
+    return 1;
+  }
+
+  if (stopped_process.pgid != 0 && shell->job_count < OOSH_MAX_JOBS) {
+    memset(&shell->jobs[shell->job_count], 0, sizeof(shell->jobs[0]));
+    shell->jobs[shell->job_count].id      = shell->next_job_id++;
+    shell->jobs[shell->job_count].state   = OOSH_JOB_STOPPED;
+    shell->jobs[shell->job_count].process = stopped_process;
+    copy_string(shell->jobs[shell->job_count].command, sizeof(shell->jobs[0].command), specs[0].argv[0]);
+    shell->job_count++;
+    out[0] = '\0';
     return 1;
   }
 

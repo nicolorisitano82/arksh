@@ -248,11 +248,11 @@ Stato epoca: `[ ]`
 
 ### E4-S1. Process group completi per pipeline foreground
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E4-S1-T1` assegnare process group coerenti a pipeline composte
-- `[ ]` `E4-S1-T2` aggiornare `fg` per pipeline e non solo per processi semplici
-- `[ ]` `E4-S1-T3` testare stop/resume su pipeline reali
+- `[x]` `E4-S1-T1` assegnare process group coerenti a pipeline composte (`setpgid` in figlio e genitore, `tcsetpgrp` prima/dopo attesa)
+- `[x]` `E4-S1-T2` aggiornare `fg` per pipeline e non solo per processi semplici (pgid-based: `kill(-pgid, SIGCONT)` già presente; `out_stopped` aggiunge job alla tabella con `pid=last`, `pgid=leader`)
+- `[x]` `E4-S1-T3` testare stop/resume su pipeline reali (verificato manualmente: `Ctrl-Z` su pipeline, `jobs`, `fg` riprende correttamente)
 
 ### E4-S2. `wait` e reporting robusto degli status
 
