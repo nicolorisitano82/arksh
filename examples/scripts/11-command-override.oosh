@@ -1,0 +1,40 @@
+# oosh example 11
+# Override di comandi built-in tramite funzioni shell (E3-S5).
+#
+# Pattern: definire una funzione con lo stesso nome del built-in.
+# All'interno dell'override usare `builtin <nome>` per chiamare
+# l'implementazione originale.
+
+# ── Override di cd ────────────────────────────────────────────────────────────
+#
+# Ogni volta che l'utente fa `cd`, stampa la directory di destinazione
+# e poi esegue il vero `cd`.
+
+function cd(dir) do
+  echo "→ cd: $dir"
+  builtin cd $dir
+endfunction
+
+cd /tmp
+pwd
+
+cd /usr/local
+pwd
+
+# ── Override di pwd ───────────────────────────────────────────────────────────
+#
+# Arricchisce `pwd` con il conteggio dei file nella directory corrente.
+
+function pwd() do
+  let p = capture("pwd") |> trim
+  let n = capture_lines("ls") |> count
+  echo "$p  ($n items)"
+endfunction
+
+pwd
+
+# ── Uscire dall'override: builtin ─────────────────────────────────────────────
+#
+# `builtin <nome> [args]` bypassa sempre la funzione e chiama il built-in.
+
+builtin pwd

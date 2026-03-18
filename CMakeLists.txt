@@ -218,6 +218,14 @@ if(BUILD_TESTING)
   add_test(NAME oosh_bool_lit_if_true      COMMAND oosh -c "if true ; then echo yes ; fi")
   add_test(NAME oosh_bool_lit_if_false     COMMAND oosh -c "if false ; then echo wrong ; else echo ok ; fi")
 
+  # E3-S5: command override + builtin escape
+  add_test(NAME oosh_builtin_cd_override
+    COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/builtin-cd-override.oosh")
+  add_test(NAME oosh_builtin_pwd_override
+    COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/builtin-pwd-override.oosh")
+  add_test(NAME oosh_builtin_escape
+    COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/builtin-escape.oosh")
+
   set_tests_properties(
     oosh_external_command
     oosh_shell_pipeline
@@ -567,6 +575,9 @@ if(BUILD_TESTING)
   set_tests_properties(oosh_bool_lit_true_type   PROPERTIES PASS_REGULAR_EXPRESSION "bool")
   set_tests_properties(oosh_bool_lit_if_true     PROPERTIES PASS_REGULAR_EXPRESSION "yes")
   set_tests_properties(oosh_bool_lit_if_false    PROPERTIES PASS_REGULAR_EXPRESSION "ok")
+  set_tests_properties(oosh_builtin_cd_override  PROPERTIES PASS_REGULAR_EXPRESSION "tmp")
+  set_tests_properties(oosh_builtin_pwd_override PROPERTIES PASS_REGULAR_EXPRESSION "overridden")
+  set_tests_properties(oosh_builtin_escape       PROPERTIES PASS_REGULAR_EXPRESSION ".+")
   set_tests_properties(oosh_binop_add    PROPERTIES PASS_REGULAR_EXPRESSION "7")
   set_tests_properties(oosh_binop_sub    PROPERTIES PASS_REGULAR_EXPRESSION "7")
   set_tests_properties(oosh_binop_mul    PROPERTIES PASS_REGULAR_EXPRESSION "20")

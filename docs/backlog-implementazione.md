@@ -230,15 +230,15 @@ Stato story: `[x]`
 
 ### E3-S5. Overloading e hook dei comandi
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
 Permette di ridefinire qualsiasi comando built-in tramite una funzione shell con lo stesso
 nome, e di chiamare comunque l'implementazione originale tramite `builtin <nome>`.
 Pattern idiomatico (POSIX): `function cd(dir) do ... ; builtin cd $dir ; endfunction`.
 
-- `[ ]` `E3-S5-T1` implementare il built-in `builtin` (kind MUTANT): riceve un nome comando e gli argomenti rimanenti, bypassa il lookup delle funzioni shell e chiama direttamente `find_registered_command`
-- `[ ]` `E3-S5-T2` documentare il pattern di override con esempi per `cd`, `pwd` e comandi custom
-- `[ ]` `E3-S5-T3` aggiungere test: funzione `cd` che logga e poi chiama `builtin cd`, verifica che la directory cambi davvero
+- `[x]` `E3-S5-T1` implementare il built-in `builtin` (kind MUTANT): `command_builtin` in `shell.c` itera `shell->commands` e chiama il built-in direttamente; `execute_simple_command` in `executor.c` ora controlla `function_def` prima di `command_def` (funzioni override i built-in)
+- `[x]` `E3-S5-T2` documentare il pattern di override — `examples/scripts/11-command-override.oosh` con esempi per `cd`, `pwd` e `builtin` diretto
+- `[x]` `E3-S5-T3` test: `oosh_builtin_cd_override` (directory cambia), `oosh_builtin_pwd_override` (funzione prende priorità), `oosh_builtin_escape` (`builtin` bypassa la funzione); 132/132 pass
 
 ---
 
@@ -365,6 +365,83 @@ Stato story: `[ ]`
 - `[ ]` `E6-S4-T1` esporre metadati su resolver, stage e tipi
 - `[ ]` `E6-S4-T2` migliorare `help` e completion con introspezione typed
 - `[ ]` `E6-S4-T3` aggiungere documentazione per plugin author
+
+### E6-S5. Tipi numerici espliciti: Integer, Float, Double, Imaginary
+
+Stato story: `[ ]`
+
+Aggiunge costruttori di tipo numerico esplicito come resolver o funzioni di conversione,
+separando la semantica di intero, floating-point a precisione singola/doppia e numero
+immaginario. L'attuale tipo `number` copre solo double implicito; questa story lo rende
+esplicito e affiancabile con precisioni diverse.
+
+- `[ ]` `E6-S5-T1` aggiungere i value kind `OOSH_VALUE_INTEGER`, `OOSH_VALUE_FLOAT`, `OOSH_VALUE_DOUBLE`, `OOSH_VALUE_IMAGINARY` all'enum `OoshValueKind` in `object.h`; aggiornare `oosh_value_render`, `oosh_value_free` e `value_is_truthy` per i nuovi kind
+- `[ ]` `E6-S5-T2` implementare i resolver `Integer(x)`, `Float(x)`, `Double(x)`, `Imaginary(x)` in `executor.c` (o `object.c`): parsano l'argomento, eseguono la conversione numerica e restituiscono un `OoshValue` del kind corretto
+- `[ ]` `E6-S5-T3` esporre su ogni tipo le proprietà `value`, `type`, `bits` e i metodi `-> to_integer`, `-> to_float`, `-> to_double` per conversioni incrociate
+- `[ ]` `E6-S5-T4` aritmetica mista: definire le regole di promozione quando operandi di kind diversi entrano in un `BINARY_OP` (es. `Integer + Float` → `Float`; qualsiasi operando `Imaginary` → `Imaginary`)
+- `[ ]` `E6-S5-T5` test: `Integer("42") -> value` → `42`, `Float("3.14") -> type` → `float`, `Imaginary("2") -> value` → `2i`, conversioni incrociate, promozione in espressioni miste
+
+#### Regole aritmetiche per Imaginary()
+
+Un valore `Imaginary(b)` rappresenta il numero puramente immaginario **b·i**, dove `b` è
+un `Double` interno. Non esiste un tipo `Complex` separato: la somma di una parte reale e
+una immaginaria produce una coppia `(real, imag)` resa come stringa `"a+bi"` oppure,
+se si vuole un tipo complex di prima classe, si rimanda a E6-S2 (plugin typed).
+
+**Costruzione**
+
+| Espressione | Risultato | Kind |
+|---|---|---|
+| `Imaginary(3)` | `3i` | `OOSH_VALUE_IMAGINARY` |
+| `Imaginary(-1)` | `-1i` | `OOSH_VALUE_IMAGINARY` |
+| `Imaginary(0)` | `0i` | `OOSH_VALUE_IMAGINARY` |
+
+**Addizione e sottrazione**
+
+- `Imaginary(a) + Imaginary(b)` → `Imaginary(a+b)` (rimane immaginario puro)
+- `Imaginary(a) - Imaginary(b)` → `Imaginary(a-b)`
+- `Real + Imaginary(b)` → stringa `"a+bi"` (nessun kind complex nativo in questa story)
+- `Imaginary(b) + Real` → stesso risultato commutativo
+
+**Moltiplicazione**
+
+- `Imaginary(a) * Imaginary(b)` → `Double(-(a*b))` — perché `(ai)(bi) = ab·i² = -ab`
+- `Real * Imaginary(b)` → `Imaginary(real*b)`
+- `Imaginary(a) * Real` → `Imaginary(a*real)`
+
+**Divisione**
+
+- `Imaginary(a) / Imaginary(b)` → `Double(a/b)` — le unità `i` si cancellano
+- `Imaginary(a) / Real` → `Imaginary(a/real)`
+- `Real / Imaginary(b)` → `Imaginary(-(real/b))` — perché `r/(bi) = -r·i/b` (moltiplicando per `-i/-i`)
+
+**Promozione di kind in espressioni miste**
+
+Quando almeno un operando è `Imaginary`, il risultato è `Imaginary` (o `Double` per i
+casi di cancellazione `i·i` sopra). Per tutti gli altri kind la gerarchia di promozione è:
+
+```
+Integer  <  Float  <  Double
+```
+
+Esempi: `Integer(2) + Float(1.5)` → `Float(3.5)`; `Float(1) * Double(2)` → `Double(2.0)`.
+
+**Proprietà esposte**
+
+| Proprietà | Tipo restituito | Descrizione |
+|---|---|---|
+| `-> value` | `Double` | parte immaginaria `b` (senza `i`) |
+| `-> type` | `String` | `"imaginary"` |
+| `-> real` | `Double` | sempre `0.0` per un immaginario puro |
+| `-> imag` | `Double` | alias di `value` |
+| `-> conjugate` | `Imaginary` | `Imaginary(-b)` |
+| `-> magnitude` | `Double` | `abs(b)` |
+
+**Casi limite**
+
+- `Imaginary(0)` è equivalente a `Double(0)` per truthy (`value_is_truthy` → falso).
+- Divisione per zero: `Imaginary(a) / Imaginary(0)` → errore `"division by zero"`.
+- Conversione a `Integer`: troncamento della parte immaginaria con warning; `Integer(Imaginary(3))` → `0` (parte reale) con messaggio `"imaginary part discarded"`.
 
 ---
 

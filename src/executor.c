@@ -4135,9 +4135,8 @@ static int execute_simple_command(OoshShell *shell, const OoshSimpleCommandNode 
   command_def = find_registered_command(shell, expanded_argv[0]);
   build_command_argv(expanded_argv, expanded_argc, argv);
 
-  if (command_def != NULL) {
-    return command_def->fn(shell, expanded_argc, argv, out, out_size);
-  }
+  /* E3-S5: user functions override built-ins. Use `builtin <name>` to call
+     the original built-in directly when inside an override function. */
   if (function_def != NULL) {
     OoshSimpleCommandNode expanded_command;
     int i;
@@ -4149,6 +4148,9 @@ static int execute_simple_command(OoshShell *shell, const OoshSimpleCommandNode 
       copy_string(expanded_command.raw_argv[i], sizeof(expanded_command.raw_argv[i]), expanded_argv[i]);
     }
     return execute_shell_function(shell, function_def, &expanded_command, out, out_size);
+  }
+  if (command_def != NULL) {
+    return command_def->fn(shell, expanded_argc, argv, out, out_size);
   }
 
   return oosh_execute_external_command(shell, expanded_argc, argv, out, out_size);

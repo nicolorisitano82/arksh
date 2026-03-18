@@ -1,0 +1,6 @@
+function cd(dir) do
+  echo "going to $dir"
+  builtin cd $dir
+endfunction
+cd /tmp
+pwd

@@ -6243,6 +6243,28 @@ static int command_return(OoshShell *shell, int argc, char **argv, char *out, si
 static int register_builtin(OoshShell *shell, const char *name, const char *description,
                              OoshCommandFn fn, OoshBuiltinKind kind);
 
+/* E3-S5: builtin <name> [args...] — invoke a shell built-in directly,
+   bypassing any user function that has the same name.  Useful inside
+   override functions, e.g. `function cd(dir) do ... ; builtin cd $dir ; done`. */
+static int command_builtin(OoshShell *shell, int argc, char *argv[], char *out, size_t out_size) {
+  size_t i;
+
+  if (argc < 2) {
+    snprintf(out, out_size, "usage: builtin <command> [args...]");
+    return 1;
+  }
+
+  for (i = 0; i < shell->command_count; ++i) {
+    if (strcmp(shell->commands[i].name, argv[1]) == 0) {
+      /* Call the built-in with argv shifted: argv[1] becomes argv[0]. */
+      return shell->commands[i].fn(shell, argc - 1, argv + 1, out, out_size);
+    }
+  }
+
+  snprintf(out, out_size, "builtin: %s: not a shell built-in", argv[1]);
+  return 1;
+}
+
 static int register_builtin_commands(OoshShell *shell) {
   /* --- PURE: read-only, never modifies shell state ----------------------- */
   if (register_builtin(shell, "help",      "show commands and expression syntax",       command_help,    OOSH_BUILTIN_PURE) != 0 ||
@@ -6264,7 +6286,8 @@ static int register_builtin_commands(OoshShell *shell) {
   }
 
   /* --- MUTANT: must run in the current shell process --------------------- */
-  if (register_builtin(shell, "exit",     "terminate the shell",                            command_exit,     OOSH_BUILTIN_MUTANT) != 0 ||
+  if (register_builtin(shell, "builtin",  "invoke a built-in directly, bypassing function overrides", command_builtin, OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "exit",     "terminate the shell",                            command_exit,     OOSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "quit",     "terminate the shell",                            command_exit,     OOSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "cd",       "change current directory",                       command_cd,       OOSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "set",      "list or assign shell variables",                 command_set,      OOSH_BUILTIN_MUTANT) != 0 ||

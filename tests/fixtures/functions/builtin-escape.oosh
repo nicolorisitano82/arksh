@@ -1,0 +1,4 @@
+function pwd() do
+  echo "overridden"
+endfunction
+builtin pwd
