@@ -1,0 +1,52 @@
+# oosh example 09
+# Operatori binari in contesto value (E2-S5).
+#
+# Gli operatori + - * / sono disponibili ovunque si usi una value expression:
+# number(), text(), bool(), list(), o un binding numerico.
+# La precedenza e quella aritmetica standard: * e / prima di + e -.
+
+# ── Operazioni di base ────────────────────────────────────────────────────────
+
+number(3) + number(4)
+number(10) - number(3)
+number(6) * number(7)
+number(22) / number(7)
+
+# ── Precedenza operatori ──────────────────────────────────────────────────────
+#
+# * e / vengono valutati prima di + e -.
+#   2 + 3 * 4  =>  2 + 12  =>  14   (non 20)
+
+number(2) + number(3) * number(4)
+
+# Espressione mista con piu livelli di precedenza:
+#   2 + 3*4 + 5*6 - 1  =>  2 + 12 + 30 - 1  =>  43
+
+number(2) + number(3) * number(4) + number(5) * number(6) - number(1)
+
+# ── Catene di addizioni ───────────────────────────────────────────────────────
+#
+# La valutazione e iterativa: non c'e limite alla lunghezza della catena.
+# 1 + 2 + ... + 10 = 55
+
+number(1) + number(2) + number(3) + number(4) + number(5) + number(6) + number(7) + number(8) + number(9) + number(10)
+
+# ── Uso in let binding e pipeline ────────────────────────────────────────────
+#
+# Il risultato di un'espressione aritmetica puo essere assegnato a un binding
+# e usato nelle pipeline object tramite -> value o -> type.
+
+let cateto_a = number(3)
+let cateto_b = number(4)
+let ipotenusa_quadrata = number(3) * number(3) + number(4) * number(4)
+
+ipotenusa_quadrata -> value
+ipotenusa_quadrata -> type
+
+# ── Uso all'interno dei blocchi ───────────────────────────────────────────────
+#
+# Nei blocchi [:acc :n | ...] i binding numerici possono gia essere
+# combinati con gli operatori (comportamento pre-esistente).
+# E2-S5 estende la stessa sintassi al contesto value top-level.
+
+list(1, 2, 3, 4, 5) |> reduce(number(0), [:acc :n | acc + n])

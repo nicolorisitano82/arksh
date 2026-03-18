@@ -986,6 +986,8 @@ static int resolve_stage_block_argument(OoshShell *shell, const char *text, Oosh
 static int evaluate_expression_text(OoshShell *shell, const char *text, OoshValue *out_value, char *out, size_t out_size);
 static int evaluate_block_body(OoshShell *shell, const char *body, OoshValue *out_value, OoshBlockBindingSnapshot *local_snapshots, int *out_local_count, char *out, size_t out_size);
 static int render_value_for_shell_var(const OoshValue *value, char *out, size_t out_size);
+static int evaluate_line_value_heap(OoshShell *shell, const char *line, OoshValue *value, char *out, size_t out_size);
+static int evaluate_binary_expr_iterative(OoshShell *shell, const char *text, OoshValue *value, char *out, size_t out_size);
 
 static int evaluate_value_text_core(OoshShell *shell, const char *text, OoshValue *out_value, char *out, size_t out_size) {
   OoshAst ast;
@@ -2817,78 +2819,11 @@ static int evaluate_value_source(OoshShell *shell, const OoshValueSourceNode *so
       return evaluate_expression_text(shell, source->raw_text, value, out, out_size);
     case OOSH_VALUE_SOURCE_RESOLVER_CALL:
       return invoke_value_resolver(shell, source, value, out, out_size);
-    case OOSH_VALUE_SOURCE_BINARY_OP: {
-      /* OoshValue is very large (>1MB each due to embedded lists/maps), so
-         heap-allocate both operands to avoid a stack overflow on recursion. */
-      OoshValue *lv = (OoshValue *) calloc(1, sizeof(OoshValue));
-      OoshValue *rv = (OoshValue *) calloc(1, sizeof(OoshValue));
-      int bstatus;
-
-      if (lv == NULL || rv == NULL) {
-        free(lv); free(rv);
-        snprintf(out, out_size, "out of memory");
-        return 1;
-      }
-      oosh_value_init(lv);
-      oosh_value_init(rv);
-
-      if (oosh_evaluate_line_value(shell, source->binary_left,  lv, out, out_size) != 0) {
-        free(lv); free(rv);
-        return 1;
-      }
-      if (oosh_evaluate_line_value(shell, source->binary_right, rv, out, out_size) != 0) {
-        oosh_value_free(lv); free(lv); free(rv);
-        return 1;
-      }
-
-      /* Native numeric arithmetic. */
-      if (lv->kind == OOSH_VALUE_NUMBER && rv->kind == OOSH_VALUE_NUMBER) {
-        double result;
-        switch (source->binary_op) {
-          case '+': result = lv->number + rv->number; break;
-          case '-': result = lv->number - rv->number; break;
-          case '*': result = lv->number * rv->number; break;
-          case '/':
-            if (rv->number == 0.0) {
-              snprintf(out, out_size, "division by zero");
-              oosh_value_free(lv); free(lv);
-              oosh_value_free(rv); free(rv);
-              return 1;
-            }
-            result = lv->number / rv->number;
-            break;
-          default:
-            snprintf(out, out_size, "unknown binary operator: %c", source->binary_op);
-            oosh_value_free(lv); free(lv);
-            oosh_value_free(rv); free(rv);
-            return 1;
-        }
-        oosh_value_free(lv); free(lv);
-        oosh_value_free(rv); free(rv);
-        oosh_value_set_number(value, result);
-        return 0;
-      }
-
-      /* Extension method fallback: __add__, __sub__, __mul__, __div__. */
-      {
-        const char *method_name;
-        switch (source->binary_op) {
-          case '+': method_name = "__add__"; break;
-          case '-': method_name = "__sub__"; break;
-          case '*': method_name = "__mul__"; break;
-          case '/': method_name = "__div__"; break;
-          default:
-            snprintf(out, out_size, "unknown binary operator: %c", source->binary_op);
-            oosh_value_free(lv); free(lv);
-            oosh_value_free(rv); free(rv);
-            return 1;
-        }
-        bstatus = invoke_extension_method_value(shell, lv, method_name, 1, rv, value, out, out_size);
-        oosh_value_free(lv); free(lv);
-        oosh_value_free(rv); free(rv);
-        return bstatus;
-      }
-    }
+    case OOSH_VALUE_SOURCE_BINARY_OP:
+      /* Delegate to the iterative evaluator which re-scans the full
+         expression text and evaluates all operands without recursion,
+         preventing stack overflow on long arithmetic chains. */
+      return evaluate_binary_expr_iterative(shell, source->text, value, out, out_size);
     default:
       snprintf(out, out_size, "unsupported value source");
       return 1;
@@ -4433,6 +4368,229 @@ static int evaluate_ast_value(OoshShell *shell, const OoshAst *ast, OoshValue *v
       snprintf(out, out_size, "expression does not produce a value");
       return 1;
   }
+}
+
+/* Heap-allocated variant used by the BINARY_OP evaluator.
+   OoshAst is ~675KB (the command_pipeline union member contains 8 stages each
+   with a 8KB heredoc_body buffer).  Calling oosh_evaluate_line_value
+   recursively would put a fresh OoshAst on the stack for every operand;
+   for a 5-term chain that is 4 × 675KB ≈ 2.7MB which can overflow the
+   default macOS thread stack.  This wrapper allocates the AST on the heap so
+   the stack cost per recursion level stays small. */
+static int evaluate_line_value_heap(OoshShell *shell, const char *line, OoshValue *value, char *out, size_t out_size) {
+  OoshAst *ast;
+  char trimmed[OOSH_MAX_LINE];
+  char parse_error[OOSH_MAX_OUTPUT];
+  const OoshValue *binding;
+  int result;
+
+  if (shell == NULL || line == NULL || value == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  out[0] = '\0';
+  copy_string(trimmed, sizeof(trimmed), line);
+  trim_in_place(trimmed);
+  oosh_value_init(value);
+
+  if (trimmed[0] == '\0') {
+    return 0;
+  }
+
+  binding = oosh_shell_get_binding(shell, trimmed);
+  if (binding != NULL) {
+    return oosh_value_copy(value, binding);
+  }
+  if (oosh_shell_find_class(shell, trimmed) != NULL) {
+    oosh_value_set_class(value, trimmed);
+    return 0;
+  }
+
+  ast = (OoshAst *) malloc(sizeof(OoshAst));
+  if (ast == NULL) {
+    snprintf(out, out_size, "out of memory");
+    return 1;
+  }
+
+  parse_error[0] = '\0';
+  if (oosh_parse_value_line(trimmed, ast, parse_error, sizeof(parse_error)) != 0) {
+    free(ast);
+    snprintf(out, out_size, "%s", parse_error[0] == '\0' ? "parse error" : parse_error);
+    return 1;
+  }
+
+  result = evaluate_ast_value(shell, ast, value, out, out_size);
+  free(ast);
+  return result;
+}
+
+/* Collect top-level binary operator positions from text (same scanning rules
+   as find_top_level_binary_op).  Returns count of operators found, or -1 if
+   the capacity 'max_ops' was exceeded. */
+static int collect_top_level_binary_ops(const char *text, size_t *out_pos, char *out_op, int max_ops) {
+  size_t i;
+  char quote = '\0';
+  int paren_depth = 0;
+  int bracket_depth = 0;
+  int n = 0;
+
+  for (i = 0; text[i] != '\0'; ++i) {
+    char c = text[i];
+
+    if (quote != '\0') {
+      if (c == quote) quote = '\0';
+      else if (quote == '"' && c == '\\' && text[i + 1] != '\0') i++;
+      continue;
+    }
+    if (c == '"' || c == '\'') { quote = c; continue; }
+    if (c == '(') { paren_depth++; continue; }
+    if (c == ')' && paren_depth > 0) { paren_depth--; continue; }
+    if (c == '[') { bracket_depth++; continue; }
+    if (c == ']' && bracket_depth > 0) { bracket_depth--; continue; }
+    if (paren_depth != 0 || bracket_depth != 0) continue;
+
+    if (c == '+' || c == '*' || c == '/') {
+      if (n >= max_ops) return -1;
+      out_pos[n] = i; out_op[n] = c; n++;
+    } else if (c == '-') {
+      if (text[i + 1] == '>' || text[i + 1] == '-') { i++; continue; }
+      if (n >= max_ops) return -1;
+      out_pos[n] = i; out_op[n] = '-'; n++;
+    }
+  }
+  return n;
+}
+
+/* Apply a binary operator between two OoshValues in-place (result → *lv).
+   Returns 0 on success.  On error writes to out and returns 1. */
+static int apply_binary_op(OoshShell *shell, OoshValue *lv, char op, OoshValue *rv, char *out, size_t out_size) {
+  if (lv->kind == OOSH_VALUE_NUMBER && rv->kind == OOSH_VALUE_NUMBER) {
+    double result;
+    switch (op) {
+      case '+': result = lv->number + rv->number; break;
+      case '-': result = lv->number - rv->number; break;
+      case '*': result = lv->number * rv->number; break;
+      case '/':
+        if (rv->number == 0.0) { snprintf(out, out_size, "division by zero"); return 1; }
+        result = lv->number / rv->number; break;
+      default:
+        snprintf(out, out_size, "unknown binary operator: %c", op); return 1;
+    }
+    oosh_value_free(lv);
+    oosh_value_set_number(lv, result);
+    return 0;
+  }
+
+  /* Extension method fallback. */
+  {
+    const char *method_name;
+    OoshValue result_val;
+    int status;
+    switch (op) {
+      case '+': method_name = "__add__"; break;
+      case '-': method_name = "__sub__"; break;
+      case '*': method_name = "__mul__"; break;
+      case '/': method_name = "__div__"; break;
+      default:
+        snprintf(out, out_size, "unknown binary operator: %c", op); return 1;
+    }
+    oosh_value_init(&result_val);
+    status = invoke_extension_method_value(shell, lv, method_name, 1, rv, &result_val, out, out_size);
+    if (status != 0) { oosh_value_free(&result_val); return 1; }
+    oosh_value_free(lv);
+    *lv = result_val;
+    return 0;
+  }
+}
+
+/* Iterative binary expression evaluator.
+   Scans 'text' for all top-level binary operators, evaluates each operand
+   segment via evaluate_line_value_heap (heap-allocated parse), then applies
+   operators in two passes: first '*'/'/' (higher precedence), then '+'/'-'.
+   This is O(n) in the number of terms with constant recursion depth. */
+static int evaluate_binary_expr_iterative(OoshShell *shell, const char *text, OoshValue *value, char *out, size_t out_size) {
+#define MAX_BINOP_TERMS 32
+  size_t op_pos[MAX_BINOP_TERMS - 1];
+  char   op_chr[MAX_BINOP_TERMS - 1];
+  OoshValue *terms[MAX_BINOP_TERMS];
+  char   ops[MAX_BINOP_TERMS - 1]; /* surviving operators after mul/div pass */
+  int n_ops, n_terms, i, j;
+  size_t prev, end;
+  char seg[OOSH_MAX_LINE];
+  int status = 0;
+
+  n_ops = collect_top_level_binary_ops(text, op_pos, op_chr, MAX_BINOP_TERMS - 1);
+  if (n_ops < 0) {
+    snprintf(out, out_size, "too many operators in arithmetic expression");
+    return 1;
+  }
+  if (n_ops == 0) {
+    return evaluate_line_value_heap(shell, text, value, out, out_size);
+  }
+
+  n_terms = n_ops + 1;
+  for (i = 0; i < n_terms; i++) terms[i] = NULL;
+  for (i = 0; i < n_ops; i++) ops[i] = op_chr[i];
+
+  /* Evaluate each operand segment. */
+  prev = 0;
+  for (i = 0; i < n_terms; i++) {
+    end = (i < n_ops) ? op_pos[i] : strlen(text);
+    copy_trimmed_range(text, prev, end, seg, sizeof(seg));
+    prev = (i < n_ops) ? op_pos[i] + 1 : end;
+
+    terms[i] = (OoshValue *) calloc(1, sizeof(OoshValue));
+    if (terms[i] == NULL) {
+      snprintf(out, out_size, "out of memory"); status = 1; goto cleanup;
+    }
+    oosh_value_init(terms[i]);
+    if (evaluate_line_value_heap(shell, seg, terms[i], out, out_size) != 0) {
+      status = 1; goto cleanup;
+    }
+  }
+
+  /* First pass: apply * and / (higher precedence), left-to-right.
+     Combine terms[j] op terms[j+1] into terms[j]; remove terms[j+1] and ops[j]. */
+  j = 0;
+  while (j < n_ops) {
+    if (ops[j] == '*' || ops[j] == '/') {
+      if (apply_binary_op(shell, terms[j], ops[j], terms[j + 1], out, out_size) != 0) {
+        status = 1; goto cleanup;
+      }
+      oosh_value_free(terms[j + 1]); free(terms[j + 1]);
+      memmove(&terms[j + 1], &terms[j + 2], (size_t)(n_terms - j - 2) * sizeof(OoshValue *));
+      memmove(&ops[j],       &ops[j + 1],   (size_t)(n_ops  - j - 1) * sizeof(char));
+      n_ops--;
+      n_terms--;
+      /* re-visit position j in case the next op is also mul/div */
+    } else {
+      j++;
+    }
+  }
+
+  /* Second pass: apply + and -, left-to-right. */
+  while (n_ops > 0) {
+    if (apply_binary_op(shell, terms[0], ops[0], terms[1], out, out_size) != 0) {
+      status = 1; goto cleanup;
+    }
+    oosh_value_free(terms[1]); free(terms[1]);
+    memmove(&terms[1], &terms[2], (size_t)(n_terms - 2) * sizeof(OoshValue *));
+    memmove(&ops[0],   &ops[1],   (size_t)(n_ops  - 1) * sizeof(char));
+    n_ops--;
+    n_terms--;
+  }
+
+  /* Result is terms[0]. */
+  if (oosh_value_copy(value, terms[0]) != 0) {
+    snprintf(out, out_size, "out of memory"); status = 1;
+  }
+
+cleanup:
+  for (i = 0; i < n_terms; i++) {
+    if (terms[i] != NULL) { oosh_value_free(terms[i]); free(terms[i]); terms[i] = NULL; }
+  }
+  return status;
+#undef MAX_BINOP_TERMS
 }
 
 int oosh_evaluate_line_value(OoshShell *shell, const char *line, OoshValue *value, char *out, size_t out_size) {
