@@ -192,7 +192,7 @@ di extension (`__add__`, `__sub__`, ecc.). Non tocca il contesto shell.
 
 ## E3. Built-in nelle pipeline e integrazione shell/object
 
-Stato epoca: `[~]`
+Stato epoca: `[x]`
 
 ### E3-S1. Classificazione dei built-in
 
@@ -312,10 +312,19 @@ Stato story: `[x]`
 
 Stato story: `[ ]`
 
-- `[ ]` `E5-S4-T1` completare alias, funzioni e env var
-- `[ ]` `E5-S4-T2` completare binding typed e namespace object-aware
-- `[ ]` `E5-S4-T3` completare membri plugin e stage pipeline plugin
-- `[ ]` `E5-S4-T4` migliorare la presentazione del mini-help contestuale
+La completion attuale (in `line_editor.c`) gestisce tre sorgenti:
+- `collect_registered_command_matches` — built-in registrati
+- `collect_path_command_matches` — eseguibili nel `$PATH`
+- `collect_file_matches` — path di file/directory
+
+Le seguenti sorgenti sono ancora mancanti:
+
+- `[ ]` `E5-S4-T1` aggiungere `collect_function_matches` — funzioni shell definite dall'utente (`oosh_shell_find_function` / iterazione `shell->functions`); completate in posizione comando esattamente come i built-in
+- `[ ]` `E5-S4-T2` aggiungere `collect_alias_matches` — alias definiti (`shell->aliases`); completati in posizione comando con la stessa priorità delle funzioni
+- `[ ]` `E5-S4-T3` aggiungere `collect_env_var_matches` — variabili d'ambiente e shell (`shell->variables`); attivata quando il prefisso inizia con `$`
+- `[ ]` `E5-S4-T4` aggiungere `collect_binding_matches` — binding typed creati con `let`; attivata in contesto non-comando (sorgente pipeline o argomento)
+- `[ ]` `E5-S4-T5` aggiungere `collect_pipeline_stage_matches` — stage built-in (`where`, `count`, `lines`, `trim`, `grep`, `join`, `sort`, …) e stage plugin; attivata quando il token corrente segue `|>`
+- `[ ]` `E5-S4-T6` migliorare la presentazione: indicare nell'elenco il tipo di ciascun match (built-in, funzione, alias, file, stage) con un prefisso visivo breve
 
 ### E5-S5. Migliorie opzionali di UX
 
