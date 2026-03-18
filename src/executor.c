@@ -3069,6 +3069,54 @@ static int apply_lines_stage(OoshValue *value, char *out, size_t out_size) {
   return 0;
 }
 
+static int apply_grep_stage(OoshShell *shell, OoshValue *value, const OoshPipelineStageNode *stage, char *out, size_t out_size) {
+  char pattern[OOSH_MAX_TOKEN];
+  char item_text[OOSH_MAX_OUTPUT];
+  size_t write_index;
+  size_t i;
+
+  if (shell == NULL || value == NULL || stage == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (stage->raw_args[0] == '\0') {
+    snprintf(out, out_size, "grep() requires a pattern argument");
+    return 1;
+  }
+
+  if (evaluate_stage_argument_to_text(shell, stage->raw_args, pattern, sizeof(pattern), out, out_size) != 0) {
+    return 1;
+  }
+
+  /* If given a string, split into lines first so grep works line-by-line. */
+  if (value->kind == OOSH_VALUE_STRING) {
+    char original[OOSH_MAX_OUTPUT];
+    copy_string(original, sizeof(original), value->text);
+    if (split_text_lines_into_value(original, value) != 0) {
+      snprintf(out, out_size, "grep() unable to split string into lines");
+      return 1;
+    }
+  }
+
+  if (value->kind != OOSH_VALUE_LIST) {
+    snprintf(out, out_size, "grep() expects a string or list");
+    return 1;
+  }
+
+  write_index = 0;
+  for (i = 0; i < value->list.count; ++i) {
+    item_text[0] = '\0';
+    if (oosh_value_render(&value->list.items[i], item_text, sizeof(item_text)) != 0) {
+      continue;
+    }
+    if (strstr(item_text, pattern) != NULL) {
+      value->list.items[write_index++] = value->list.items[i];
+    }
+  }
+  value->list.count = write_index;
+  return 0;
+}
+
 static int apply_trim_stage(OoshValue *value, char *out, size_t out_size) {
   size_t i;
 
@@ -3614,6 +3662,10 @@ static int apply_pipeline_stage(OoshShell *shell, OoshValue *value, const OoshPi
 
   if (strcmp(stage->name, "trim") == 0) {
     return apply_trim_stage(value, out, out_size);
+  }
+
+  if (strcmp(stage->name, "grep") == 0) {
+    return apply_grep_stage(shell, value, stage, out, out_size);
   }
 
   if (strcmp(stage->name, "split") == 0) {

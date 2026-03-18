@@ -206,6 +206,11 @@ if(BUILD_TESTING)
   add_test(NAME oosh_shell_obj_bridge_words  COMMAND oosh -c "echo hello world |> lines |> count")
   add_test(NAME oosh_shell_obj_bridge_trim   COMMAND oosh -c "echo hello |> trim")
 
+  # grep stage: filter lines/list items by substring
+  add_test(NAME oosh_grep_list     COMMAND oosh -c "capture_lines(\"ls /usr\") |> grep(\"lib\") |> count")
+  add_test(NAME oosh_grep_string   COMMAND oosh -c "echo hello |> grep(\"hello\")")
+  add_test(NAME oosh_grep_no_match COMMAND oosh -c "capture_lines(\"ls /usr\") |> grep(\"ZZZNOMATCH\") |> count")
+
   # E3-S4: boolean literals in object expressions and conditions
   add_test(NAME oosh_bool_lit_true_value   COMMAND oosh -c "true -> value")
   add_test(NAME oosh_bool_lit_false_type   COMMAND oosh -c "false -> type")
@@ -554,6 +559,9 @@ if(BUILD_TESTING)
   set_tests_properties(oosh_shell_obj_bridge_count PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
   set_tests_properties(oosh_shell_obj_bridge_words PROPERTIES PASS_REGULAR_EXPRESSION "1")
   set_tests_properties(oosh_shell_obj_bridge_trim  PROPERTIES PASS_REGULAR_EXPRESSION "hello")
+  set_tests_properties(oosh_grep_list      PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
+  set_tests_properties(oosh_grep_string    PROPERTIES PASS_REGULAR_EXPRESSION "hello")
+  set_tests_properties(oosh_grep_no_match  PROPERTIES PASS_REGULAR_EXPRESSION "0")
   set_tests_properties(oosh_bool_lit_true_value  PROPERTIES PASS_REGULAR_EXPRESSION "true")
   set_tests_properties(oosh_bool_lit_false_type  PROPERTIES PASS_REGULAR_EXPRESSION "bool")
   set_tests_properties(oosh_bool_lit_true_type   PROPERTIES PASS_REGULAR_EXPRESSION "bool")
