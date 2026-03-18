@@ -35,13 +35,21 @@ enum {
   OOSH_KEY_CTRL_R,
   OOSH_KEY_ESC,
   OOSH_KEY_WORD_LEFT,
-  OOSH_KEY_WORD_RIGHT
+  OOSH_KEY_WORD_RIGHT,
+  OOSH_KEY_CTRL_K,           /* kill to end of line   (^K, 0x0b) */
+  OOSH_KEY_CTRL_U,           /* kill to start of line (^U, 0x15) */
+  OOSH_KEY_CTRL_W,           /* kill word backward    (^W, 0x17) */
+  OOSH_KEY_CTRL_Y,           /* yank from kill buffer (^Y, 0x19) */
+  OOSH_KEY_CTRL_UNDERSCORE   /* undo                  (^_, 0x1f) */
 };
 
 typedef struct {
   char items[OOSH_MAX_COMPLETION_MATCHES][OOSH_MAX_PATH];
   int count;
 } OoshCompletionMatches;
+
+/* Kill ring: single-slot buffer shared across calls within one session. */
+static char s_kill_buf[OOSH_MAX_LINE];
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {
   if (dest_size == 0) {
@@ -727,8 +735,23 @@ static int read_key(void) {
   if (ch == 7) {
     return OOSH_KEY_CTRL_G;
   }
+  if (ch == 11) {
+    return OOSH_KEY_CTRL_K;
+  }
   if (ch == 18) {
     return OOSH_KEY_CTRL_R;
+  }
+  if (ch == 21) {
+    return OOSH_KEY_CTRL_U;
+  }
+  if (ch == 23) {
+    return OOSH_KEY_CTRL_W;
+  }
+  if (ch == 25) {
+    return OOSH_KEY_CTRL_Y;
+  }
+  if (ch == 31) {
+    return OOSH_KEY_CTRL_UNDERSCORE;
   }
   if (ch == 0 || ch == 224) {
     int ext = _getch();
@@ -826,8 +849,23 @@ static int read_key(void) {
   if (ch == 7) {
     return OOSH_KEY_CTRL_G;
   }
+  if (ch == 11) {
+    return OOSH_KEY_CTRL_K;
+  }
   if (ch == 18) {
     return OOSH_KEY_CTRL_R;
+  }
+  if (ch == 21) {
+    return OOSH_KEY_CTRL_U;
+  }
+  if (ch == 23) {
+    return OOSH_KEY_CTRL_W;
+  }
+  if (ch == 25) {
+    return OOSH_KEY_CTRL_Y;
+  }
+  if (ch == 31) {
+    return OOSH_KEY_CTRL_UNDERSCORE;
   }
   if (ch == 27) {
     struct termios save;
@@ -1078,6 +1116,11 @@ OoshLineReadStatus oosh_line_editor_read_line(
   /* Active prompt for the current editing line. */
   const char *active_prompt;
   int in_continuation = 0;
+  /* Single-level undo snapshot (E5-S3-T3). */
+  char undo_line[OOSH_MAX_LINE];
+  size_t undo_length = 0;
+  size_t undo_cursor = 0;
+  int undo_valid = 0;
 
   if (shell == NULL || prompt == NULL || out == NULL || out_size == 0) {
     return OOSH_LINE_READ_ERROR;
@@ -1270,8 +1313,81 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
+    if (key == OOSH_KEY_CTRL_K) {
+      /* Kill from cursor to end of line; save killed text in kill buffer. */
+      if (cursor < length) {
+        memcpy(undo_line, line, length + 1); undo_length = length; undo_cursor = cursor; undo_valid = 1;
+        copy_string(s_kill_buf, sizeof(s_kill_buf), line + cursor);
+        line[cursor] = '\0';
+        length = cursor;
+        redraw_line(active_prompt, line, length, cursor);
+      }
+      continue;
+    }
+
+    if (key == OOSH_KEY_CTRL_U) {
+      /* Kill from start of line to cursor; save killed text in kill buffer. */
+      if (cursor > 0) {
+        memcpy(undo_line, line, length + 1); undo_length = length; undo_cursor = cursor; undo_valid = 1;
+        if (cursor < sizeof(s_kill_buf)) {
+          memcpy(s_kill_buf, line, cursor);
+          s_kill_buf[cursor] = '\0';
+        }
+        memmove(line, line + cursor, length - cursor + 1);
+        length -= cursor;
+        cursor = 0;
+        redraw_line(active_prompt, line, length, cursor);
+      }
+      continue;
+    }
+
+    if (key == OOSH_KEY_CTRL_W) {
+      /* Kill word backward; save killed text in kill buffer. */
+      if (cursor > 0) {
+        size_t new_pos = word_backward(line, cursor);
+        size_t killed = cursor - new_pos;
+        memcpy(undo_line, line, length + 1); undo_length = length; undo_cursor = cursor; undo_valid = 1;
+        if (killed < sizeof(s_kill_buf)) {
+          memcpy(s_kill_buf, line + new_pos, killed);
+          s_kill_buf[killed] = '\0';
+        }
+        memmove(line + new_pos, line + cursor, length - cursor + 1);
+        length -= killed;
+        cursor = new_pos;
+        redraw_line(active_prompt, line, length, cursor);
+      }
+      continue;
+    }
+
+    if (key == OOSH_KEY_CTRL_Y) {
+      /* Yank: insert kill buffer text at cursor. */
+      size_t yank_len = strlen(s_kill_buf);
+      if (yank_len > 0 && length + yank_len < sizeof(line)) {
+        memcpy(undo_line, line, length + 1); undo_length = length; undo_cursor = cursor; undo_valid = 1;
+        memmove(line + cursor + yank_len, line + cursor, length - cursor + 1);
+        memcpy(line + cursor, s_kill_buf, yank_len);
+        length += yank_len;
+        cursor += yank_len;
+        redraw_line(active_prompt, line, length, cursor);
+      }
+      continue;
+    }
+
+    if (key == OOSH_KEY_CTRL_UNDERSCORE) {
+      /* Undo: restore line to state before last modifying key. */
+      if (undo_valid) {
+        memcpy(line, undo_line, undo_length + 1);
+        length = undo_length;
+        cursor = undo_cursor;
+        undo_valid = 0;
+        redraw_line(active_prompt, line, length, cursor);
+      }
+      continue;
+    }
+
     if (key == OOSH_KEY_BACKSPACE) {
       if (cursor > 0) {
+        memcpy(undo_line, line, length + 1); undo_length = length; undo_cursor = cursor; undo_valid = 1;
         memmove(line + cursor - 1, line + cursor, length - cursor + 1);
         length--;
         cursor--;
@@ -1282,6 +1398,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
 
     if (key == OOSH_KEY_DELETE) {
       if (cursor < length) {
+        memcpy(undo_line, line, length + 1); undo_length = length; undo_cursor = cursor; undo_valid = 1;
         memmove(line + cursor, line + cursor + 1, length - cursor);
         length--;
         redraw_line(active_prompt, line, length, cursor);
@@ -1296,6 +1413,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
         continue;
       }
 
+      memcpy(undo_line, line, length + 1); undo_length = length; undo_cursor = cursor; undo_valid = 1;
       memmove(line + cursor + 1, line + cursor, length - cursor + 1);
       line[cursor] = (char) key;
       length++;

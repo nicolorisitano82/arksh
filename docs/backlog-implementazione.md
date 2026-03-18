@@ -302,11 +302,11 @@ Stato story: `[x]`
 
 ### E5-S3. Kill/yank e undo
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E5-S3-T1` introdurre kill buffer
-- `[ ]` `E5-S3-T2` implementare yank
-- `[ ]` `E5-S3-T3` implementare undo locale sulla linea
+- `[x]` `E5-S3-T1` kill buffer (file-static `s_kill_buf`): `^K` kill to EOL, `^U` kill to BOL, `^W` kill word backward
+- `[x]` `E5-S3-T2` yank: `^Y` incolla il kill buffer al cursore
+- `[x]` `E5-S3-T3` undo locale su singola linea: `^_` ripristina lo stato precedente alla ultima modifica
 
 ### E5-S4. Completion avanzata
 
