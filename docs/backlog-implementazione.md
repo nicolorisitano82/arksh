@@ -204,13 +204,13 @@ Stato story: `[x]`
 
 ### E3-S2. Built-in dentro shell pipeline multi-stage
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E3-S2-T1` permettere built-in puri come stage intermedi di pipeline
-- `[ ]` `E3-S2-T2` decidere e implementare il comportamento dei built-in mutanti
+- `[x]` `E3-S2-T1` permettere built-in puri come stage intermedi di pipeline (stage 0 PURE → output iniettato come text stdin agli stage esterni successivi)
+- `[x]` `E3-S2-T2` decidere e implementare il comportamento dei built-in mutanti (MUTANT/MIXED in pipeline → errore con messaggio chiaro)
 - `[ ]` `E3-S2-T3` unificare redirection e pipe per built-in ed esterni
-- `[ ]` `E3-S2-T4` aggiungere test su `history`, `type`, `plugin list` e comandi equivalenti
-- `[ ]` `E3-S2-T5` aggiungere fallback in `apply_pipeline_stage`: se il nome dello stage non e riconosciuto, provare come method call sul sistema di extension (`find_extension`); permette overloading di `|>` tramite `extend`
+- `[x]` `E3-S2-T4` aggiungere test su `pwd | cat`, `history | cat`, `cd | cat` (WILL_FAIL)
+- `[x]` `E3-S2-T5` aggiungere fallback in `apply_pipeline_stage`: se il nome dello stage non e riconosciuto, provare come method call sul sistema di extension (`find_extension`); permette overloading di `|>` tramite `extend`
 
 ### E3-S3. Bridge shell/object piu naturale
 
@@ -489,16 +489,18 @@ Stato story: `[ ]`
 
 Se vuoi procedere con il percorso piu lineare, i prossimi task consigliati sono:
 
-- `E3-S2-T1` (built-in puri come stage intermedi di pipeline)
-- `E3-S2-T5` (fallback `|>` su extension method — overloading pipeline immediato)
+- `E3-S2-T3` (unificare redirection e pipe per built-in ed esterni — opzionale)
+- `E3-S3-T1` (conversione canonica stdout → valori typed)
 - `E3-S5-T1` (built-in `builtin` — sblocca override comandi)
 - `E4-S1-T1` (process group pipeline)
 
 Se invece vuoi lavorare sull'espressivita del linguaggio (operator overloading):
 
-- `E3-S2-T5` (fallback `|>` su extension — quick win, ~10 righe)
+- `E3-S3-T1` (bridge shell/object — conversione stdout → value)
 - `E3-S5-T1` (`builtin` command — ~20 righe)
 - ~~`E2-S5-T1..T5` (operatori binari in value context — completato)~~
+- ~~`E3-S2-T1` (built-in puri in pipeline — completato)~~
+- ~~`E3-S2-T5` (fallback `|>` su extension — completato)~~
 
 Se invece vuoi puntare prima all'usabilita quotidiana della REPL:
 

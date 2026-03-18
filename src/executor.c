@@ -3631,6 +3631,22 @@ static int apply_pipeline_stage(OoshShell *shell, OoshValue *value, const OoshPi
     return handler->fn(shell, value, stage->raw_args, out, out_size);
   }
 
+  /* T5: fallback — try an extension method with this name */
+  {
+    char ext_err[OOSH_MAX_OUTPUT];
+    OoshValue *ext_result = (OoshValue *) calloc(1, sizeof(OoshValue));
+    if (ext_result != NULL) {
+      if (invoke_extension_method_value(shell, value, stage->name, 0, NULL, ext_result, ext_err, sizeof(ext_err)) == 0) {
+        oosh_value_free(value);
+        *value = *ext_result;
+        free(ext_result);
+        return 0;
+      }
+      oosh_value_free(ext_result);
+      free(ext_result);
+    }
+  }
+
   snprintf(out, out_size, "unknown pipeline stage: %s", stage->name);
   return 1;
 }
@@ -4057,6 +4073,99 @@ static int execute_shell_pipeline(OoshShell *shell, const OoshCommandPipelineNod
     return 1;
   }
 
+  /* ── Single-stage shortcut ─────────────────────────────────────────────── */
+  if (pipeline->stage_count == 1) {
+    char expanded_name[OOSH_MAX_TOKEN];
+    const OoshCommandDef *command_def;
+
+    if (expand_single_word(shell, pipeline->stages[0].raw_argv[0], OOSH_EXPAND_MODE_COMMAND_NAME, expanded_name, sizeof(expanded_name), out, out_size) != 0) {
+      return 1;
+    }
+    command_def = find_registered_command(shell, expanded_name);
+    if (command_def != NULL) {
+      return execute_builtin_with_redirection(shell, command_def, &pipeline->stages[0], out, out_size);
+    }
+    memset(&specs[0], 0, sizeof(specs[0]));
+    if (populate_process_spec_from_stage(shell, &pipeline->stages[0], &specs[0], out, out_size) != 0) {
+      return 1;
+    }
+    if (apply_inherited_input_redirection(shell, &specs[0], out, out_size) != 0) {
+      return 1;
+    }
+    if (oosh_platform_run_process_pipeline(shell->cwd, specs, 1, out, out_size, &exit_code) != 0) {
+      if (out[0] == '\0') snprintf(out, out_size, "failed to execute shell pipeline");
+      return 1;
+    }
+    return exit_code == 0 ? 0 : 1;
+  }
+
+  /* ── Multi-stage: check stage 0 for built-in ───────────────────────────── */
+  {
+    char expanded_name_0[OOSH_MAX_TOKEN];
+    const OoshCommandDef *command_def_0;
+
+    if (expand_single_word(shell, pipeline->stages[0].raw_argv[0], OOSH_EXPAND_MODE_COMMAND_NAME, expanded_name_0, sizeof(expanded_name_0), out, out_size) != 0) {
+      return 1;
+    }
+    command_def_0 = find_registered_command(shell, expanded_name_0);
+
+    if (command_def_0 != NULL) {
+      if (command_def_0->kind != OOSH_BUILTIN_PURE) {
+        /* T2: MUTANT/MIXED built-ins modify shell state and cannot be piped */
+        snprintf(out, out_size,
+          "built-in '%s' modifies shell state and cannot be used as a pipeline source",
+          expanded_name_0);
+        return 1;
+      }
+
+      /* T1: PURE built-in at stage 0 — run it, inject output into stage 1 */
+      {
+        char builtin_out[OOSH_MAX_OUTPUT];
+        OoshPlatformRedirectionSpec *stdin_inject;
+
+        builtin_out[0] = '\0';
+        if (execute_builtin_with_redirection(shell, command_def_0, &pipeline->stages[0], builtin_out, sizeof(builtin_out)) != 0) {
+          copy_string(out, out_size, builtin_out);
+          return 1;
+        }
+
+        /* Populate specs for the remaining external stages */
+        for (i = 1; i < pipeline->stage_count; ++i) {
+          char expanded_name[OOSH_MAX_TOKEN];
+          const OoshCommandDef *cmd;
+
+          if (expand_single_word(shell, pipeline->stages[i].raw_argv[0], OOSH_EXPAND_MODE_COMMAND_NAME, expanded_name, sizeof(expanded_name), out, out_size) != 0) {
+            return 1;
+          }
+          cmd = find_registered_command(shell, expanded_name);
+          if (cmd != NULL) {
+            snprintf(out, out_size, "built-in '%s' cannot appear after stage 0 in a shell pipeline", expanded_name);
+            return 1;
+          }
+          if (populate_process_spec_from_stage(shell, &pipeline->stages[i], &specs[i - 1], out, out_size) != 0) {
+            return 1;
+          }
+        }
+
+        /* Inject built-in output as text stdin into the first external stage */
+        if (specs[0].redirection_count < OOSH_MAX_REDIRECTIONS) {
+          stdin_inject = &specs[0].redirections[specs[0].redirection_count++];
+          memset(stdin_inject, 0, sizeof(*stdin_inject));
+          stdin_inject->fd = 0;
+          stdin_inject->input_mode = 1;
+          copy_string(stdin_inject->text, sizeof(stdin_inject->text), builtin_out);
+        }
+
+        if (oosh_platform_run_process_pipeline(shell->cwd, specs, pipeline->stage_count - 1, out, out_size, &exit_code) != 0) {
+          if (out[0] == '\0') snprintf(out, out_size, "failed to execute shell pipeline");
+          return 1;
+        }
+        return exit_code == 0 ? 0 : 1;
+      }
+    }
+  }
+
+  /* ── All-external multi-stage pipeline ─────────────────────────────────── */
   for (i = 0; i < pipeline->stage_count; ++i) {
     char expanded_name[OOSH_MAX_TOKEN];
     const OoshCommandDef *command_def;
@@ -4064,23 +4173,17 @@ static int execute_shell_pipeline(OoshShell *shell, const OoshCommandPipelineNod
     if (expand_single_word(shell, pipeline->stages[i].raw_argv[0], OOSH_EXPAND_MODE_COMMAND_NAME, expanded_name, sizeof(expanded_name), out, out_size) != 0) {
       return 1;
     }
-
     command_def = find_registered_command(shell, expanded_name);
     if (command_def != NULL) {
-      if (pipeline->stage_count == 1) {
-        return execute_builtin_with_redirection(shell, command_def, &pipeline->stages[i], out, out_size);
-      }
-
-      snprintf(out, out_size, "built-in commands cannot be used inside shell pipelines yet: %s", expanded_name);
+      snprintf(out, out_size, "built-in '%s' cannot appear in the middle or end of a shell pipeline", expanded_name);
       return 1;
     }
-
     if (populate_process_spec_from_stage(shell, &pipeline->stages[i], &specs[i], out, out_size) != 0) {
       return 1;
     }
   }
 
-  if (pipeline->stage_count > 0 && apply_inherited_input_redirection(shell, &specs[0], out, out_size) != 0) {
+  if (apply_inherited_input_redirection(shell, &specs[0], out, out_size) != 0) {
     return 1;
   }
 

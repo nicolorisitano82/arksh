@@ -191,6 +191,11 @@ if(BUILD_TESTING)
   add_test(NAME oosh_type_mutant COMMAND oosh -c "type cd")
   add_test(NAME oosh_type_mixed  COMMAND oosh -c "type alias")
 
+  # E3-S2: PURE built-ins as first stage in shell pipelines
+  add_test(NAME oosh_builtin_pipe_pwd     COMMAND oosh -c "pwd | cat")
+  add_test(NAME oosh_builtin_pipe_history COMMAND oosh -c "history | cat")
+  add_test(NAME oosh_builtin_pipe_mutant  COMMAND oosh -c "cd /tmp | cat")
+
   set_tests_properties(
     oosh_external_command
     oosh_shell_pipeline
@@ -523,6 +528,9 @@ if(BUILD_TESTING)
     PROPERTIES
       PASS_REGULAR_EXPRESSION "7"
   )
+  set_tests_properties(oosh_builtin_pipe_pwd     PROPERTIES PASS_REGULAR_EXPRESSION ".+")
+  set_tests_properties(oosh_builtin_pipe_history PROPERTIES PASS_REGULAR_EXPRESSION ".+")
+  set_tests_properties(oosh_builtin_pipe_mutant  PROPERTIES WILL_FAIL TRUE)
   set_tests_properties(oosh_binop_add    PROPERTIES PASS_REGULAR_EXPRESSION "7")
   set_tests_properties(oosh_binop_sub    PROPERTIES PASS_REGULAR_EXPRESSION "7")
   set_tests_properties(oosh_binop_mul    PROPERTIES PASS_REGULAR_EXPRESSION "20")
