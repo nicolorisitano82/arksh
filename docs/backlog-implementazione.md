@@ -282,7 +282,7 @@ Stato story: `[ ]`
 
 ## E5. UX interattiva di livello quotidiano
 
-Stato epoca: `[~]`
+Stato epoca: `[x]`
 
 ### E5-S1. Modello editor multilinea
 
@@ -329,11 +329,14 @@ La completion (in `line_editor.c`) gestisce le seguenti sorgenti:
 
 ### E5-S5. Migliorie opzionali di UX
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E5-S5-T1` valutare syntax highlighting
-- `[ ]` `E5-S5-T2` valutare autosuggestion
-- `[ ]` `E5-S5-T3` decidere se tenerle nel core o dietro plugin/modulo opzionale
+Entrambe le funzionalità implementate nel core (in `line_editor.c`), attive solo quando
+`oosh_line_editor_is_interactive()` è vero. Nessun plugin necessario.
+
+- `[x]` `E5-S5-T1` **Syntax highlighting** — `highlight_line()`: state machine (S_NORMAL / S_COMMENT / S_SQ / S_DQ / S_VAR) con ANSI codes: keyword bold (`\033[1m`), stringhe verde (`\033[32m`), `$var` cyan (`\033[36m`), commenti grigio (`\033[90m`), operatori (`|>`, `->`, `|`, `&&`, `;`, `>>`) giallo (`\033[33m`). Lista keyword: `if then else elif fi while until do done for in case esac function endfunction return break continue true false`.
+- `[x]` `E5-S5-T2` **Autosuggestion** — `find_autosuggestion()`: cerca nella history (dal più recente) la prima entry che inizia con il buffer corrente; mostra il suffisso in grigio (`\033[90m`) dopo il cursore quando `cursor == length`; il cursore viene riposizionato correttamente contando anche i caratteri visibili del ghost text.
+- `[x]` `E5-S5-T3` **Decisione architetturale**: nel core — `redraw_line()` ora accetta `OoshShell *shell`; passa `NULL` nei contesti senza UX (search mode); entrambe le feature disabilitate automaticamente in modalità non-interattiva (pipe/script).
 
 ---
 

@@ -194,13 +194,228 @@ static int find_object_member_context(
   return 1;
 }
 
-static void redraw_line(const char *prompt, const char *buffer, size_t length, size_t cursor) {
-  size_t move_left = length > cursor ? length - cursor : 0;
+/* ── Syntax highlighting (E5-S5-T1) ─────────────────────────────────────── */
+
+#define HL_RESET_CODE  "\033[0m"
+#define HL_BOLD_CODE   "\033[1m"
+#define HL_GREEN_CODE  "\033[32m"
+#define HL_CYAN_CODE   "\033[36m"
+#define HL_YELLOW_CODE "\033[33m"
+#define HL_GRAY_CODE   "\033[90m"
+
+static const char *s_hl_keywords[] = {
+  "if", "then", "else", "elif", "fi",
+  "while", "until", "do", "done",
+  "for", "in", "case", "esac",
+  "function", "endfunction",
+  "return", "break", "continue",
+  "true", "false",
+  NULL
+};
+
+static int hl_is_keyword(const char *word, size_t len) {
+  const char **kw;
+  for (kw = s_hl_keywords; *kw != NULL; ++kw) {
+    if (strlen(*kw) == len && memcmp(*kw, word, len) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int hl_is_word_char(char c) {
+  return !isspace((unsigned char) c) &&
+         c != '|' && c != '&' && c != ';' && c != '>' && c != '<' &&
+         c != '\'' && c != '"' && c != '$' && c != '#';
+}
+
+/* Build an ANSI-colorized copy of buffer[0..len) into out[0..out_size). */
+static void highlight_line(const char *buf, size_t len, char *out, size_t out_size) {
+  enum { S_NORMAL, S_COMMENT, S_SQ, S_DQ, S_VAR } state = S_NORMAL;
+  size_t i;
+  size_t out_pos = 0;
+  int cur_color = 0;     /* tracks active color id to avoid redundant escapes */
+  int at_word_start = 1; /* true when next non-space char opens a new word */
+
+#define HL_PUT(s) do { \
+  const char *_s = (s); size_t _l = strlen(_s); \
+  if (out_pos + _l < out_size) { memcpy(out + out_pos, _s, _l); out_pos += _l; } \
+} while (0)
+#define HL_PUTC(c) do { \
+  if (out_pos + 1 < out_size) { out[out_pos++] = (c); } \
+} while (0)
+#define HL_COLOR(code, id) do { \
+  if (cur_color != (id)) { HL_PUT(code); cur_color = (id); } \
+} while (0)
+#define HL_RESET() HL_COLOR(HL_RESET_CODE, 0)
+
+  for (i = 0; i < len; ++i) {
+    char c  = buf[i];
+    char nx = (i + 1 < len) ? buf[i + 1] : '\0';
+
+    switch (state) {
+    case S_COMMENT:
+      HL_COLOR(HL_GRAY_CODE, 5);
+      HL_PUTC(c);
+      break;
+
+    case S_SQ:
+      HL_COLOR(HL_GREEN_CODE, 2);
+      HL_PUTC(c);
+      if (c == '\'') { HL_RESET(); state = S_NORMAL; at_word_start = 0; }
+      break;
+
+    case S_DQ:
+      HL_COLOR(HL_GREEN_CODE, 2);
+      HL_PUTC(c);
+      if (c == '"') { HL_RESET(); state = S_NORMAL; at_word_start = 0; }
+      break;
+
+    case S_VAR:
+      if (isalnum((unsigned char) c) || c == '_') {
+        HL_COLOR(HL_CYAN_CODE, 3);
+        HL_PUTC(c);
+      } else {
+        HL_RESET();
+        state = S_NORMAL;
+        i--; /* reprocess this char in S_NORMAL */
+      }
+      break;
+
+    case S_NORMAL:
+      if (c == '#') {
+        state = S_COMMENT;
+        HL_COLOR(HL_GRAY_CODE, 5);
+        HL_PUTC(c);
+      } else if (c == '\'') {
+        state = S_SQ;
+        HL_COLOR(HL_GREEN_CODE, 2);
+        HL_PUTC(c);
+        at_word_start = 0;
+      } else if (c == '"') {
+        state = S_DQ;
+        HL_COLOR(HL_GREEN_CODE, 2);
+        HL_PUTC(c);
+        at_word_start = 0;
+      } else if (c == '$') {
+        state = S_VAR;
+        HL_COLOR(HL_CYAN_CODE, 3);
+        HL_PUTC(c);
+        at_word_start = 0;
+      } else if (c == '-' && nx == '>') {
+        /* -> operator */
+        HL_RESET();
+        HL_COLOR(HL_YELLOW_CODE, 4);
+        HL_PUTC(c); i++; HL_PUTC(buf[i]);
+        HL_RESET();
+        at_word_start = 1;
+      } else if (c == '|' || c == '&' || c == ';' || c == '>' || c == '<') {
+        HL_RESET();
+        HL_COLOR(HL_YELLOW_CODE, 4);
+        HL_PUTC(c);
+        /* consume second char of two-char operators: |> || && >> */
+        if ((c == '|' && (nx == '>' || nx == '|')) ||
+            (c == '&' && nx == '&') ||
+            (c == '>' && nx == '>')) {
+          i++;
+          HL_PUTC(buf[i]);
+        }
+        HL_RESET();
+        at_word_start = 1;
+      } else if (isspace((unsigned char) c)) {
+        HL_RESET();
+        HL_PUTC(c);
+        /* at_word_start stays as-is: 1 if we're between commands */
+      } else {
+        /* Regular word character */
+        if (at_word_start) {
+          /* Look ahead to find end of word, then check for keyword */
+          size_t wend = i;
+          while (wend < len && hl_is_word_char(buf[wend])) { wend++; }
+          if (hl_is_keyword(buf + i, wend - i)) {
+            HL_COLOR(HL_BOLD_CODE, 1);
+          } else {
+            HL_RESET();
+          }
+          at_word_start = 0;
+        }
+        HL_PUTC(c);
+      }
+      break;
+    }
+  }
+
+  HL_RESET();
+  if (out_pos < out_size) { out[out_pos] = '\0'; }
+  else if (out_size > 0)  { out[out_size - 1] = '\0'; }
+
+#undef HL_PUT
+#undef HL_PUTC
+#undef HL_COLOR
+#undef HL_RESET
+}
+
+/* ── Autosuggestion (E5-S5-T2) ──────────────────────────────────────────── */
+
+/* Find the most-recent history entry that starts with buffer[0..len).
+   Writes the suffix (the part after the prefix) into out.
+   Returns 1 if a suggestion was found, 0 otherwise. */
+static int find_autosuggestion(OoshShell *shell, const char *buffer, size_t len,
+                               char *out, size_t out_size) {
+  size_t i;
+
+  if (shell == NULL || buffer == NULL || len == 0 || out == NULL || out_size == 0) {
+    return 0;
+  }
+
+  for (i = shell->history_count; i > 0; --i) {
+    const char *entry = shell->history[i - 1];
+    size_t entry_len = strlen(entry);
+    if (entry_len > len && strncmp(entry, buffer, len) == 0) {
+      copy_string(out, out_size, entry + len);
+      return 1;
+    }
+  }
+  return 0;
+}
+
+/* ── Line renderer ───────────────────────────────────────────────────────── */
+
+/* Redraws the current input line with optional syntax highlighting and
+   autosuggestion ghost text.  Pass shell=NULL to render plain text
+   (used inside search mode). */
+static void redraw_line(const char *prompt, const char *buffer, size_t length,
+                        size_t cursor, OoshShell *shell) {
+  size_t move_left;
+  size_t suggestion_len = 0;
 
   fputs("\r", stdout);
   fputs(prompt, stdout);
-  fputs(buffer, stdout);
+
+  if (shell != NULL && oosh_line_editor_is_interactive()) {
+    /* T1: syntax-highlighted buffer */
+    char hl_buf[OOSH_MAX_LINE * 10];
+    highlight_line(buffer, length, hl_buf, sizeof(hl_buf));
+    fputs(hl_buf, stdout);
+
+    /* T2: autosuggestion ghost text — only when cursor is at end of line */
+    if (cursor == length) {
+      char suggestion[OOSH_MAX_LINE];
+      if (find_autosuggestion(shell, buffer, length, suggestion, sizeof(suggestion))) {
+        suggestion_len = strlen(suggestion);
+        fputs(HL_GRAY_CODE, stdout);
+        fputs(suggestion, stdout);
+        fputs(HL_RESET_CODE, stdout);
+      }
+    }
+  } else {
+    fputs(buffer, stdout);
+  }
+
   fputs("\033[K", stdout);
+
+  /* Move cursor left past any suggestion and any chars after the cursor. */
+  move_left = (length - cursor) + suggestion_len;
   if (move_left > 0) {
     fprintf(stdout, "\033[%zuD", move_left);
   }
@@ -696,7 +911,7 @@ static void handle_completion(
     }
 
     if (replace_range(buffer, buffer_size, length, cursor, start, *cursor, replacement) == 0) {
-      redraw_line(prompt, buffer, *length, *cursor);
+      redraw_line(prompt, buffer, *length, *cursor, shell);
     }
     return;
   }
@@ -713,14 +928,14 @@ static void handle_completion(
       memcpy(replacement, matches.items[0], shared);
       replacement[shared] = '\0';
       if (replace_range(buffer, buffer_size, length, cursor, start, *cursor, replacement) == 0) {
-        redraw_line(prompt, buffer, *length, *cursor);
+        redraw_line(prompt, buffer, *length, *cursor, shell);
       }
       return;
     }
   }
 
   print_completion_matches(&matches);
-  redraw_line(prompt, buffer, *length, *cursor);
+  redraw_line(prompt, buffer, *length, *cursor, shell);
 }
 
 static void apply_history_entry(char *buffer, size_t buffer_size, size_t *length, size_t *cursor, const char *entry) {
@@ -1334,20 +1549,20 @@ OoshLineReadStatus oosh_line_editor_read_line(
 
     if (key == OOSH_KEY_CTRL_A) {
       cursor = 0;
-      redraw_line(active_prompt, line, length, cursor);
+      redraw_line(active_prompt, line, length, cursor, shell);
       continue;
     }
 
     if (key == OOSH_KEY_CTRL_E) {
       cursor = length;
-      redraw_line(active_prompt, line, length, cursor);
+      redraw_line(active_prompt, line, length, cursor, shell);
       continue;
     }
 
     if (key == OOSH_KEY_LEFT) {
       if (cursor > 0) {
         cursor--;
-        redraw_line(active_prompt, line, length, cursor);
+        redraw_line(active_prompt, line, length, cursor, shell);
       }
       continue;
     }
@@ -1355,20 +1570,20 @@ OoshLineReadStatus oosh_line_editor_read_line(
     if (key == OOSH_KEY_RIGHT) {
       if (cursor < length) {
         cursor++;
-        redraw_line(active_prompt, line, length, cursor);
+        redraw_line(active_prompt, line, length, cursor, shell);
       }
       continue;
     }
 
     if (key == OOSH_KEY_WORD_LEFT) {
       cursor = word_backward(line, cursor);
-      redraw_line(active_prompt, line, length, cursor);
+      redraw_line(active_prompt, line, length, cursor, shell);
       continue;
     }
 
     if (key == OOSH_KEY_WORD_RIGHT) {
       cursor = word_forward(line, length, cursor);
-      redraw_line(active_prompt, line, length, cursor);
+      redraw_line(active_prompt, line, length, cursor, shell);
       continue;
     }
 
@@ -1376,7 +1591,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
       /* History navigation only on the first line. */
       if (!in_continuation) {
         navigate_history(shell, -1, line, sizeof(line), &length, &cursor, &history_index, history_scratch, sizeof(history_scratch));
-        redraw_line(active_prompt, line, length, cursor);
+        redraw_line(active_prompt, line, length, cursor, shell);
       }
       continue;
     }
@@ -1384,7 +1599,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
     if (key == OOSH_KEY_DOWN) {
       if (!in_continuation) {
         navigate_history(shell, 1, line, sizeof(line), &length, &cursor, &history_index, history_scratch, sizeof(history_scratch));
-        redraw_line(active_prompt, line, length, cursor);
+        redraw_line(active_prompt, line, length, cursor, shell);
       }
       continue;
     }
@@ -1427,7 +1642,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
           }
         } else {
           /* Cancelled (< 0) or continue editing (== 0): redraw current line. */
-          redraw_line(active_prompt, line, length, cursor);
+          redraw_line(active_prompt, line, length, cursor, shell);
         }
       }
       continue;
@@ -1445,7 +1660,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
         copy_string(s_kill_buf, sizeof(s_kill_buf), line + cursor);
         line[cursor] = '\0';
         length = cursor;
-        redraw_line(active_prompt, line, length, cursor);
+        redraw_line(active_prompt, line, length, cursor, shell);
       }
       continue;
     }
@@ -1461,7 +1676,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
         memmove(line, line + cursor, length - cursor + 1);
         length -= cursor;
         cursor = 0;
-        redraw_line(active_prompt, line, length, cursor);
+        redraw_line(active_prompt, line, length, cursor, shell);
       }
       continue;
     }
@@ -1479,7 +1694,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
         memmove(line + new_pos, line + cursor, length - cursor + 1);
         length -= killed;
         cursor = new_pos;
-        redraw_line(active_prompt, line, length, cursor);
+        redraw_line(active_prompt, line, length, cursor, shell);
       }
       continue;
     }
@@ -1493,7 +1708,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
         memcpy(line + cursor, s_kill_buf, yank_len);
         length += yank_len;
         cursor += yank_len;
-        redraw_line(active_prompt, line, length, cursor);
+        redraw_line(active_prompt, line, length, cursor, shell);
       }
       continue;
     }
@@ -1505,7 +1720,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
         length = undo_length;
         cursor = undo_cursor;
         undo_valid = 0;
-        redraw_line(active_prompt, line, length, cursor);
+        redraw_line(active_prompt, line, length, cursor, shell);
       }
       continue;
     }
@@ -1516,7 +1731,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
         memmove(line + cursor - 1, line + cursor, length - cursor + 1);
         length--;
         cursor--;
-        redraw_line(active_prompt, line, length, cursor);
+        redraw_line(active_prompt, line, length, cursor, shell);
       }
       continue;
     }
@@ -1526,7 +1741,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
         memcpy(undo_line, line, length + 1); undo_length = length; undo_cursor = cursor; undo_valid = 1;
         memmove(line + cursor, line + cursor + 1, length - cursor);
         length--;
-        redraw_line(active_prompt, line, length, cursor);
+        redraw_line(active_prompt, line, length, cursor, shell);
       }
       continue;
     }
@@ -1543,7 +1758,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
       line[cursor] = (char) key;
       length++;
       cursor++;
-      redraw_line(active_prompt, line, length, cursor);
+      redraw_line(active_prompt, line, length, cursor, shell);
     }
   }
 }
