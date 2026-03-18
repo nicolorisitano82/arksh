@@ -3928,6 +3928,8 @@ static int execute_builtin_with_redirection(
 
     switch (stage->redirections[i].kind) {
       case OOSH_REDIRECT_INPUT:
+      case OOSH_REDIRECT_HEREDOC:
+        /* Built-ins do not read from stdin; ignore input redirections. */
         break;
       case OOSH_REDIRECT_OUTPUT_TRUNCATE:
         if (expand_single_word(shell, stage->redirections[i].raw_target, OOSH_EXPAND_MODE_REDIRECT_TARGET, expanded_target, sizeof(expanded_target), out, out_size) != 0) {
@@ -3948,12 +3950,30 @@ static int execute_builtin_with_redirection(
         command_output[0] = '\0';
         break;
       case OOSH_REDIRECT_ERROR_TRUNCATE:
+        /* On success stderr is empty; truncate/create the target file. */
+        if (expand_single_word(shell, stage->redirections[i].raw_target, OOSH_EXPAND_MODE_REDIRECT_TARGET, expanded_target, sizeof(expanded_target), out, out_size) != 0) {
+          return 1;
+        }
+        if (write_text_file(expanded_target, "", 0, out, out_size) != 0) {
+          return 1;
+        }
+        break;
       case OOSH_REDIRECT_ERROR_APPEND:
+        /* On success stderr is empty; nothing to append. */
+        break;
       case OOSH_REDIRECT_ERROR_TO_OUTPUT:
+        /* On success stderr is empty; nothing to merge into stdout. */
+        break;
+      case OOSH_REDIRECT_FD_INPUT:
+      case OOSH_REDIRECT_FD_OUTPUT_TRUNCATE:
+      case OOSH_REDIRECT_FD_OUTPUT_APPEND:
+      case OOSH_REDIRECT_FD_DUP_INPUT:
+      case OOSH_REDIRECT_FD_DUP_OUTPUT:
+      case OOSH_REDIRECT_FD_CLOSE:
+        /* FD-level redirections are not applicable to built-ins; ignore. */
         break;
       default:
-        snprintf(out, out_size, "unsupported redirection kind for builtin");
-        return 1;
+        break;
     }
   }
 
