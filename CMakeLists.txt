@@ -178,6 +178,19 @@ if(BUILD_TESTING)
   add_test(NAME oosh_arith_prec    COMMAND oosh -c "text(\"%d\") -> print($((2 + 3 * 4)))")
   add_test(NAME oosh_arith_quoted  COMMAND oosh -c "text(\"%d\") -> print(\"$((10 - 3))\")")
 
+  # E2-S5: binary arithmetic operators in value expression context
+  add_test(NAME oosh_binop_add     COMMAND oosh -c "number(3) + number(4)")
+  add_test(NAME oosh_binop_sub     COMMAND oosh -c "number(10) - number(3)")
+  add_test(NAME oosh_binop_mul     COMMAND oosh -c "number(4) * number(5)")
+  add_test(NAME oosh_binop_div     COMMAND oosh -c "number(9) / number(3)")
+  add_test(NAME oosh_binop_prec    COMMAND oosh -c "number(2) + number(3) * number(4)")
+  add_test(NAME oosh_binop_nested  COMMAND oosh -c "number(6) + number(2) - number(1)")
+
+  # E3-S1: builtin-kind metadata visible via `type`
+  add_test(NAME oosh_type_pure   COMMAND oosh -c "type pwd")
+  add_test(NAME oosh_type_mutant COMMAND oosh -c "type cd")
+  add_test(NAME oosh_type_mixed  COMMAND oosh -c "type alias")
+
   set_tests_properties(
     oosh_external_command
     oosh_shell_pipeline
@@ -509,6 +522,27 @@ if(BUILD_TESTING)
     oosh_arith_quoted
     PROPERTIES
       PASS_REGULAR_EXPRESSION "7"
+  )
+  set_tests_properties(oosh_binop_add    PROPERTIES PASS_REGULAR_EXPRESSION "7")
+  set_tests_properties(oosh_binop_sub    PROPERTIES PASS_REGULAR_EXPRESSION "7")
+  set_tests_properties(oosh_binop_mul    PROPERTIES PASS_REGULAR_EXPRESSION "20")
+  set_tests_properties(oosh_binop_div    PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(oosh_binop_prec   PROPERTIES PASS_REGULAR_EXPRESSION "14")
+  set_tests_properties(oosh_binop_nested PROPERTIES PASS_REGULAR_EXPRESSION "7")
+  set_tests_properties(
+    oosh_type_pure
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "pure shell builtin"
+  )
+  set_tests_properties(
+    oosh_type_mutant
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "mutant shell builtin"
+  )
+  set_tests_properties(
+    oosh_type_mixed
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "mixed shell builtin"
   )
   set_tests_properties(
     oosh_source_file

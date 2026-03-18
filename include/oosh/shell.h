@@ -34,12 +34,30 @@ extern "C" {
 #define OOSH_MAX_CLASS_METHODS 32
 #define OOSH_MAX_INSTANCES 128
 
+/* Execution semantics classification for built-in commands.
+ *
+ * PURE    – reads shell state only; output is plain text; safe to run in any
+ *           pipeline position (e.g. pwd, type, history, jobs).
+ * MUTANT  – must run in the main shell process because it modifies shell state
+ *           (variables, working directory, job table, control flow, etc.).
+ *           Cannot be an intermediate pipeline stage (e.g. cd, set, eval).
+ * MIXED   – behaviour depends on arguments: some invocations are read-only
+ *           (list mode) while others mutate state (define/load mode).
+ *           Conservative treatment: same restriction as MUTANT in pipelines.
+ */
+typedef enum {
+  OOSH_BUILTIN_PURE = 0,
+  OOSH_BUILTIN_MUTANT,
+  OOSH_BUILTIN_MIXED
+} OoshBuiltinKind;
+
 typedef struct {
   char name[64];
   char description[OOSH_MAX_DESCRIPTION];
   OoshCommandFn fn;
   int is_plugin_command;
   int owner_plugin_index;
+  OoshBuiltinKind kind; /* execution-policy metadata; see OoshBuiltinKind */
 } OoshCommandDef;
 
 typedef struct {

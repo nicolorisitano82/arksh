@@ -5789,13 +5789,14 @@ static int command_type(OoshShell *shell, int argc, char **argv, char *out, size
     } else if (class_def != NULL) {
       snprintf(line, sizeof(line), "%s is a class", argv[i]);
     } else if (command != NULL) {
-      snprintf(
-        line,
-        sizeof(line),
-        "%s is a %s",
-        argv[i],
-        command->is_plugin_command ? "plugin command" : "shell builtin"
-      );
+      if (command->is_plugin_command) {
+        snprintf(line, sizeof(line), "%s is a plugin command", argv[i]);
+      } else {
+        const char *kind_label =
+          (command->kind == OOSH_BUILTIN_MUTANT) ? "mutant" :
+          (command->kind == OOSH_BUILTIN_MIXED)  ? "mixed"  : "pure";
+        snprintf(line, sizeof(line), "%s is a %s shell builtin", argv[i], kind_label);
+      }
     } else if (resolve_command_path(shell, argv[i], command_path, sizeof(command_path)) == 0) {
       snprintf(line, sizeof(line), "%s is %s", argv[i], command_path);
     } else {
@@ -6239,121 +6240,60 @@ static int command_return(OoshShell *shell, int argc, char **argv, char *out, si
   return handle_return_line(shell, line, out, out_size);
 }
 
+static int register_builtin(OoshShell *shell, const char *name, const char *description,
+                             OoshCommandFn fn, OoshBuiltinKind kind);
+
 static int register_builtin_commands(OoshShell *shell) {
-  if (oosh_shell_register_command(shell, "help", "show commands and expression syntax", command_help, 0) != 0) {
+  /* --- PURE: read-only, never modifies shell state ----------------------- */
+  if (register_builtin(shell, "help",      "show commands and expression syntax",       command_help,    OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "pwd",       "print current directory",                   command_pwd,     OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "type",      "show how a command name resolves",          command_type,    OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "history",   "show interactive command history",          command_history, OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "jobs",      "list background jobs with state and pid",   command_jobs,    OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "true",      "return success",                            command_true,    OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "false",     "return failure",                            command_false,   OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "inspect",   "print object metadata for a path",         command_inspect, OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "get",       "read an object property",                  command_get,     OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "call",      "invoke an object method",                  command_call,    OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "run",       "execute an external command natively",     command_run,     OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "function",  "list or inspect shell functions",          command_function, OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "functions", "list or inspect shell functions",          command_function, OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "class",     "list defined classes",                     command_class,   OOSH_BUILTIN_PURE) != 0 ||
+      register_builtin(shell, "classes",   "list or inspect defined classes",          command_class,   OOSH_BUILTIN_PURE) != 0) {
     return 1;
   }
-  if (oosh_shell_register_command(shell, "exit", "terminate the shell", command_exit, 0) != 0) {
+
+  /* --- MUTANT: must run in the current shell process --------------------- */
+  if (register_builtin(shell, "exit",     "terminate the shell",                            command_exit,     OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "quit",     "terminate the shell",                            command_exit,     OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "cd",       "change current directory",                       command_cd,       OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "set",      "list or assign shell variables",                 command_set,      OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "export",   "mark a shell variable for child processes",      command_export,   OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "unset",    "remove shell variables",                         command_unset,    OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "unalias",  "remove aliases",                                 command_unalias,  OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "source",   "execute commands from a file",                   command_source,   OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, ".",        "execute commands from a file",                   command_source,   OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "eval",     "evaluate a command string in the current shell", command_eval,     OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "exec",     "run an external command and terminate the current shell", command_exec, OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "trap",     "list or define shell exit traps",                command_trap,     OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "break",    "exit the current loop or an outer loop",         command_break,    OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "continue", "skip to the next loop iteration",                command_continue, OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "return",   "exit the current shell function",                command_return,   OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "bg",       "resume a stopped background job",                command_bg,       OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "fg",       "resume or wait for a background job in the foreground", command_fg, OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "wait",     "wait for background jobs to complete",           command_wait,     OOSH_BUILTIN_MUTANT) != 0) {
     return 1;
   }
-  if (oosh_shell_register_command(shell, "quit", "terminate the shell", command_exit, 0) != 0) {
+
+  /* --- MIXED: read-only when listing, mutating when defining/loading ----- */
+  if (register_builtin(shell, "alias",   "list or define aliases",                    command_alias,   OOSH_BUILTIN_MIXED) != 0 ||
+      register_builtin(shell, "extend",  "list or define object/value extensions",    command_extend,  OOSH_BUILTIN_MIXED) != 0 ||
+      register_builtin(shell, "let",     "list or create typed value bindings",       command_let,     OOSH_BUILTIN_MIXED) != 0 ||
+      register_builtin(shell, "plugin",  "load, inspect or toggle plugins",           command_plugin,  OOSH_BUILTIN_MIXED) != 0 ||
+      register_builtin(shell, "prompt",  "show or load prompt configuration",        command_prompt,  OOSH_BUILTIN_MIXED) != 0) {
     return 1;
   }
-  if (oosh_shell_register_command(shell, "pwd", "print current directory", command_pwd, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "cd", "change current directory", command_cd, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "set", "list or assign shell variables", command_set, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "export", "mark a shell variable for child processes", command_export, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "let", "list or create typed value bindings", command_let, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "function", "list or inspect shell functions", command_function, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "functions", "list or inspect shell functions", command_function, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "class", "list defined classes", command_class, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "classes", "list or inspect defined classes", command_class, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "extend", "list or define object/value extensions", command_extend, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "unset", "remove shell variables", command_unset, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "alias", "list or define aliases", command_alias, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "unalias", "remove aliases", command_unalias, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "source", "execute commands from a file", command_source, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, ".", "execute commands from a file", command_source, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "type", "show how a command name resolves", command_type, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "history", "show interactive command history", command_history, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "jobs", "list background jobs with state and pid", command_jobs, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "fg", "resume or wait for a background job in the foreground", command_fg, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "bg", "resume a stopped background job", command_bg, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "wait", "wait for background jobs to complete", command_wait, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "eval", "evaluate a command string in the current shell", command_eval, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "exec", "run an external command and terminate the current shell", command_exec, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "trap", "list or define shell exit traps", command_trap, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "true", "return success", command_true, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "false", "return failure", command_false, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "break", "exit the current loop or an outer loop", command_break, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "continue", "skip to the next loop iteration", command_continue, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "return", "exit the current shell function", command_return, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "inspect", "print object metadata for a path", command_inspect, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "get", "read an object property", command_get, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "call", "invoke an object method", command_call, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "prompt", "show or load prompt configuration", command_prompt, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "plugin", "load, inspect or toggle plugins", command_plugin, 0) != 0) {
-    return 1;
-  }
-  if (oosh_shell_register_command(shell, "run", "execute an external command natively", command_run, 0) != 0) {
-    return 1;
-  }
+
   return 0;
 }
 
@@ -6549,7 +6489,23 @@ int oosh_shell_register_command(OoshShell *shell, const char *name, const char *
   shell->commands[shell->command_count].fn = fn;
   shell->commands[shell->command_count].is_plugin_command = is_plugin_command;
   shell->commands[shell->command_count].owner_plugin_index = is_plugin_command ? shell->loading_plugin_index : -1;
+  /* Plugin commands default to PURE – they receive a copy of the output
+     buffer and cannot directly modify shell-internal state. */
+  shell->commands[shell->command_count].kind = OOSH_BUILTIN_PURE;
   shell->command_count++;
+  return 0;
+}
+
+/* Internal helper: like oosh_shell_register_command but accepts an explicit
+   OoshBuiltinKind so that register_builtin_commands() can classify each
+   built-in at registration time. */
+static int register_builtin(OoshShell *shell, const char *name, const char *description,
+                             OoshCommandFn fn, OoshBuiltinKind kind) {
+  if (oosh_shell_register_command(shell, name, description, fn, 0) != 0) {
+    return 1;
+  }
+  /* Overwrite the default kind set by oosh_shell_register_command. */
+  shell->commands[shell->command_count - 1].kind = kind;
   return 0;
 }
 

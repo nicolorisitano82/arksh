@@ -615,6 +615,106 @@ static int find_top_level_ternary_operator(const char *text, size_t *out_questio
   return 1;
 }
 
+/* Find the rightmost occurrence of a binary operator at paren/bracket depth 0,
+ * not inside a quoted string, and not part of '->' or '--'.
+ * If additive_only is non-zero, only '+' and '-' are considered.
+ * Otherwise only '*' and '/' are considered.
+ * Returns 0 on success (found), 1 if not found.
+ * *out_pos   = index of the operator in text
+ * *out_op    = operator character
+ */
+static int find_top_level_binary_op(
+  const char *text,
+  size_t *out_pos,
+  char *out_op,
+  int additive_only
+) {
+  size_t i;
+  size_t len;
+  char quote = '\0';
+  int paren_depth = 0;
+  int bracket_depth = 0;
+  int found = 0;
+
+  if (text == NULL || out_pos == NULL || out_op == NULL) {
+    return 1;
+  }
+
+  len = strlen(text);
+
+  /* Scan right-to-left so we find the rightmost low-precedence operator first,
+     giving correct left-associativity when the expression is evaluated
+     recursively (right subtree gets the higher-precedence sub-expression). */
+  for (i = len; i > 0; --i) {
+    size_t idx = i - 1;
+    char c = text[idx];
+
+    /* Track quotes (right-to-left: just skip; full tracking is too complex
+       scanning backwards, so we do a two-pass: first scan left-to-right to
+       build a depth/quote map, then use it).
+       For simplicity we do a left-to-right re-scan with guards instead. */
+    (void) c;
+    break; /* exit the backwards loop — use forward scan below */
+  }
+
+  /* Forward scan: track nesting, record the LAST operator seen at depth 0. */
+  found = 0;
+  for (i = 0; text[i] != '\0'; ++i) {
+    char c = text[i];
+
+    if (quote != '\0') {
+      if (c == quote) {
+        quote = '\0';
+      } else if (quote == '"' && c == '\\' && text[i + 1] != '\0') {
+        i++;
+      }
+      continue;
+    }
+
+    if (c == '"' || c == '\'') {
+      quote = c;
+      continue;
+    }
+    if (c == '(') { paren_depth++;   continue; }
+    if (c == ')' && paren_depth   > 0) { paren_depth--;   continue; }
+    if (c == '[') { bracket_depth++; continue; }
+    if (c == ']' && bracket_depth > 0) { bracket_depth--; continue; }
+
+    if (paren_depth != 0 || bracket_depth != 0) {
+      continue;
+    }
+
+    if (additive_only) {
+      if (c == '+') {
+        *out_pos = i;
+        *out_op  = '+';
+        found    = 1;
+      } else if (c == '-') {
+        /* Skip '->' and '--' */
+        if (text[i + 1] == '>' || text[i + 1] == '-') {
+          i++;
+          continue;
+        }
+        *out_pos = i;
+        *out_op  = '-';
+        found    = 1;
+      }
+    } else {
+      if (c == '*') {
+        *out_pos = i;
+        *out_op  = '*';
+        found    = 1;
+      } else if (c == '/') {
+        *out_pos = i;
+        *out_op  = '/';
+        found    = 1;
+      }
+    }
+  }
+
+  return found ? 0 : 1;
+}
+
 static int parse_method_args_csv(
   const char *src,
   char argv[OOSH_MAX_ARGS][OOSH_MAX_TOKEN],
@@ -1198,6 +1298,70 @@ static int parse_value_source_text_ex(const char *line, OoshValueSourceNode *out
     copy_string(out_source->text, sizeof(out_source->text), trimmed);
     copy_string(out_source->raw_text, sizeof(out_source->raw_text), trimmed);
     return 0;
+  }
+
+  /* Binary operator: additive (+/-) has lower precedence, check first. */
+  {
+    size_t op_pos = 0;
+    char op_char = '\0';
+
+    if (find_top_level_binary_op(trimmed, &op_pos, &op_char, 1) == 0 ||
+        find_top_level_binary_op(trimmed, &op_pos, &op_char, 0) == 0) {
+      char left_buf[OOSH_MAX_LINE];
+      char right_buf[OOSH_MAX_LINE];
+
+      /* Re-run to get the correct precedence level: additive first. */
+      if (find_top_level_binary_op(trimmed, &op_pos, &op_char, 1) != 0) {
+        find_top_level_binary_op(trimmed, &op_pos, &op_char, 0);
+      }
+
+      copy_trimmed_slice(trimmed, 0, op_pos, left_buf, sizeof(left_buf));
+      copy_trimmed_slice(trimmed, op_pos + 1, strlen(trimmed), right_buf, sizeof(right_buf));
+
+      /* Guard: only treat as binary op if the LEFT operand looks like a
+         structured value expression. Rules:
+           1. Resolver call: contains '(' with no whitespace before the '('.
+              Spaces inside the parens are fine (e.g. "number( 3 )").
+           2. Single double-quoted string literal: starts with '"' AND ends
+              with '"' (no unquoted text after the closing quote).
+           3. Single single-quoted string literal: same, with '\''.
+           4. Bare number literal: starts with a digit and has no spaces.
+         This rejects shell commands like:
+           '"./prog" tests/fixtures/glob/*.fixture' (starts with '"' but
+           does NOT end with '"') and plain shell words like "source". */
+      {
+        int left_is_value = 0;
+        if (left_buf[0] != '\0' && right_buf[0] != '\0') {
+          size_t llen = strlen(left_buf);
+          if (strchr(left_buf, '(') != NULL) {
+            /* Resolver call: no space before the first '(' */
+            const char *paren = strchr(left_buf, '(');
+            int space_before = 0;
+            for (const char *p = left_buf; p < paren; p++) {
+              if (*p == ' ' || *p == '\t') { space_before = 1; break; }
+            }
+            left_is_value = !space_before;
+          } else if (left_buf[0] == '"' && llen >= 2 && left_buf[llen - 1] == '"') {
+            left_is_value = 1; /* single double-quoted string */
+          } else if (left_buf[0] == '\'' && llen >= 2 && left_buf[llen - 1] == '\'') {
+            left_is_value = 1; /* single single-quoted string */
+          } else if (left_buf[0] >= '0' && left_buf[0] <= '9' &&
+                     strchr(left_buf, ' ') == NULL) {
+            left_is_value = 1; /* bare number literal */
+          }
+        }
+
+        if (left_is_value) {
+          out_source->kind = OOSH_VALUE_SOURCE_BINARY_OP;
+          out_source->binary_op = op_char;
+          copy_string(out_source->binary_left,  sizeof(out_source->binary_left),  left_buf);
+          copy_string(out_source->binary_right, sizeof(out_source->binary_right), right_buf);
+          copy_string(out_source->text,     sizeof(out_source->text),     trimmed);
+          copy_string(out_source->raw_text, sizeof(out_source->raw_text), trimmed);
+          return 0;
+        }
+      }
+    }
   }
 
   if (parse_object_expression_text(line, &out_source->object_expression, error, error_size) == 0) {

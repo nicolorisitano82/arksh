@@ -174,19 +174,33 @@ Stato story: `[x]`
 - `[x]` `E2-S4-T3` allineare comportamento Linux/macOS/Windows sui glob
 - `[x]` `E2-S4-T4` aggiungere test cross-platform per pattern edge case
 
+### E2-S5. Operatori binari in contesto value
+
+Stato story: `[x]`
+
+Permette di scrivere `number(3) + number(4)` o `text("foo") + text("bar")` nel contesto
+delle value expression. Gli operatori sono sovraccaricabili per tipo tramite il sistema
+di extension (`__add__`, `__sub__`, ecc.). Non tocca il contesto shell.
+
+- `[x]` `E2-S5-T1` aggiungere token `PLUS`, `MINUS`, `STAR`, `SLASH` nel lexer (neutri in contesto shell, operatori in contesto value) — implementato come parsing testuale, senza nuovi token lexer, per preservare glob e path
+- `[x]` `E2-S5-T2` aggiungere nodo AST `OOSH_VALUE_SOURCE_BINARY_OP` con campi `left`, `op`, `right`
+- `[x]` `E2-S5-T3` implementare parser di espressioni binarie nel contesto value con precedenza corretta (`*`/`/` > `+`/`-`) e guard per evitare false detection su path e comandi shell
+- `[x]` `E2-S5-T4` implementare dispatch nell'executor: nativo per NUMBER, fallback su extension method (`__add__`, `__sub__`, `__mul__`, `__div__`) per altri tipi
+- `[x]` `E2-S5-T5` aggiungere test su numeri (add, sub, mul, div, prec, assoc) — 6 test aggiunti
+
 ---
 
 ## E3. Built-in nelle pipeline e integrazione shell/object
 
-Stato epoca: `[ ]`
+Stato epoca: `[~]`
 
 ### E3-S1. Classificazione dei built-in
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E3-S1-T1` classificare i built-in in puri, mutanti e misti
-- `[ ]` `E3-S1-T2` documentare la politica di esecuzione in pipeline
-- `[ ]` `E3-S1-T3` aggiornare il registry comandi con metadata di esecuzione
+- `[x]` `E3-S1-T1` classificare i built-in in puri, mutanti e misti
+- `[x]` `E3-S1-T2` documentare la politica di esecuzione in pipeline
+- `[x]` `E3-S1-T3` aggiornare il registry comandi con metadata di esecuzione
 
 ### E3-S2. Built-in dentro shell pipeline multi-stage
 
@@ -196,6 +210,7 @@ Stato story: `[ ]`
 - `[ ]` `E3-S2-T2` decidere e implementare il comportamento dei built-in mutanti
 - `[ ]` `E3-S2-T3` unificare redirection e pipe per built-in ed esterni
 - `[ ]` `E3-S2-T4` aggiungere test su `history`, `type`, `plugin list` e comandi equivalenti
+- `[ ]` `E3-S2-T5` aggiungere fallback in `apply_pipeline_stage`: se il nome dello stage non e riconosciuto, provare come method call sul sistema di extension (`find_extension`); permette overloading di `|>` tramite `extend`
 
 ### E3-S3. Bridge shell/object piu naturale
 
@@ -212,6 +227,18 @@ Stato story: `[ ]`
 - `[ ]` `E3-S4-T1` formalizzare le regole di dispatch in documentazione tecnica
 - `[ ]` `E3-S4-T2` ridurre i casi ambigui nel parser
 - `[ ]` `E3-S4-T3` aggiungere test di regressione su input ambigui
+
+### E3-S5. Overloading e hook dei comandi
+
+Stato story: `[ ]`
+
+Permette di ridefinire qualsiasi comando built-in tramite una funzione shell con lo stesso
+nome, e di chiamare comunque l'implementazione originale tramite `builtin <nome>`.
+Pattern idiomatico (POSIX): `function cd(dir) do ... ; builtin cd $dir ; endfunction`.
+
+- `[ ]` `E3-S5-T1` implementare il built-in `builtin` (kind MUTANT): riceve un nome comando e gli argomenti rimanenti, bypassa il lookup delle funzioni shell e chiama direttamente `find_registered_command`
+- `[ ]` `E3-S5-T2` documentare il pattern di override con esempi per `cd`, `pwd` e comandi custom
+- `[ ]` `E3-S5-T3` aggiungere test: funzione `cd` che logga e poi chiama `builtin cd`, verifica che la directory cambi davvero
 
 ---
 
@@ -462,11 +489,18 @@ Stato story: `[ ]`
 
 Se vuoi procedere con il percorso piu lineare, i prossimi task consigliati sono:
 
-- `E3-S1-T1` (classificazione built-in)
+- `E3-S2-T1` (built-in puri come stage intermedi di pipeline)
+- `E3-S2-T5` (fallback `|>` su extension method — overloading pipeline immediato)
+- `E3-S5-T1` (built-in `builtin` — sblocca override comandi)
 - `E4-S1-T1` (process group pipeline)
-- `E5-S3-T1` (completamento comandi / tab completion)
 
-Se invece vuoi puntare prima all'usabilita quotidiana della REPL, il percorso alternativo migliore e:
+Se invece vuoi lavorare sull'espressivita del linguaggio (operator overloading):
+
+- `E3-S2-T5` (fallback `|>` su extension — quick win, ~10 righe)
+- `E3-S5-T1` (`builtin` command — ~20 righe)
+- ~~`E2-S5-T1..T5` (operatori binari in value context — completato)~~
+
+Se invece vuoi puntare prima all'usabilita quotidiana della REPL:
 
 - `E5-S3-T1` (kill/yank)
 - `E5-S4-T1` (completion avanzata)

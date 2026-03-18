@@ -2817,6 +2817,78 @@ static int evaluate_value_source(OoshShell *shell, const OoshValueSourceNode *so
       return evaluate_expression_text(shell, source->raw_text, value, out, out_size);
     case OOSH_VALUE_SOURCE_RESOLVER_CALL:
       return invoke_value_resolver(shell, source, value, out, out_size);
+    case OOSH_VALUE_SOURCE_BINARY_OP: {
+      /* OoshValue is very large (>1MB each due to embedded lists/maps), so
+         heap-allocate both operands to avoid a stack overflow on recursion. */
+      OoshValue *lv = (OoshValue *) calloc(1, sizeof(OoshValue));
+      OoshValue *rv = (OoshValue *) calloc(1, sizeof(OoshValue));
+      int bstatus;
+
+      if (lv == NULL || rv == NULL) {
+        free(lv); free(rv);
+        snprintf(out, out_size, "out of memory");
+        return 1;
+      }
+      oosh_value_init(lv);
+      oosh_value_init(rv);
+
+      if (oosh_evaluate_line_value(shell, source->binary_left,  lv, out, out_size) != 0) {
+        free(lv); free(rv);
+        return 1;
+      }
+      if (oosh_evaluate_line_value(shell, source->binary_right, rv, out, out_size) != 0) {
+        oosh_value_free(lv); free(lv); free(rv);
+        return 1;
+      }
+
+      /* Native numeric arithmetic. */
+      if (lv->kind == OOSH_VALUE_NUMBER && rv->kind == OOSH_VALUE_NUMBER) {
+        double result;
+        switch (source->binary_op) {
+          case '+': result = lv->number + rv->number; break;
+          case '-': result = lv->number - rv->number; break;
+          case '*': result = lv->number * rv->number; break;
+          case '/':
+            if (rv->number == 0.0) {
+              snprintf(out, out_size, "division by zero");
+              oosh_value_free(lv); free(lv);
+              oosh_value_free(rv); free(rv);
+              return 1;
+            }
+            result = lv->number / rv->number;
+            break;
+          default:
+            snprintf(out, out_size, "unknown binary operator: %c", source->binary_op);
+            oosh_value_free(lv); free(lv);
+            oosh_value_free(rv); free(rv);
+            return 1;
+        }
+        oosh_value_free(lv); free(lv);
+        oosh_value_free(rv); free(rv);
+        oosh_value_set_number(value, result);
+        return 0;
+      }
+
+      /* Extension method fallback: __add__, __sub__, __mul__, __div__. */
+      {
+        const char *method_name;
+        switch (source->binary_op) {
+          case '+': method_name = "__add__"; break;
+          case '-': method_name = "__sub__"; break;
+          case '*': method_name = "__mul__"; break;
+          case '/': method_name = "__div__"; break;
+          default:
+            snprintf(out, out_size, "unknown binary operator: %c", source->binary_op);
+            oosh_value_free(lv); free(lv);
+            oosh_value_free(rv); free(rv);
+            return 1;
+        }
+        bstatus = invoke_extension_method_value(shell, lv, method_name, 1, rv, value, out, out_size);
+        oosh_value_free(lv); free(lv);
+        oosh_value_free(rv); free(rv);
+        return bstatus;
+      }
+    }
     default:
       snprintf(out, out_size, "unsupported value source");
       return 1;

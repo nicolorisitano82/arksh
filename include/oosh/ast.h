@@ -195,7 +195,12 @@ typedef enum {
   OOSH_VALUE_SOURCE_CAPTURE_TEXT,
   OOSH_VALUE_SOURCE_CAPTURE_LINES,
   OOSH_VALUE_SOURCE_TERNARY,
-  OOSH_VALUE_SOURCE_RESOLVER_CALL
+  OOSH_VALUE_SOURCE_RESOLVER_CALL,
+  /* Binary operator in value context: left OP right.
+     OP is one of '+', '-', '*', '/'.
+     Dispatch: numeric operands → native arithmetic;
+     other types → extension method __add__ / __sub__ / __mul__ / __div__. */
+  OOSH_VALUE_SOURCE_BINARY_OP
 } OoshValueSourceKind;
 
 typedef struct {
@@ -208,6 +213,10 @@ typedef struct {
   char raw_argv[OOSH_MAX_ARGS][OOSH_MAX_TOKEN];
   int argc;
   OoshBlock block;
+  /* Binary operator fields (used when kind == OOSH_VALUE_SOURCE_BINARY_OP). */
+  char binary_left[OOSH_MAX_LINE];
+  char binary_right[OOSH_MAX_LINE];
+  char binary_op; /* '+', '-', '*', '/' */
 } OoshValueSourceNode;
 
 typedef struct {
