@@ -763,6 +763,556 @@ static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, ch
   return 0;
 }
 
+/* ---- Arithmetic expansion $(( )) ---- */
+
+/*
+ * Extract the arithmetic expression text from raw[*index] which must start
+ * at the '$' of '$((...))'  On success *index is left at the second ')'.
+ */
+static int parse_arith_expansion(
+  const char *raw,
+  size_t *index,
+  char *out,
+  size_t out_size,
+  char *error,
+  size_t error_size
+) {
+  char expr[OOSH_MAX_OUTPUT];
+  size_t expr_len = 0;
+  size_t i = *index + 3; /* skip '$', '(', '(' */
+  int depth = 0;
+
+  out[0] = '\0';
+
+  while (raw[i] != '\0') {
+    char c = raw[i];
+
+    if (c == '(') {
+      depth++;
+      if (expr_len + 1 < sizeof(expr)) {
+        expr[expr_len++] = c;
+      }
+      i++;
+      continue;
+    }
+
+    if (c == ')') {
+      if (depth > 0) {
+        depth--;
+        if (expr_len + 1 < sizeof(expr)) {
+          expr[expr_len++] = c;
+        }
+        i++;
+        continue;
+      }
+      /* depth == 0: this ')' is the first of the closing '))' */
+      if (raw[i + 1] == ')') {
+        *index = i + 1;
+        expr[expr_len] = '\0';
+        copy_string(out, out_size, expr);
+        return 0;
+      }
+      snprintf(error, error_size, "unmatched ')' inside arithmetic expansion");
+      return 1;
+    }
+
+    if (expr_len + 1 < sizeof(expr)) {
+      expr[expr_len++] = c;
+    }
+    i++;
+  }
+
+  snprintf(error, error_size, "unterminated arithmetic expansion");
+  return 1;
+}
+
+typedef struct {
+  const char *expr;
+  size_t pos;
+  size_t len;
+  OoshShell *shell;
+  int has_error;
+  char error[256];
+} ArithCtx;
+
+static void arith_skip_ws(ArithCtx *ctx) {
+  while (ctx->pos < ctx->len && isspace((unsigned char) ctx->expr[ctx->pos])) {
+    ctx->pos++;
+  }
+}
+
+/* Forward declaration. */
+static long long arith_expr(ArithCtx *ctx);
+
+static long long arith_primary(ArithCtx *ctx) {
+  long long val = 0;
+
+  arith_skip_ws(ctx);
+
+  if (ctx->pos >= ctx->len) {
+    ctx->has_error = 1;
+    snprintf(ctx->error, sizeof(ctx->error), "unexpected end of arithmetic expression");
+    return 0;
+  }
+
+  /* Parenthesised sub-expression. */
+  if (ctx->expr[ctx->pos] == '(') {
+    ctx->pos++;
+    val = arith_expr(ctx);
+    if (ctx->has_error) {
+      return 0;
+    }
+    arith_skip_ws(ctx);
+    if (ctx->pos < ctx->len && ctx->expr[ctx->pos] == ')') {
+      ctx->pos++;
+    } else {
+      ctx->has_error = 1;
+      snprintf(ctx->error, sizeof(ctx->error), "missing ')' in arithmetic expression");
+    }
+    return val;
+  }
+
+  /* Variable reference: bare name (POSIX) or $name. */
+  if (ctx->expr[ctx->pos] == '$' ||
+      isalpha((unsigned char) ctx->expr[ctx->pos]) ||
+      ctx->expr[ctx->pos] == '_') {
+    char name[128];
+    size_t name_len = 0;
+    const char *var_val;
+
+    if (ctx->expr[ctx->pos] == '$') {
+      ctx->pos++;
+    }
+
+    while (ctx->pos < ctx->len &&
+           (isalnum((unsigned char) ctx->expr[ctx->pos]) || ctx->expr[ctx->pos] == '_')) {
+      if (name_len + 1 < sizeof(name)) {
+        name[name_len++] = ctx->expr[ctx->pos];
+      }
+      ctx->pos++;
+    }
+    name[name_len] = '\0';
+
+    if (name_len == 0) {
+      return 0;
+    }
+
+    var_val = oosh_shell_get_var(ctx->shell, name);
+    if (var_val == NULL || var_val[0] == '\0') {
+      return 0;
+    }
+    {
+      char *endptr;
+      long long num = strtoll(var_val, &endptr, 0);
+
+      while (*endptr != '\0' && isspace((unsigned char) *endptr)) {
+        endptr++;
+      }
+      return (*endptr == '\0') ? num : 0;
+    }
+  }
+
+  /* Integer literal (decimal, 0x hex, 0 octal). */
+  if (isdigit((unsigned char) ctx->expr[ctx->pos])) {
+    char *endptr;
+    val = strtoll(ctx->expr + ctx->pos, &endptr, 0);
+    ctx->pos = (size_t) (endptr - ctx->expr);
+    return val;
+  }
+
+  ctx->has_error = 1;
+  snprintf(ctx->error, sizeof(ctx->error), "unexpected character '%c' in arithmetic expression",
+           ctx->expr[ctx->pos]);
+  return 0;
+}
+
+static long long arith_unary(ArithCtx *ctx) {
+  arith_skip_ws(ctx);
+
+  if (ctx->pos < ctx->len) {
+    if (ctx->expr[ctx->pos] == '-') { ctx->pos++; return -arith_unary(ctx); }
+    if (ctx->expr[ctx->pos] == '+') { ctx->pos++; return  arith_unary(ctx); }
+    if (ctx->expr[ctx->pos] == '!') { ctx->pos++; return !arith_unary(ctx) ? 1 : 0; }
+    if (ctx->expr[ctx->pos] == '~') { ctx->pos++; return ~arith_unary(ctx); }
+  }
+  return arith_primary(ctx);
+}
+
+static long long arith_multiplicative(ArithCtx *ctx) {
+  long long left = arith_unary(ctx);
+
+  for (;;) {
+    char op;
+
+    if (ctx->has_error) {
+      return 0;
+    }
+    arith_skip_ws(ctx);
+    if (ctx->pos >= ctx->len) {
+      break;
+    }
+    op = ctx->expr[ctx->pos];
+    if (op != '*' && op != '/' && op != '%') {
+      break;
+    }
+    /* Don't consume '**' (power) as '*' — leave it for later. */
+    if (op == '*' && ctx->pos + 1 < ctx->len && ctx->expr[ctx->pos + 1] == '*') {
+      break;
+    }
+    ctx->pos++;
+    {
+      long long right = arith_unary(ctx);
+
+      if (ctx->has_error) {
+        return 0;
+      }
+      if (op == '*') {
+        left *= right;
+      } else if (right == 0) {
+        ctx->has_error = 1;
+        snprintf(ctx->error, sizeof(ctx->error),
+                 op == '/' ? "division by zero" : "modulo by zero");
+        return 0;
+      } else if (op == '/') {
+        left /= right;
+      } else {
+        left %= right;
+      }
+    }
+  }
+  return left;
+}
+
+static long long arith_additive(ArithCtx *ctx) {
+  long long left = arith_multiplicative(ctx);
+
+  for (;;) {
+    char op;
+
+    if (ctx->has_error) {
+      return 0;
+    }
+    arith_skip_ws(ctx);
+    if (ctx->pos >= ctx->len) {
+      break;
+    }
+    op = ctx->expr[ctx->pos];
+    if (op != '+' && op != '-') {
+      break;
+    }
+    ctx->pos++;
+    {
+      long long right = arith_multiplicative(ctx);
+
+      if (ctx->has_error) {
+        return 0;
+      }
+      left = (op == '+') ? left + right : left - right;
+    }
+  }
+  return left;
+}
+
+static long long arith_shift(ArithCtx *ctx) {
+  long long left = arith_additive(ctx);
+
+  for (;;) {
+    int is_left;
+
+    if (ctx->has_error) {
+      return 0;
+    }
+    arith_skip_ws(ctx);
+    if (ctx->pos + 1 >= ctx->len) {
+      break;
+    }
+    if (ctx->expr[ctx->pos] == '<' && ctx->expr[ctx->pos + 1] == '<') {
+      is_left = 1;
+    } else if (ctx->expr[ctx->pos] == '>' && ctx->expr[ctx->pos + 1] == '>') {
+      is_left = 0;
+    } else {
+      break;
+    }
+    ctx->pos += 2;
+    {
+      long long right = arith_additive(ctx);
+
+      if (ctx->has_error) {
+        return 0;
+      }
+      left = is_left ? (left << right) : (left >> right);
+    }
+  }
+  return left;
+}
+
+static long long arith_comparison(ArithCtx *ctx) {
+  long long left = arith_shift(ctx);
+
+  for (;;) {
+    int is_le, is_ge, is_lt, is_gt;
+
+    if (ctx->has_error) {
+      return 0;
+    }
+    arith_skip_ws(ctx);
+    if (ctx->pos >= ctx->len) {
+      break;
+    }
+    is_le = (ctx->pos + 1 < ctx->len &&
+             ctx->expr[ctx->pos] == '<' && ctx->expr[ctx->pos + 1] == '=');
+    is_ge = (ctx->pos + 1 < ctx->len &&
+             ctx->expr[ctx->pos] == '>' && ctx->expr[ctx->pos + 1] == '=');
+    is_lt = (!is_le && ctx->expr[ctx->pos] == '<' &&
+             (ctx->pos + 1 >= ctx->len || ctx->expr[ctx->pos + 1] != '<'));
+    is_gt = (!is_ge && ctx->expr[ctx->pos] == '>' &&
+             (ctx->pos + 1 >= ctx->len || ctx->expr[ctx->pos + 1] != '>'));
+
+    if (!is_le && !is_ge && !is_lt && !is_gt) {
+      break;
+    }
+    ctx->pos += (is_le || is_ge) ? 2 : 1;
+    {
+      long long right = arith_shift(ctx);
+
+      if (ctx->has_error) {
+        return 0;
+      }
+      if (is_le) { left = (left <= right) ? 1 : 0; }
+      else if (is_ge) { left = (left >= right) ? 1 : 0; }
+      else if (is_lt) { left = (left <  right) ? 1 : 0; }
+      else            { left = (left >  right) ? 1 : 0; }
+    }
+  }
+  return left;
+}
+
+static long long arith_equality(ArithCtx *ctx) {
+  long long left = arith_comparison(ctx);
+
+  for (;;) {
+    int is_eq, is_ne;
+
+    if (ctx->has_error) {
+      return 0;
+    }
+    arith_skip_ws(ctx);
+    if (ctx->pos + 1 >= ctx->len) {
+      break;
+    }
+    is_eq = (ctx->expr[ctx->pos] == '=' && ctx->expr[ctx->pos + 1] == '=');
+    is_ne = (ctx->expr[ctx->pos] == '!' && ctx->expr[ctx->pos + 1] == '=');
+    if (!is_eq && !is_ne) {
+      break;
+    }
+    ctx->pos += 2;
+    {
+      long long right = arith_comparison(ctx);
+
+      if (ctx->has_error) {
+        return 0;
+      }
+      left = is_eq ? ((left == right) ? 1 : 0) : ((left != right) ? 1 : 0);
+    }
+  }
+  return left;
+}
+
+static long long arith_bitwise_and(ArithCtx *ctx) {
+  long long left = arith_equality(ctx);
+
+  for (;;) {
+    if (ctx->has_error) {
+      return 0;
+    }
+    arith_skip_ws(ctx);
+    if (ctx->pos >= ctx->len || ctx->expr[ctx->pos] != '&') {
+      break;
+    }
+    if (ctx->pos + 1 < ctx->len && ctx->expr[ctx->pos + 1] == '&') {
+      break; /* don't consume && here */
+    }
+    ctx->pos++;
+    {
+      long long right = arith_equality(ctx);
+
+      if (ctx->has_error) {
+        return 0;
+      }
+      left &= right;
+    }
+  }
+  return left;
+}
+
+static long long arith_bitwise_xor(ArithCtx *ctx) {
+  long long left = arith_bitwise_and(ctx);
+
+  for (;;) {
+    if (ctx->has_error) {
+      return 0;
+    }
+    arith_skip_ws(ctx);
+    if (ctx->pos >= ctx->len || ctx->expr[ctx->pos] != '^') {
+      break;
+    }
+    ctx->pos++;
+    {
+      long long right = arith_bitwise_and(ctx);
+
+      if (ctx->has_error) {
+        return 0;
+      }
+      left ^= right;
+    }
+  }
+  return left;
+}
+
+static long long arith_bitwise_or(ArithCtx *ctx) {
+  long long left = arith_bitwise_xor(ctx);
+
+  for (;;) {
+    if (ctx->has_error) {
+      return 0;
+    }
+    arith_skip_ws(ctx);
+    if (ctx->pos >= ctx->len || ctx->expr[ctx->pos] != '|') {
+      break;
+    }
+    if (ctx->pos + 1 < ctx->len && ctx->expr[ctx->pos + 1] == '|') {
+      break; /* don't consume || here */
+    }
+    ctx->pos++;
+    {
+      long long right = arith_bitwise_xor(ctx);
+
+      if (ctx->has_error) {
+        return 0;
+      }
+      left |= right;
+    }
+  }
+  return left;
+}
+
+static long long arith_logical_and(ArithCtx *ctx) {
+  long long left = arith_bitwise_or(ctx);
+
+  for (;;) {
+    if (ctx->has_error) {
+      return 0;
+    }
+    arith_skip_ws(ctx);
+    if (ctx->pos + 1 >= ctx->len ||
+        ctx->expr[ctx->pos] != '&' || ctx->expr[ctx->pos + 1] != '&') {
+      break;
+    }
+    ctx->pos += 2;
+    {
+      long long right = arith_bitwise_or(ctx);
+
+      if (ctx->has_error) {
+        return 0;
+      }
+      left = (left && right) ? 1 : 0;
+    }
+  }
+  return left;
+}
+
+static long long arith_logical_or(ArithCtx *ctx) {
+  long long left = arith_logical_and(ctx);
+
+  for (;;) {
+    if (ctx->has_error) {
+      return 0;
+    }
+    arith_skip_ws(ctx);
+    if (ctx->pos + 1 >= ctx->len ||
+        ctx->expr[ctx->pos] != '|' || ctx->expr[ctx->pos + 1] != '|') {
+      break;
+    }
+    ctx->pos += 2;
+    {
+      long long right = arith_logical_and(ctx);
+
+      if (ctx->has_error) {
+        return 0;
+      }
+      left = (left || right) ? 1 : 0;
+    }
+  }
+  return left;
+}
+
+static long long arith_ternary(ArithCtx *ctx) {
+  long long cond = arith_logical_or(ctx);
+
+  if (ctx->has_error) {
+    return 0;
+  }
+  arith_skip_ws(ctx);
+  if (ctx->pos < ctx->len && ctx->expr[ctx->pos] == '?') {
+    long long t, f;
+
+    ctx->pos++;
+    t = arith_logical_or(ctx);
+    if (ctx->has_error) {
+      return 0;
+    }
+    arith_skip_ws(ctx);
+    if (ctx->pos < ctx->len && ctx->expr[ctx->pos] == ':') {
+      ctx->pos++;
+    } else {
+      ctx->has_error = 1;
+      snprintf(ctx->error, sizeof(ctx->error), "missing ':' in ternary arithmetic expression");
+      return 0;
+    }
+    f = arith_logical_or(ctx);
+    if (ctx->has_error) {
+      return 0;
+    }
+    return cond ? t : f;
+  }
+  return cond;
+}
+
+static long long arith_expr(ArithCtx *ctx) {
+  return arith_ternary(ctx);
+}
+
+static int evaluate_arith(OoshShell *shell, const char *expr, long long *result, char *error, size_t error_size) {
+  ArithCtx ctx;
+
+  if (expr == NULL || result == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+
+  memset(&ctx, 0, sizeof(ctx));
+  ctx.expr = expr;
+  ctx.pos = 0;
+  ctx.len = strlen(expr);
+  ctx.shell = shell;
+  ctx.has_error = 0;
+
+  *result = arith_expr(&ctx);
+
+  if (ctx.has_error) {
+    snprintf(error, error_size, "%s", ctx.error);
+    return 1;
+  }
+
+  arith_skip_ws(&ctx);
+  if (ctx.pos < ctx.len) {
+    snprintf(error, error_size, "unexpected token in arithmetic expression: '%c'",
+             ctx.expr[ctx.pos]);
+    return 1;
+  }
+
+  return 0;
+}
+
 static int is_ifs_char(char c, const char *ifs) {
   const char *p;
 
@@ -972,8 +1522,18 @@ static int expand_raw_token(
       if (c == '$') {
         char substitution[OOSH_MAX_OUTPUT];
         size_t sub_start = expanded_len;
+        int is_arith = 0;
 
-        if (raw[i + 1] == '(') {
+        if (raw[i + 1] == '(' && raw[i + 2] == '(') {
+          char arith_str[OOSH_MAX_OUTPUT];
+          long long arith_val;
+          is_arith = 1;
+          if (parse_arith_expansion(raw, &i, arith_str, sizeof(arith_str), error, error_size) != 0 ||
+              evaluate_arith(shell, arith_str, &arith_val, error, error_size) != 0) {
+            return 1;
+          }
+          snprintf(substitution, sizeof(substitution), "%lld", arith_val);
+        } else if (raw[i + 1] == '(') {
           char command[OOSH_MAX_OUTPUT];
 
           if (parse_command_substitution(raw, &i, command, sizeof(command), error, error_size) != 0 ||
@@ -990,8 +1550,9 @@ static int expand_raw_token(
             append_pattern_text(pattern, pattern_size, &pattern_len, substitution, allow_glob, has_glob, error, error_size) != 0) {
           return 1;
         }
-        /* Mark chars from this unquoted substitution as field-splittable. */
-        if (split_flags != NULL) {
+        /* Mark chars from unquoted variable/command substitution as field-splittable.
+           Arithmetic expansion results are not field-split (POSIX). */
+        if (!is_arith && split_flags != NULL) {
           size_t k;
           for (k = sub_start; k < expanded_len; ++k) {
             split_flags[k] = 1;
@@ -1037,7 +1598,15 @@ static int expand_raw_token(
       if (c == '$') {
         char substitution[OOSH_MAX_OUTPUT];
 
-        if (raw[i + 1] == '(') {
+        if (raw[i + 1] == '(' && raw[i + 2] == '(') {
+          char arith_str[OOSH_MAX_OUTPUT];
+          long long arith_val;
+          if (parse_arith_expansion(raw, &i, arith_str, sizeof(arith_str), error, error_size) != 0 ||
+              evaluate_arith(shell, arith_str, &arith_val, error, error_size) != 0) {
+            return 1;
+          }
+          snprintf(substitution, sizeof(substitution), "%lld", arith_val);
+        } else if (raw[i + 1] == '(') {
           char command[OOSH_MAX_OUTPUT];
 
           if (parse_command_substitution(raw, &i, command, sizeof(command), error, error_size) != 0 ||

@@ -172,6 +172,12 @@ if(BUILD_TESTING)
   add_test(NAME oosh_ifs_quote_removal COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/quote-removal.oosh")
   add_test(NAME oosh_ifs_empty_var COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/empty-var.oosh")
 
+  # E2-S4: arithmetic expansion
+  add_test(NAME oosh_arith_basic   COMMAND oosh -c "text(\"%d\") -> print($((3 + 4)))")
+  add_test(NAME oosh_arith_var     COMMAND oosh -c "set X \"6\" ; text(\"%d\") -> print($((X * 7)))")
+  add_test(NAME oosh_arith_prec    COMMAND oosh -c "text(\"%d\") -> print($((2 + 3 * 4)))")
+  add_test(NAME oosh_arith_quoted  COMMAND oosh -c "text(\"%d\") -> print(\"$((10 - 3))\")")
+
   set_tests_properties(
     oosh_external_command
     oosh_shell_pipeline
@@ -483,6 +489,26 @@ if(BUILD_TESTING)
     oosh_ifs_empty_var
     PROPERTIES
       PASS_REGULAR_EXPRESSION "done"
+  )
+  set_tests_properties(
+    oosh_arith_basic
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "7"
+  )
+  set_tests_properties(
+    oosh_arith_var
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "42"
+  )
+  set_tests_properties(
+    oosh_arith_prec
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "14"
+  )
+  set_tests_properties(
+    oosh_arith_quoted
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "7"
   )
   set_tests_properties(
     oosh_source_file

@@ -1,0 +1,2 @@
+set X "6"
+text("%d") -> print($((X * 7)))

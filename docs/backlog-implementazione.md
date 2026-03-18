@@ -133,7 +133,7 @@ Stato story: `[x]`
 
 ## E2. Espansioni e semantica dei parametri
 
-Stato epoca: `[~]`
+Stato epoca: `[x]`
 
 ### E2-S1. Positional parameters e parametri speciali
 
@@ -167,12 +167,12 @@ Stato story: `[x]`
 
 ### E2-S4. Arithmetic expansion e globbing coerente
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E2-S4-T1` implementare arithmetic expansion
-- `[ ]` `E2-S4-T2` definire i contesti in cui il globbing deve o non deve attivarsi
-- `[ ]` `E2-S4-T3` allineare comportamento Linux/macOS/Windows sui glob
-- `[ ]` `E2-S4-T4` aggiungere test cross-platform per pattern edge case
+- `[x]` `E2-S4-T1` implementare arithmetic expansion
+- `[x]` `E2-S4-T2` definire i contesti in cui il globbing deve o non deve attivarsi
+- `[x]` `E2-S4-T3` allineare comportamento Linux/macOS/Windows sui glob
+- `[x]` `E2-S4-T4` aggiungere test cross-platform per pattern edge case
 
 ---
 
@@ -462,9 +462,9 @@ Stato story: `[ ]`
 
 Se vuoi procedere con il percorso piu lineare, i prossimi task consigliati sono:
 
-- `E2-S4-T1` (arithmetic expansion)
 - `E3-S1-T1` (classificazione built-in)
 - `E4-S1-T1` (process group pipeline)
+- `E5-S3-T1` (completamento comandi / tab completion)
 
 Se invece vuoi puntare prima all'usabilita quotidiana della REPL, il percorso alternativo migliore e:
 
