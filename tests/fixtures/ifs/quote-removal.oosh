@@ -1,0 +1,5 @@
+function show(a) do
+  text("%s") -> print("$1")
+endfunction
+show 'hello world'
+show "foo bar"

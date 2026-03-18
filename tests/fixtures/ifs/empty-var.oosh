@@ -1,0 +1,5 @@
+set V ""
+for word in $V ; do
+  text("found") -> print()
+done
+text("done") -> print()

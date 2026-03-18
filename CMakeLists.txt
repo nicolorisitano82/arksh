@@ -165,6 +165,12 @@ if(BUILD_TESTING)
   add_test(NAME oosh_param_expand_prefix_shortest COMMAND oosh -c "set P /usr/local/bin ; text(\"%s\") -> print(\"\${P#/usr}\")")
   add_test(NAME oosh_param_expand_prefix_longest COMMAND oosh -c "set P /usr/local/bin ; text(\"%s\") -> print(\"\${P##*/}\")")
   add_test(NAME oosh_param_expand_script COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-expansion.oosh")
+  add_test(NAME oosh_ifs_split_count COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/split-count.oosh")
+  add_test(NAME oosh_ifs_split_first COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/split-first.oosh")
+  add_test(NAME oosh_ifs_quoted_no_split COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/quoted-no-split.oosh")
+  add_test(NAME oosh_ifs_custom COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/custom-ifs.oosh")
+  add_test(NAME oosh_ifs_quote_removal COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/quote-removal.oosh")
+  add_test(NAME oosh_ifs_empty_var COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/empty-var.oosh")
 
   set_tests_properties(
     oosh_external_command
@@ -447,6 +453,36 @@ if(BUILD_TESTING)
     oosh_plugin_pipeline_stage
     PROPERTIES
       PASS_REGULAR_EXPRESSION "sample:ciao"
+  )
+  set_tests_properties(
+    oosh_ifs_split_count
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "3"
+  )
+  set_tests_properties(
+    oosh_ifs_split_first
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "hello"
+  )
+  set_tests_properties(
+    oosh_ifs_quoted_no_split
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "x y z"
+  )
+  set_tests_properties(
+    oosh_ifs_custom
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "a"
+  )
+  set_tests_properties(
+    oosh_ifs_quote_removal
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "hello world"
+  )
+  set_tests_properties(
+    oosh_ifs_empty_var
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "done"
   )
   set_tests_properties(
     oosh_source_file

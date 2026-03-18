@@ -133,7 +133,7 @@ Stato story: `[x]`
 
 ## E2. Espansioni e semantica dei parametri
 
-Stato epoca: `[ ]`
+Stato epoca: `[~]`
 
 ### E2-S1. Positional parameters e parametri speciali
 
@@ -157,13 +157,13 @@ Stato story: `[x]`
 
 ### E2-S3. Field splitting, `IFS` e quote removal
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E2-S3-T1` formalizzare l'ordine completo: expansion -> splitting -> quote removal
-- `[ ]` `E2-S3-T2` introdurre `IFS` nel runtime shell
-- `[ ]` `E2-S3-T3` applicare field splitting ai contesti corretti
-- `[ ]` `E2-S3-T4` completare quote removal
-- `[ ]` `E2-S3-T5` aggiungere suite di test mirata solo per quoting e splitting
+- `[x]` `E2-S3-T1` formalizzare l'ordine completo: expansion -> splitting -> quote removal
+- `[x]` `E2-S3-T2` introdurre `IFS` nel runtime shell
+- `[x]` `E2-S3-T3` applicare field splitting ai contesti corretti
+- `[x]` `E2-S3-T4` completare quote removal
+- `[x]` `E2-S3-T5` aggiungere suite di test mirata solo per quoting e splitting
 
 ### E2-S4. Arithmetic expansion e globbing coerente
 
@@ -267,11 +267,11 @@ Stato story: `[x]`
 
 ### E5-S2. Reverse search e movimenti per parola
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E5-S2-T1` implementare reverse search della history
-- `[ ]` `E5-S2-T2` aggiungere movimenti per parola avanti/indietro
-- `[ ]` `E5-S2-T3` aggiungere test manuali e automatizzati PTY
+- `[x]` `E5-S2-T1` implementare reverse search della history
+- `[x]` `E5-S2-T2` aggiungere movimenti per parola avanti/indietro
+- `[x]` `E5-S2-T3` aggiungere test manuali e automatizzati PTY
 
 ### E5-S3. Kill/yank e undo
 
@@ -462,17 +462,15 @@ Stato story: `[ ]`
 
 Se vuoi procedere con il percorso piu lineare, i prossimi task consigliati sono:
 
-- `E1-S1-T1`
-- `E1-S1-T2`
-- `E1-S1-T3`
-- `E2-S1-T1`
-- `E3-S1-T1`
+- `E2-S4-T1` (arithmetic expansion)
+- `E3-S1-T1` (classificazione built-in)
+- `E4-S1-T1` (process group pipeline)
 
 Se invece vuoi puntare prima all'usabilita quotidiana della REPL, il percorso alternativo migliore e:
 
-- `E5-S1-T1`
-- `E5-S2-T1`
-- `E5-S4-T1`
+- `E5-S3-T1` (kill/yank)
+- `E5-S4-T1` (completion avanzata)
+- `E4-S1-T1` (process group pipeline)
 
 ## Regola finale
 

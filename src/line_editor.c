@@ -30,7 +30,12 @@ enum {
   OOSH_KEY_CTRL_A,
   OOSH_KEY_CTRL_C,
   OOSH_KEY_CTRL_D,
-  OOSH_KEY_CTRL_E
+  OOSH_KEY_CTRL_E,
+  OOSH_KEY_CTRL_G,
+  OOSH_KEY_CTRL_R,
+  OOSH_KEY_ESC,
+  OOSH_KEY_WORD_LEFT,
+  OOSH_KEY_WORD_RIGHT
 };
 
 typedef struct {
@@ -634,6 +639,30 @@ static void navigate_history(
   }
 }
 
+static size_t word_backward(const char *buf, size_t cursor) {
+  size_t pos = cursor;
+
+  while (pos > 0 && isspace((unsigned char) buf[pos - 1])) {
+    pos--;
+  }
+  while (pos > 0 && !isspace((unsigned char) buf[pos - 1])) {
+    pos--;
+  }
+  return pos;
+}
+
+static size_t word_forward(const char *buf, size_t length, size_t cursor) {
+  size_t pos = cursor;
+
+  while (pos < length && !isspace((unsigned char) buf[pos])) {
+    pos++;
+  }
+  while (pos < length && isspace((unsigned char) buf[pos])) {
+    pos++;
+  }
+  return pos;
+}
+
 #ifdef _WIN32
 typedef struct {
   HANDLE input_handle;
@@ -695,6 +724,12 @@ static int read_key(void) {
   if (ch == 5) {
     return OOSH_KEY_CTRL_E;
   }
+  if (ch == 7) {
+    return OOSH_KEY_CTRL_G;
+  }
+  if (ch == 18) {
+    return OOSH_KEY_CTRL_R;
+  }
   if (ch == 0 || ch == 224) {
     int ext = _getch();
 
@@ -709,6 +744,10 @@ static int read_key(void) {
         return OOSH_KEY_DOWN;
       case 83:
         return OOSH_KEY_DELETE;
+      case 115:
+        return OOSH_KEY_WORD_LEFT;
+      case 116:
+        return OOSH_KEY_WORD_RIGHT;
       default:
         return -1;
     }
@@ -784,26 +823,76 @@ static int read_key(void) {
   if (ch == 5) {
     return OOSH_KEY_CTRL_E;
   }
+  if (ch == 7) {
+    return OOSH_KEY_CTRL_G;
+  }
+  if (ch == 18) {
+    return OOSH_KEY_CTRL_R;
+  }
   if (ch == 27) {
-    unsigned char sequence[3];
+    struct termios save;
+    struct termios peek;
+    unsigned char b0;
+    int n;
 
-    if (read(STDIN_FILENO, &sequence[0], 1) != 1) {
-      return -1;
-    }
-    if (read(STDIN_FILENO, &sequence[1], 1) != 1) {
-      return -1;
+    /* Use a brief timeout to distinguish bare ESC from escape sequences. */
+    tcgetattr(STDIN_FILENO, &save);
+    peek = save;
+    peek.c_cc[VMIN] = 0;
+    peek.c_cc[VTIME] = 1; /* 100 ms */
+    tcsetattr(STDIN_FILENO, TCSANOW, &peek);
+    n = (int) read(STDIN_FILENO, &b0, 1);
+    tcsetattr(STDIN_FILENO, TCSANOW, &save);
+
+    if (n <= 0) {
+      return OOSH_KEY_ESC;
     }
 
-    if (sequence[0] == '[') {
-      if (sequence[1] >= '0' && sequence[1] <= '9') {
-        if (read(STDIN_FILENO, &sequence[2], 1) != 1) {
+    if (b0 == 'f' || b0 == 'F') {
+      return OOSH_KEY_WORD_RIGHT;
+    }
+    if (b0 == 'b' || b0 == 'B') {
+      return OOSH_KEY_WORD_LEFT;
+    }
+
+    if (b0 == '[') {
+      unsigned char b1;
+
+      if (read(STDIN_FILENO, &b1, 1) != 1) {
+        return -1;
+      }
+
+      if (b1 >= '0' && b1 <= '9') {
+        unsigned char b2;
+
+        if (read(STDIN_FILENO, &b2, 1) != 1) {
           return -1;
         }
-        if (sequence[1] == '3' && sequence[2] == '~') {
+        if (b1 == '3' && b2 == '~') {
           return OOSH_KEY_DELETE;
         }
+        /* Handle ESC [ 1 ; 5 C/D for Ctrl-arrows (xterm, VTE). */
+        if (b1 == '1' && b2 == ';') {
+          unsigned char b3;
+          unsigned char b4;
+
+          if (read(STDIN_FILENO, &b3, 1) != 1) {
+            return -1;
+          }
+          if (read(STDIN_FILENO, &b4, 1) != 1) {
+            return -1;
+          }
+          if (b3 == '5') {
+            if (b4 == 'C') {
+              return OOSH_KEY_WORD_RIGHT;
+            }
+            if (b4 == 'D') {
+              return OOSH_KEY_WORD_LEFT;
+            }
+          }
+        }
       } else {
-        switch (sequence[1]) {
+        switch (b1) {
           case 'A':
             return OOSH_KEY_UP;
           case 'B':
@@ -828,6 +917,145 @@ int oosh_line_editor_is_interactive(void) {
   return isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
 }
 #endif
+
+static void redraw_search(const char *query, const char *match) {
+  char search_prompt[256];
+
+  snprintf(search_prompt, sizeof(search_prompt), "(reverse-i-search)'%s': ", query != NULL ? query : "");
+  fputs("\r", stdout);
+  fputs(search_prompt, stdout);
+  if (match != NULL) {
+    fputs(match, stdout);
+  }
+  fputs("\033[K", stdout);
+  fflush(stdout);
+}
+
+static int find_history_match(OoshShell *shell, const char *query, size_t from, size_t *found_index) {
+  size_t i = from;
+
+  if (shell == NULL || query == NULL || query[0] == '\0' || shell->history_count == 0) {
+    return 0;
+  }
+
+  while (i > 0) {
+    i--;
+    if (strstr(shell->history[i], query) != NULL) {
+      *found_index = i;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+/* Returns: 1 = submit (Enter pressed with match loaded), 0 = continue editing, -1 = cancelled. */
+static int do_reverse_search(
+  OoshShell *shell,
+  char *buffer,
+  size_t buffer_size,
+  size_t *length,
+  size_t *cursor,
+  size_t *history_index
+) {
+  char query[OOSH_MAX_LINE];
+  size_t query_len = 0;
+  size_t search_from;
+  size_t match_idx;
+  const char *match_str;
+  int key;
+
+  query[0] = '\0';
+  search_from = shell->history_count;
+  match_idx = shell->history_count;
+  match_str = NULL;
+
+  redraw_search(query, buffer);
+
+  for (;;) {
+    key = read_key();
+
+    if (key == -1 || key == OOSH_KEY_CTRL_G || key == OOSH_KEY_ESC || key == OOSH_KEY_CTRL_C) {
+      return -1;
+    }
+
+    if (key == OOSH_KEY_ENTER) {
+      if (match_str != NULL) {
+        copy_string(buffer, buffer_size, match_str);
+        *length = strlen(buffer);
+        *cursor = *length;
+        *history_index = match_idx;
+      }
+      return 1;
+    }
+
+    if (key == OOSH_KEY_CTRL_R) {
+      if (query_len > 0) {
+        size_t found;
+
+        if (match_idx < shell->history_count) {
+          search_from = match_idx;
+        }
+        if (find_history_match(shell, query, search_from, &found)) {
+          match_idx = found;
+          match_str = shell->history[found];
+          search_from = found;
+        } else {
+          fputc('\a', stdout);
+          fflush(stdout);
+        }
+      }
+      redraw_search(query, match_str);
+      continue;
+    }
+
+    if (key == OOSH_KEY_BACKSPACE) {
+      if (query_len > 0) {
+        size_t found;
+
+        query_len--;
+        query[query_len] = '\0';
+        search_from = shell->history_count;
+        match_idx = shell->history_count;
+        match_str = NULL;
+        if (query_len > 0 && find_history_match(shell, query, search_from, &found)) {
+          match_idx = found;
+          match_str = shell->history[found];
+          search_from = found;
+        }
+      }
+      redraw_search(query, match_str);
+      continue;
+    }
+
+    if (isprint(key) && key < 128) {
+      if (query_len + 1 < sizeof(query)) {
+        size_t found;
+
+        query[query_len++] = (char) key;
+        query[query_len] = '\0';
+        search_from = shell->history_count;
+        match_idx = shell->history_count;
+        match_str = NULL;
+        if (find_history_match(shell, query, search_from, &found)) {
+          match_idx = found;
+          match_str = shell->history[found];
+          search_from = found;
+        }
+      }
+      redraw_search(query, match_str);
+      continue;
+    }
+
+    /* Any other key: accept match and continue editing. */
+    if (match_str != NULL) {
+      copy_string(buffer, buffer_size, match_str);
+      *length = strlen(buffer);
+      *cursor = *length;
+      *history_index = match_idx;
+    }
+    return 0;
+  }
+}
 
 OoshLineReadStatus oosh_line_editor_read_line(
   OoshShell *shell,
@@ -964,6 +1192,18 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
+    if (key == OOSH_KEY_WORD_LEFT) {
+      cursor = word_backward(line, cursor);
+      redraw_line(active_prompt, line, length, cursor);
+      continue;
+    }
+
+    if (key == OOSH_KEY_WORD_RIGHT) {
+      cursor = word_forward(line, length, cursor);
+      redraw_line(active_prompt, line, length, cursor);
+      continue;
+    }
+
     if (key == OOSH_KEY_UP) {
       /* History navigation only on the first line. */
       if (!in_continuation) {
@@ -977,6 +1217,50 @@ OoshLineReadStatus oosh_line_editor_read_line(
       if (!in_continuation) {
         navigate_history(shell, 1, line, sizeof(line), &length, &cursor, &history_index, history_scratch, sizeof(history_scratch));
         redraw_line(active_prompt, line, length, cursor);
+      }
+      continue;
+    }
+
+    if (key == OOSH_KEY_CTRL_R) {
+      if (!in_continuation) {
+        int search_result = do_reverse_search(shell, line, sizeof(line), &length, &cursor, &history_index);
+
+        if (search_result == 1) {
+          /* Enter was pressed in search: submit the loaded line. */
+          size_t space = sizeof(multi) - multi_len - 1;
+
+          if (multi_len > 0 && space > 0) {
+            multi[multi_len++] = '\n';
+            space--;
+          }
+          if (length > 0 && length <= space) {
+            memcpy(multi + multi_len, line, length);
+            multi_len += length;
+          }
+          multi[multi_len] = '\0';
+
+          if (needs_more != NULL && multi_len > 0 && needs_more(multi) > 0) {
+            fputc('\n', stdout);
+            active_prompt = (prompt_continue != NULL && prompt_continue[0] != '\0')
+                            ? prompt_continue : "... ";
+            fputs(active_prompt, stdout);
+            fflush(stdout);
+            in_continuation = 1;
+            length = 0;
+            cursor = 0;
+            line[0] = '\0';
+            history_index = shell->history_count;
+            history_scratch[0] = '\0';
+          } else {
+            terminal_leave_raw(&terminal_state);
+            fputc('\n', stdout);
+            copy_string(out, out_size, multi);
+            return OOSH_LINE_READ_OK;
+          }
+        } else {
+          /* Cancelled (< 0) or continue editing (== 0): redraw current line. */
+          redraw_line(active_prompt, line, length, cursor);
+        }
       }
       continue;
     }

@@ -763,12 +763,138 @@ static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, ch
   return 0;
 }
 
+static int is_ifs_char(char c, const char *ifs) {
+  const char *p;
+
+  for (p = ifs; *p != '\0'; ++p) {
+    if (*p == c) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int is_ifs_whitespace(char c, const char *ifs) {
+  return is_ifs_char(c, ifs) && isspace((unsigned char) c);
+}
+
+/*
+ * Apply POSIX field splitting to an expanded string.
+ *
+ * split_flags[i] == 1 means expanded[i] came from an unquoted parameter or
+ * command substitution and is eligible to be split by IFS characters.
+ * Characters with split_flags[i] == 0 (literal or quoted) are never split.
+ *
+ * saw_quote_open: set to 1 if the original word opened a quote context
+ * (e.g. "" or "$var" inside double-quotes).  When the expanded string is
+ * empty but a quote was opened, one empty field is produced.
+ */
+static int apply_ifs_splitting(
+  const char *expanded,
+  size_t expanded_len,
+  const unsigned char *split_flags,
+  int saw_quote_open,
+  const char *ifs,
+  char out_values[][OOSH_MAX_TOKEN],
+  int max_values,
+  int *out_count,
+  char *error,
+  size_t error_size
+) {
+  char field[OOSH_MAX_TOKEN];
+  size_t field_len = 0;
+  size_t i;
+  int after_nonwhite_ifs = 0;
+
+  *out_count = 0;
+  field[0] = '\0';
+
+  if (ifs == NULL || ifs[0] == '\0') {
+    /* IFS="" → no field splitting at all. */
+    if (expanded_len > 0 || saw_quote_open) {
+      copy_string(out_values[0], sizeof(out_values[0]), expanded);
+      *out_count = 1;
+    }
+    return 0;
+  }
+
+  for (i = 0; i < expanded_len; ++i) {
+    char c = expanded[i];
+    int splittable = (int) split_flags[i];
+    int split_here = splittable && is_ifs_char(c, ifs);
+
+    if (split_here) {
+      int is_white = is_ifs_whitespace(c, ifs);
+
+      if (!is_white) {
+        /* Non-whitespace IFS char: always a field terminator. */
+        if (*out_count >= max_values) {
+          snprintf(error, error_size, "too many fields after IFS splitting");
+          return 1;
+        }
+        field[field_len] = '\0';
+        copy_string(out_values[*out_count], sizeof(out_values[*out_count]), field);
+        (*out_count)++;
+        field_len = 0;
+        after_nonwhite_ifs = 1;
+      } else {
+        /* Whitespace IFS char: terminates a non-empty field, skips otherwise. */
+        if (field_len > 0) {
+          if (*out_count >= max_values) {
+            snprintf(error, error_size, "too many fields after IFS splitting");
+            return 1;
+          }
+          field[field_len] = '\0';
+          copy_string(out_values[*out_count], sizeof(out_values[*out_count]), field);
+          (*out_count)++;
+          field_len = 0;
+        }
+        after_nonwhite_ifs = 0;
+      }
+    } else {
+      after_nonwhite_ifs = 0;
+      if (field_len + 1 < sizeof(field)) {
+        field[field_len++] = c;
+      }
+    }
+  }
+
+  /* Emit any remaining non-empty field. */
+  if (field_len > 0) {
+    if (*out_count >= max_values) {
+      snprintf(error, error_size, "too many fields after IFS splitting");
+      return 1;
+    }
+    field[field_len] = '\0';
+    copy_string(out_values[*out_count], sizeof(out_values[*out_count]), field);
+    (*out_count)++;
+  } else if (after_nonwhite_ifs) {
+    /* Trailing non-whitespace IFS (e.g. "a:") → emit trailing empty field. */
+    if (*out_count >= max_values) {
+      snprintf(error, error_size, "too many fields after IFS splitting");
+      return 1;
+    }
+    copy_string(out_values[*out_count], sizeof(out_values[*out_count]), "");
+    (*out_count)++;
+  }
+
+  /* An empty quoted string (e.g. "") must yield one empty field. */
+  if (*out_count == 0 && saw_quote_open) {
+    copy_string(out_values[0], sizeof(out_values[0]), "");
+    *out_count = 1;
+  }
+
+  return 0;
+}
+
 static int expand_raw_token(
   OoshShell *shell,
   const char *raw,
   OoshExpandMode mode,
   char *expanded,
   size_t expanded_size,
+  unsigned char *split_flags,
+  int *saw_quote_open,
   char *pattern,
   size_t pattern_size,
   int *has_glob,
@@ -788,6 +914,9 @@ static int expand_raw_token(
   expanded[0] = '\0';
   pattern[0] = '\0';
   *has_glob = 0;
+  if (saw_quote_open != NULL) {
+    *saw_quote_open = 0;
+  }
 
   if (raw == NULL) {
     return 0;
@@ -801,6 +930,9 @@ static int expand_raw_token(
       if ((c == '\'' || c == '"')) {
         quote = c;
         saw_prefix_fragment = 1;
+        if (saw_quote_open != NULL) {
+          *saw_quote_open = 1;
+        }
         i++;
         continue;
       }
@@ -839,6 +971,7 @@ static int expand_raw_token(
 
       if (c == '$') {
         char substitution[OOSH_MAX_OUTPUT];
+        size_t sub_start = expanded_len;
 
         if (raw[i + 1] == '(') {
           char command[OOSH_MAX_OUTPUT];
@@ -856,6 +989,13 @@ static int expand_raw_token(
         if (append_text(expanded, expanded_size, &expanded_len, substitution, error, error_size, "expanded token") != 0 ||
             append_pattern_text(pattern, pattern_size, &pattern_len, substitution, allow_glob, has_glob, error, error_size) != 0) {
           return 1;
+        }
+        /* Mark chars from this unquoted substitution as field-splittable. */
+        if (split_flags != NULL) {
+          size_t k;
+          for (k = sub_start; k < expanded_len; ++k) {
+            split_flags[k] = 1;
+          }
         }
         saw_prefix_fragment = 1;
         i++;
@@ -947,16 +1087,19 @@ int oosh_expand_word(
   size_t error_size
 ) {
   char expanded[OOSH_MAX_TOKEN];
+  unsigned char split_flags[OOSH_MAX_TOKEN];
   char pattern[OOSH_MAX_TOKEN * 2];
   int has_glob = 0;
+  int saw_quote_open = 0;
 
   if (out_values == NULL || max_values <= 0 || out_count == NULL || error == NULL || error_size == 0) {
     return 1;
   }
 
   *out_count = 0;
+  memset(split_flags, 0, sizeof(split_flags));
 
-  if (expand_raw_token(shell, raw, mode, expanded, sizeof(expanded), pattern, sizeof(pattern), &has_glob, error, error_size) != 0) {
+  if (expand_raw_token(shell, raw, mode, expanded, sizeof(expanded), split_flags, &saw_quote_open, pattern, sizeof(pattern), &has_glob, error, error_size) != 0) {
     return 1;
   }
 
@@ -977,6 +1120,18 @@ int oosh_expand_word(
       snprintf(error, error_size, "glob expansion failed");
       return 1;
     }
+  }
+
+  /* Apply IFS field splitting for command arguments. */
+  if (mode == OOSH_EXPAND_MODE_COMMAND) {
+    const char *ifs = oosh_shell_get_var(shell, "IFS");
+    size_t exp_len = strlen(expanded);
+
+    if (ifs == NULL) {
+      ifs = " \t\n";
+    }
+    return apply_ifs_splitting(expanded, exp_len, split_flags, saw_quote_open, ifs,
+                               out_values, max_values, out_count, error, error_size);
   }
 
   copy_string(out_values[0], sizeof(out_values[0]), expanded);

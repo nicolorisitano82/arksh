@@ -1,0 +1,5 @@
+set V ""
+function count_args() do
+  text("%d") -> print("$#")
+endfunction
+count_args "$V"

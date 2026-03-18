@@ -4401,6 +4401,9 @@ static void initialize_default_variables(OoshShell *shell) {
   if (path != NULL && path[0] != '\0') {
     oosh_shell_set_var(shell, "PATH", path, 1);
   }
+
+  /* POSIX default field separator: space, tab, newline. */
+  oosh_shell_set_var(shell, "IFS", " \t\n", 0);
 }
 
 static void resolve_history_path(OoshShell *shell) {

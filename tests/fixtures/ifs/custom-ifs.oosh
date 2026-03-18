@@ -1,0 +1,6 @@
+set IFS :
+set V "a:b:c"
+function show(a, b, c) do
+  text("%s") -> print("$1")
+endfunction
+show $V

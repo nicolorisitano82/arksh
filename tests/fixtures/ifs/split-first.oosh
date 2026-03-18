@@ -1,0 +1,5 @@
+set V "hello world"
+function show(a, b) do
+  text("%s") -> print("$1")
+endfunction
+show $V
