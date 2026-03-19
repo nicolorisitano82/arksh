@@ -535,8 +535,8 @@ Stato epoca: `[ ]`
 
 Stato story: `[ ]`
 
-- `[ ]` `E8-S1-T1` aggiungere test unitari per lexer
-- `[ ]` `E8-S1-T2` aggiungere test unitari per parser
+- `[x]` `E8-S1-T1` aggiungere test unitari per lexer
+- `[x]` `E8-S1-T2` aggiungere test unitari per parser
 - `[ ]` `E8-S1-T3` aggiungere test unitari per executor
 - `[ ]` `E8-S1-T4` aggiungere test unitari per object model
 
@@ -552,7 +552,7 @@ Stato story: `[ ]`
 
 Stato story: `[ ]`
 
-- `[ ]` `E8-S3-T1` aggiungere target ASan/UBSan
+- `[x]` `E8-S3-T1` aggiungere target ASan/UBSan
 - `[ ]` `E8-S3-T2` integrare ASan/UBSan in CI
 - `[ ]` `E8-S3-T3` aggiungere fuzzing su lexer/parser/expander
 
@@ -622,29 +622,42 @@ Stato story: `[ ]`
 
 ---
 
-### Percorso A — chiudi E4 (raccomandato — job control affidabile)
+### Percorso A — qualità e CI (E8, raccomandato — sblocca E9)
 
-1. `E4-S4` (comportamento equivalente su Windows — job groups con `CREATE_NEW_PROCESS_GROUP`)
+Nessun blocco aperto nelle epoche precedenti: è il momento giusto per consolidare
+il test bed prima di affrontare l'object model avanzato.
 
-### Percorso B — tipi numerici (E6-S5, alta visibilità)
+1. `E8-S1-T1` (test unitari mirati su parser e expander)
+2. `E8-S1-T2` (test unitari su executor e object model)
+3. `E8-S3-T1` (AddressSanitizer / UBSan in CI)
+4. `E8-S4-T1` (CI multipiattaforma — macOS + Linux + Windows)
 
-1. `E6-S5-T1` (aggiungere i value kind `INTEGER`, `FLOAT`, `DOUBLE`, `IMAGINARY` all'enum)
-2. `E6-S5-T2` (implementare resolver `Integer()`, `Float()`, `Double()`, `Imaginary()`)
-3. `E6-S5-T3` (proprietà e metodi di conversione)
-4. `E6-S5-T4` (regole di promozione in espressioni miste)
+### Percorso B — pipeline object più ricca (quick wins su E6-S3)
 
-### Percorso C — pipeline object più ricca (quick wins su E6-S3)
+Alta visibilità utente, nessuna dipendenza da E7/E8.
 
 1. `E6-S3-T1` (aggiungere stage `map`)
 2. `E6-S3-T2` (aggiungere stage `filter` come alias di `where` con block)
 3. `E6-S3-T3` (aggiungere stage `flat_map`)
 4. `E6-S3-T5` (aggregati `sum`, `min`, `max`)
 
-### Percorso D — qualità e CI (E8, utile prima di E9)
+### Percorso C — tipi numerici espliciti (E6-S5)
 
-1. `E8-S1-T1` (test unitari mirati su parser e expander)
-2. `E8-S3-T1` (AddressSanitizer / UBSan in CI)
-3. `E8-S4-T1` (CI multipiattaforma — macOS + Linux + Windows)
+Impatto visibile nell'aritmetica e nei confronti tipizzati.
+
+1. `E6-S5-T1` (aggiungere i value kind `INTEGER`, `FLOAT`, `DOUBLE`, `IMAGINARY` all'enum)
+2. `E6-S5-T2` (implementare resolver `Integer()`, `Float()`, `Double()`, `Imaginary()`)
+3. `E6-S5-T3` (proprietà e metodi di conversione)
+4. `E6-S5-T4` (regole di promozione in espressioni miste)
+
+### Percorso D — JSON robusto (E7)
+
+Prerequisito naturale per script di automazione e integrazione con API esterne.
+
+1. `E7-S1-T1` (parser JSON completo — gestione escape, unicode, numeri float)
+2. `E7-S1-T2` (serializer con pretty-print opzionale)
+3. `E7-S2-T1` (strutture annidate oltre `OOSH_MAX_COLLECTION_ITEMS`)
+4. `E7-S3-T1` (stage `jq`-like o `select` per query su valori JSON)
 
 ## Regola finale
 

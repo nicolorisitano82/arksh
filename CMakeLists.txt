@@ -10,6 +10,44 @@ if(MSVC)
   add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 endif()
 
+# E8-S3-T1: AddressSanitizer + UndefinedBehaviorSanitizer
+#
+# OOSH_SANITIZE=ON  — full ASan+UBSan; intended for Linux CI (GitHub Actions).
+#                     On macOS 14+/SIP, ASan shadow-memory setup may hang at
+#                     launch unless the binary is signed with get-task-allow.
+#                     Use OOSH_UBSAN=ON for local macOS development instead.
+#
+# OOSH_UBSAN=ON     — UBSan only; works on macOS without special entitlements.
+#
+# Usage (Linux / CI):
+#   cmake -S . -B build-san -DOOSH_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug
+#   cmake --build build-san && ctest --test-dir build-san
+#
+# Usage (macOS local):
+#   cmake -S . -B build-ubsan -DOOSH_UBSAN=ON -DCMAKE_BUILD_TYPE=Debug
+#   cmake --build build-ubsan && ctest --test-dir build-ubsan
+option(OOSH_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer (Linux CI)" OFF)
+option(OOSH_UBSAN    "Build with UndefinedBehaviorSanitizer only (macOS-safe)"               OFF)
+if(OOSH_SANITIZE AND OOSH_UBSAN)
+  message(FATAL_ERROR "OOSH_SANITIZE and OOSH_UBSAN are mutually exclusive")
+endif()
+if(OOSH_SANITIZE)
+  if(MSVC)
+    message(FATAL_ERROR "OOSH_SANITIZE is not supported with MSVC")
+  endif()
+  add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined)
+  message(STATUS "Sanitizers enabled: -fsanitize=address,undefined")
+endif()
+if(OOSH_UBSAN)
+  if(MSVC)
+    message(FATAL_ERROR "OOSH_UBSAN is not supported with MSVC")
+  endif()
+  add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=undefined)
+  message(STATUS "Sanitizers enabled: -fsanitize=undefined")
+endif()
+
 add_library(oosh_core STATIC
   src/expand.c
   src/executor.c
@@ -57,6 +95,12 @@ if(BUILD_TESTING)
   add_executable(oosh_test_count_lines tests/count_lines.c)
   add_executable(oosh_test_echo_stdin tests/echo_stdin.c)
   add_executable(oosh_test_pause tests/pause_seconds.c)
+
+  # E8-S1: unit test executables (link against oosh_core for lexer/parser APIs)
+  add_executable(oosh_unit_lexer tests/unit_lexer.c)
+  target_link_libraries(oosh_unit_lexer PRIVATE oosh_core)
+  add_executable(oosh_unit_parser tests/unit_parser.c)
+  target_link_libraries(oosh_unit_parser PRIVATE oosh_core)
 
   file(COPY tests/fixtures DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tests")
 
@@ -690,4 +734,18 @@ if(BUILD_TESTING)
         DISABLED TRUE
     )
   endif()
+
+  # E8-S1-T1: lexer unit tests
+  add_test(NAME oosh_unit_lexer COMMAND oosh_unit_lexer)
+  set_tests_properties(oosh_unit_lexer PROPERTIES
+    PASS_REGULAR_EXPRESSION "all tests passed"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+
+  # E8-S1-T2: parser unit tests
+  add_test(NAME oosh_unit_parser COMMAND oosh_unit_parser)
+  set_tests_properties(oosh_unit_parser PROPERTIES
+    PASS_REGULAR_EXPRESSION "all tests passed"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
 endif()
