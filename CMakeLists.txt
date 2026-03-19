@@ -124,6 +124,12 @@ if(BUILD_TESTING)
   add_test(NAME oosh_pipeline_three_stage COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" a b c | \"${OOSH_TEST_ECHO}\" | \"${OOSH_TEST_COUNT}\"")
   add_test(NAME oosh_pipeline_sigpipe_safe COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" x y z | \"${OOSH_TEST_COUNT}\"")
   add_test(NAME oosh_bridge_capture_lines COMMAND oosh -c "capture_lines(\"${OOSH_TEST_EMIT} a b c\") |> count()")
+  # E4-S4: force_capture path (capture() sets force_capture=1 — exercises the
+  # interactive-detection + capture-pipe branch on both POSIX and Windows)
+  add_test(NAME oosh_capture_text_first
+    COMMAND oosh -c "capture(\"${OOSH_TEST_EMIT} hello\") |> lines() |> first()")
+  add_test(NAME oosh_capture_text_count
+    COMMAND oosh -c "capture(\"${OOSH_TEST_EMIT} alpha beta\") |> lines() |> count()")
   add_test(NAME oosh_bridge_multiword COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" x y z |> lines() |> count()")
   add_test(NAME oosh_trap_exit COMMAND oosh -c "trap \"text(\\\"bye\\\") -> print()\" EXIT ; text(\"run\") -> print()")
   add_test(NAME oosh_heredoc_basic COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/basic.oosh")
@@ -664,6 +670,11 @@ if(BUILD_TESTING)
   set_tests_properties(oosh_pipeline_sigpipe_safe PROPERTIES PASS_REGULAR_EXPRESSION "3")
   set_tests_properties(oosh_bridge_capture_lines  PROPERTIES PASS_REGULAR_EXPRESSION "3")
   set_tests_properties(oosh_bridge_multiword      PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  # E4-S4 tests
+  set_tests_properties(oosh_capture_text_first    PROPERTIES PASS_REGULAR_EXPRESSION "hello"
+                                                             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+  set_tests_properties(oosh_capture_text_count    PROPERTIES PASS_REGULAR_EXPRESSION "2"
+                                                             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   if(NOT WIN32)
     set_tests_properties(
       oosh_fd_redirect_output_dup

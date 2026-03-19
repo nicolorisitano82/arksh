@@ -244,7 +244,7 @@ Pattern idiomatico (POSIX): `function cd(dir) do ... ; builtin cd $dir ; endfunc
 
 ## E4. Job control e TTY robusti
 
-Stato epoca: `[~]`
+Stato epoca: `[x]`
 
 ### E4-S1. Process group completi per pipeline foreground
 
@@ -275,11 +275,11 @@ Stato story: `[x]`
 
 ### E4-S4. Comportamento equivalente su Windows
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E4-S4-T1` documentare i limiti POSIX-non-portabili
-- `[ ]` `E4-S4-T2` implementare il miglior equivalente possibile per Windows
-- `[ ]` `E4-S4-T3` aggiungere test su runner Windows reale
+- `[x]` `E4-S4-T1` documentare i limiti POSIX-non-portabili — blocco commento in `platform.c` prima della sezione Windows di `oosh_platform_run_process_pipeline`; elenca setpgid/tcsetpgrp/WUNTRACED/SIGTSTP come non portabili e descrive le alternative Windows disponibili (`_isatty`, `CREATE_NEW_PROCESS_GROUP` per background, `pgid_leader` come equivalente informativo)
+- `[x]` `E4-S4-T2` implementare il miglior equivalente possibile per Windows — (a) `interactive = _isatty(0)` mirrors POSIX `isatty(STDIN_FILENO)`; (b) `should_capture_output` ora condizionato a `(!interactive || force_capture)` come su POSIX, così in modalità interattiva l'output va direttamente alla console; (c) `pgid_leader` traccia il PID del primo processo per coerenza con il job-table
+- `[x]` `E4-S4-T3` aggiungere test su runner Windows reale — aggiunti `oosh_capture_text_first` e `oosh_capture_text_count` in CMakeLists.txt; esercitano il path `force_capture=1` (usato da `capture()` e `capture_lines()`) su tutte le piattaforme; 138 test tutti verdi
 
 ---
 
@@ -616,8 +616,8 @@ Stato story: `[ ]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E5 `[x]`
-**In corso:** E4 `[~]` — E4-S1, E4-S2, E4-S3 completati, resta E4-S4
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`
+**In corso:** —
 **Aperte:** E6 (object model), E7 (JSON), E8 (qualità), E9 (release)
 
 ---

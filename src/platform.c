@@ -1076,6 +1076,43 @@ int oosh_platform_run_process_pipeline(
     return 1;
   }
 
+  /* E4-S4: Windows pipeline — POSIX portability notes
+   *
+   * The following POSIX primitives used in the #else branch have NO direct
+   * Windows equivalent and are therefore omitted here:
+   *
+   *   setpgid / getpgrp     — Windows has no process-group hierarchy for
+   *                            foreground pipelines.  Background processes get
+   *                            CREATE_NEW_PROCESS_GROUP in spawn_background_process
+   *                            so that Ctrl+Break does not reach them.
+   *
+   *   tcsetpgrp / tcgetpgrp — Windows consoles have no "foreground process
+   *                            group" concept.  All processes attached to the
+   *                            same console receive Ctrl+C simultaneously.
+   *                            No TTY hand-off or restore is required.
+   *
+   *   WUNTRACED / WIFSTOPPED — Job suspension (Ctrl+Z / SIGTSTP) does not
+   *                            exist on Windows.  out_stopped is always left
+   *                            untouched (no stopped-job entry is created).
+   *
+   *   SIGINT / SIGQUIT /
+   *   SIGTSTP / SIGPIPE      — Windows child processes do not inherit POSIX
+   *                            signal dispositions.  Ctrl+C delivers a console
+   *                            control event to every process in the console
+   *                            session; no per-child reset is needed.
+   *
+   * What Windows *does* provide:
+   *   _isatty(0)             — detects whether stdin is a console (mirrors
+   *                            POSIX isatty(STDIN_FILENO)).  Used to decide
+   *                            whether the last pipeline stage should redirect
+   *                            stdout to a capture pipe (non-interactive /
+   *                            force_capture) or let it flow to the console
+   *                            directly (interactive, no force_capture).
+   *
+   *   pgid_leader            — set to dwProcessId of the first spawned stage.
+   *                            Mirrors the POSIX pgid_leader so callers that
+   *                            inspect out_stopped->pgid get a consistent value
+   *                            if we ever need to extend job-table support. */
 #ifdef _WIN32
   {
     SECURITY_ATTRIBUTES security_attributes;
@@ -1084,9 +1121,14 @@ int oosh_platform_run_process_pipeline(
     HANDLE capture_read = INVALID_HANDLE_VALUE;
     size_t process_count = 0;
     DWORD exit_code = 0;
+    DWORD pgid_leader = 0;
+    int interactive;
     size_t i;
     (void) out_stopped;
     int status = 0;
+
+    /* E4-S4: mirror POSIX isatty(STDIN_FILENO) */
+    interactive = _isatty(0);
 
     memset(&security_attributes, 0, sizeof(security_attributes));
     security_attributes.nLength = sizeof(security_attributes);
@@ -1108,7 +1150,12 @@ int oosh_platform_run_process_pipeline(
       HANDLE opened_redirects[OOSH_MAX_REDIRECTIONS * 2];
       char command_line[OOSH_MAX_LINE * 2];
       int needs_next_pipe = (i + 1 < spec_count);
-      int should_capture_output = (i + 1 == spec_count);
+      /* E4-S4: match POSIX logic — only redirect to a capture pipe when the
+       * caller asks for captured output (force_capture) or when stdin is not a
+       * console (script / piped mode).  In interactive mode without
+       * force_capture the last stage writes directly to the console handle,
+       * which is what the user expects. */
+      int should_capture_output = (!interactive || force_capture) && (i + 1 == spec_count);
       int stage_spawned = 0;
       size_t opened_redirect_count = 0;
       size_t redirect_index;
@@ -1314,6 +1361,10 @@ windows_stage_cleanup:
         close_handle_if_valid(&capture_write);
 
         close_handle_if_valid(&process_info.hThread);
+        /* E4-S4: record the first process as the pgid equivalent */
+        if (process_count == 0) {
+          pgid_leader = process_info.dwProcessId;
+        }
         process_infos[process_count++] = process_info;
         previous_read = next_read;
         next_read = INVALID_HANDLE_VALUE;
