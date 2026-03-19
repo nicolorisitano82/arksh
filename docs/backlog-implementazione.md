@@ -244,7 +244,7 @@ Pattern idiomatico (POSIX): `function cd(dir) do ... ; builtin cd $dir ; endfunc
 
 ## E4. Job control e TTY robusti
 
-Stato epoca: `[ ]`
+Stato epoca: `[~]`
 
 ### E4-S1. Process group completi per pipeline foreground
 
@@ -256,11 +256,11 @@ Stato story: `[x]`
 
 ### E4-S2. `wait` e reporting robusto degli status
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E4-S2-T1` introdurre built-in `wait`
-- `[ ]` `E4-S2-T2` tracciare status finali e segnali in modo piu ricco
-- `[ ]` `E4-S2-T3` aggiungere test su `wait`, exit code e job terminati
+- `[x]` `E4-S2-T1` introdurre built-in `wait` (già presente in `command_wait`; attende uno o più job per ID `%n`)
+- `[x]` `E4-S2-T2` tracciare status finali e segnali: aggiunto campo `termination_signal` in `OoshJob`; `oosh_shell_refresh_jobs` e `wait_for_job_at` lo valorizzano a `exit_code - 128` se `exit_code > 128`; `command_jobs` mostra `exit=N` / `signal=NAME`; helper `signal_name()` restituisce nome POSIX breve (HUP, INT, KILL, TERM, TSTP …); marcatori `+`/`-` per job corrente/precedente; `wait_for_job_at` produce messaggio `[n] done ...` con dettaglio exit/segnale
+- `[x]` `E4-S2-T3` aggiunti 2 test CTest: `oosh_wait_done_message` (controlla che `wait` produca "done"), `oosh_jobs_current_marker` (controlla che `jobs` mostri `+` per il job corrente); 134 test tutti verdi
 
 ### E4-S3. TTY e segnali affidabili
 
@@ -614,16 +614,15 @@ Stato story: `[ ]`
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E5 `[x]`
-**In corso:** E4 `[~]` — E4-S1 completato, restano E4-S2/S3/S4
+**In corso:** E4 `[~]` — E4-S1 e E4-S2 completati, restano E4-S3/S4
 **Aperte:** E6 (object model), E7 (JSON), E8 (qualità), E9 (release)
 
 ---
 
 ### Percorso A — chiudi E4 (raccomandato — job control affidabile)
 
-1. `E4-S2` (reporting robusto di `wait` e exit status — exit code da segnali, status multipli)
-2. `E4-S3` (TTY e segnali — `SIGPIPE` nei processi intermedi, `Ctrl-C` in blocchi annidati)
-3. `E4-S4` (comportamento equivalente su Windows — job groups con `CREATE_NEW_PROCESS_GROUP`)
+1. `E4-S3` (TTY e segnali — `SIGPIPE` nei processi intermedi, `Ctrl-C` in blocchi annidati)
+2. `E4-S4` (comportamento equivalente su Windows — job groups con `CREATE_NEW_PROCESS_GROUP`)
 
 ### Percorso B — tipi numerici (E6-S5, alta visibilità)
 

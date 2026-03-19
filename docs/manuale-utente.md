@@ -2204,12 +2204,22 @@ inspect /dev/null
 
 ### jobs
 
-Lista i job attivi, stoppati e completati con PID e PGID:
+Lista i job attivi, stoppati e completati. Il formato di ogni riga e:
+
+```
+[n]{marker} {stato}{detail} pid={pid} {comando}
+```
+
+- `marker` e `+` per il job corrente (ripreso da `fg`/`bg` senza argomenti), `-` per il precedente, spazio altrimenti
+- `stato` e `running`, `stopped` o `done`
+- `detail` e vuoto per terminazione normale, `exit=N` se il codice di uscita e diverso da 0, `signal=NAME` se terminato da un segnale
 
 ```bash
+sleep 100 &
+sleep 200 &
 jobs
-# [1]  Running    sleep 100  (pid: 1234, pgid: 1234)
-# [2]  Stopped    vim file   (pid: 5678, pgid: 5678)
+# [1]- running pid=1234 sleep
+# [2]+ running pid=5678 sleep
 ```
 
 ### let
@@ -2368,11 +2378,18 @@ unset nome_binding
 Attende il completamento di un job in background:
 
 ```bash
-wait        # attende il job piu recente
-wait %2     # attende il job numero 2
+wait        # attende tutti i job in background
+wait %1     # attende il job numero 1
+wait %2 %3  # attende i job 2 e 3
 ```
 
-Restituisce l'exit status del job atteso.
+Restituisce l'exit status dell'ultimo job atteso. Quando il job termina, stampa una riga di completamento:
+
+```
+[1] done pid=1234 sleep
+[2] done exit=1 pid=5678 false
+[3] done signal=TERM pid=9012 sleep
+```
 
 ---
 
@@ -2398,20 +2415,33 @@ Il comando `jobs` mostra lo stato di tutti i job della sessione corrente:
 
 ```bash
 jobs
-# [1]  Running    wget https://example.com/file.zip  (pid: 12345, pgid: 12345)
-# [2]  Stopped    vim documento.txt                   (pid: 12346, pgid: 12346)
-# [3]  Done       sleep 5                             (pid: 12347, pgid: 12347)
+# [1]+ running pid=12345 wget https://example.com/file.zip
+# [2]- stopped pid=12346 vim documento.txt
+# [3]  done exit=1 pid=12347 false
+# [4]  done signal=TERM pid=12348 sleep 60
 ```
 
-Gli stati possibili sono:
-- `Running`: il processo e in esecuzione in background
-- `Stopped`: il processo e stato fermato (con Ctrl-Z o SIGSTOP)
-- `Done`: il processo e terminato (rimane visibile finche non viene raccolto)
+Gli stati possibili:
+- `running`: il processo e in esecuzione in background
+- `stopped`: il processo e stato fermato (Ctrl-Z o SIGSTOP)
+- `done`: il processo e terminato — aggiunto `exit=N` se il codice e diverso da 0, `signal=NAME` se terminato da un segnale
+
+I marcatori `+` e `-` seguono la convenzione POSIX:
+- `+` indica il job corrente (quello che `fg` o `bg` riprenderebbero senza argomenti)
+- `-` indica il job precedente
+
+Quando un job termina, `wait` produce una riga di completamento analoga:
+
+```bash
+sleep 5 &
+wait %1
+# [1] done pid=... sleep
+```
 
 `shell()` restituisce anche la lista dei job attivi come valore tipizzato:
 
 ```bash
-shell() -> get("job") |> render()
+shell() -> plugins |> count()
 ```
 
 ### 14.3 Foreground (fg)

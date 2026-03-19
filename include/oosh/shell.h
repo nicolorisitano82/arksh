@@ -144,6 +144,7 @@ typedef struct {
   int id;
   OoshJobState state;
   int exit_code;
+  int termination_signal; /* 0 = normal exit, >0 = signal number */
   char command[OOSH_MAX_LINE];
   OoshPlatformAsyncProcess process;
 } OoshJob;

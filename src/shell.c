@@ -4549,6 +4549,21 @@ static OoshJob *find_job_by_id(OoshShell *shell, int id) {
   return NULL;
 }
 
+static const char *signal_name(int sig) {
+  switch (sig) {
+    case 1:  return "HUP";
+    case 2:  return "INT";
+    case 3:  return "QUIT";
+    case 6:  return "ABRT";
+    case 9:  return "KILL";
+    case 11: return "SEGV";
+    case 13: return "PIPE";
+    case 15: return "TERM";
+    case 20: return "TSTP";
+    default: return "SIG";
+  }
+}
+
 static OoshJob *find_default_job(OoshShell *shell) {
   size_t i;
   OoshJob *running_job = NULL;
@@ -4632,7 +4647,15 @@ static int wait_for_job_at(OoshShell *shell, size_t index, int *out_status, char
 
   job->state = OOSH_JOB_DONE;
   job->exit_code = exit_code;
+  job->termination_signal = (exit_code > 128) ? (exit_code - 128) : 0;
   *out_status = exit_code;
+  if (job->termination_signal > 0) {
+    snprintf(out, out_size, "[%d] done signal=%s pid=%lld %s", job->id, signal_name(job->termination_signal), job->process.pid, job->command);
+  } else if (exit_code != 0) {
+    snprintf(out, out_size, "[%d] done exit=%d pid=%lld %s", job->id, exit_code, job->process.pid, job->command);
+  } else {
+    snprintf(out, out_size, "[%d] done pid=%lld %s", job->id, job->process.pid, job->command);
+  }
   remove_job_at(shell, index);
   return 0;
 }
@@ -4664,6 +4687,7 @@ void oosh_shell_refresh_jobs(OoshShell *shell) {
     } else if (state == OOSH_PLATFORM_PROCESS_EXITED) {
       shell->jobs[i].state = OOSH_JOB_DONE;
       shell->jobs[i].exit_code = exit_code;
+      shell->jobs[i].termination_signal = (exit_code > 128) ? (exit_code - 128) : 0;
     }
   }
 }
@@ -5861,32 +5885,70 @@ static int command_jobs(OoshShell *shell, int argc, char **argv, char *out, size
     return 0;
   }
 
-  for (i = 0; i < shell->job_count; ++i) {
-    char line[OOSH_MAX_OUTPUT];
-    const char *status = "running";
-    const char *suffix = "";
+  {
+    /* Determine which jobs get + and - markers (POSIX current/previous) */
+    OoshJob *current_job  = NULL;
+    OoshJob *previous_job = NULL;
+    size_t j;
 
-    if (shell->jobs[i].state == OOSH_JOB_STOPPED) {
-      status = "stopped";
-    } else if (shell->jobs[i].state == OOSH_JOB_DONE) {
-      status = "done";
-      suffix = shell->jobs[i].exit_code == 0 ? "" : " (failed)";
+    for (j = shell->job_count; j > 0; --j) {
+      OoshJob *candidate = &shell->jobs[j - 1];
+      if (candidate->state == OOSH_JOB_DONE) continue;
+      if (current_job == NULL) {
+        current_job = candidate;
+      } else if (previous_job == NULL) {
+        previous_job = candidate;
+        break;
+      }
+    }
+    /* If no stopped job found yet, retry preferring stopped */
+    if (current_job == NULL) {
+      for (j = shell->job_count; j > 0; --j) {
+        if (shell->jobs[j - 1].state == OOSH_JOB_STOPPED) {
+          current_job = &shell->jobs[j - 1];
+          break;
+        }
+      }
     }
 
-    snprintf(
-      line,
-      sizeof(line),
-      "[%d] %s%s pid=%lld %s",
-      shell->jobs[i].id,
-      status,
-      suffix,
-      shell->jobs[i].process.pid,
-      shell->jobs[i].command
-    );
+    for (i = 0; i < shell->job_count; ++i) {
+      char line[OOSH_MAX_OUTPUT];
+      const char *status = "running";
+      char detail[64];
+      char marker;
 
-    if (append_output_line(out, out_size, line) != 0) {
-      snprintf(out, out_size, "jobs output too large");
-      return 1;
+      detail[0] = '\0';
+      marker = ' ';
+      if (&shell->jobs[i] == current_job)  marker = '+';
+      else if (&shell->jobs[i] == previous_job) marker = '-';
+
+      if (shell->jobs[i].state == OOSH_JOB_STOPPED) {
+        status = "stopped";
+      } else if (shell->jobs[i].state == OOSH_JOB_DONE) {
+        status = "done";
+        if (shell->jobs[i].termination_signal > 0) {
+          snprintf(detail, sizeof(detail), " signal=%s", signal_name(shell->jobs[i].termination_signal));
+        } else if (shell->jobs[i].exit_code != 0) {
+          snprintf(detail, sizeof(detail), " exit=%d", shell->jobs[i].exit_code);
+        }
+      }
+
+      snprintf(
+        line,
+        sizeof(line),
+        "[%d]%c %s%s pid=%lld %s",
+        shell->jobs[i].id,
+        marker,
+        status,
+        detail,
+        shell->jobs[i].process.pid,
+        shell->jobs[i].command
+      );
+
+      if (append_output_line(out, out_size, line) != 0) {
+        snprintf(out, out_size, "jobs output too large");
+        return 1;
+      }
     }
   }
 
