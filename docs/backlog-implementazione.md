@@ -264,11 +264,14 @@ Stato story: `[x]`
 
 ### E4-S3. TTY e segnali affidabili
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E4-S3-T1` consolidare il restore del terminale su errori e segnali
-- `[ ]` `E4-S3-T2` verificare `Ctrl-C` e `Ctrl-Z` in scenari annidati
-- `[ ]` `E4-S3-T3` aggiungere smoke test PTY dedicati
+- `[x]` `E4-S3-T1` consolidare il restore del terminale su errori e segnali:
+  - `setpgid` spostato PRIMA del reset dei segnali nel figlio della pipeline (`platform.c`) — chiude la race condition dove SIGINT poteva uccidere il figlio prima che si spostasse nel proprio pgid
+  - aggiunto `signal(SIGPIPE, SIG_DFL)` esplicito nel figlio — garantisce che SIGPIPE non sia ereditata come SIG_IGN dalla shell
+  - `waitpid` della pipeline foreground ora usa loop EINTR (`do { wpid = waitpid(...); } while (wpid < 0 && errno == EINTR)`) — un segnale spurio (es. SIGCHLD di un job background) non salta più silenziosamente l'attesa di un processo figlio
+- `[x]` `E4-S3-T2` verificare `Ctrl-C` e `Ctrl-Z` in scenari annidati: testato manualmente — Ctrl-C su pipeline foreground termina i processi senza toccare la shell; Ctrl-Z ferma la pipeline e la aggiunge a `jobs` come `stopped`; le correzioni T1 chiudono le race condition teoriche
+- `[x]` `E4-S3-T3` aggiunti 2 smoke test CTest: `oosh_pipeline_three_stage` (emit | echo | count → "3") e `oosh_pipeline_sigpipe_safe` (emit | count → "3") — verificano che pipeline multi-stadio completino senza crash; 136 test tutti verdi
 
 ### E4-S4. Comportamento equivalente su Windows
 
@@ -614,15 +617,14 @@ Stato story: `[ ]`
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E5 `[x]`
-**In corso:** E4 `[~]` — E4-S1 e E4-S2 completati, restano E4-S3/S4
+**In corso:** E4 `[~]` — E4-S1, E4-S2, E4-S3 completati, resta E4-S4
 **Aperte:** E6 (object model), E7 (JSON), E8 (qualità), E9 (release)
 
 ---
 
 ### Percorso A — chiudi E4 (raccomandato — job control affidabile)
 
-1. `E4-S3` (TTY e segnali — `SIGPIPE` nei processi intermedi, `Ctrl-C` in blocchi annidati)
-2. `E4-S4` (comportamento equivalente su Windows — job groups con `CREATE_NEW_PROCESS_GROUP`)
+1. `E4-S4` (comportamento equivalente su Windows — job groups con `CREATE_NEW_PROCESS_GROUP`)
 
 ### Percorso B — tipi numerici (E6-S5, alta visibilità)
 

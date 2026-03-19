@@ -121,6 +121,10 @@ if(BUILD_TESTING)
   add_test(NAME oosh_wait_builtin COMMAND oosh -c "\"${OOSH_TEST_PAUSE}\" 0 & wait %1")
   add_test(NAME oosh_wait_done_message COMMAND oosh -c "\"${OOSH_TEST_PAUSE}\" 0 & wait %1")
   add_test(NAME oosh_jobs_current_marker COMMAND oosh -c "\"${OOSH_TEST_PAUSE}\" 1 & jobs")
+  add_test(NAME oosh_pipeline_three_stage COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" a b c | \"${OOSH_TEST_ECHO}\" | \"${OOSH_TEST_COUNT}\"")
+  add_test(NAME oosh_pipeline_sigpipe_safe COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" x y z | \"${OOSH_TEST_COUNT}\"")
+  add_test(NAME oosh_bridge_capture_lines COMMAND oosh -c "capture_lines(\"${OOSH_TEST_EMIT} a b c\") |> count()")
+  add_test(NAME oosh_bridge_multiword COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" x y z |> lines() |> count()")
   add_test(NAME oosh_trap_exit COMMAND oosh -c "trap \"text(\\\"bye\\\") -> print()\" EXIT ; text(\"run\") -> print()")
   add_test(NAME oosh_heredoc_basic COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/basic.oosh")
   add_test(NAME oosh_heredoc_strip_tabs COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/strip-tabs.oosh")
@@ -240,6 +244,10 @@ if(BUILD_TESTING)
     oosh_wait_builtin
     oosh_wait_done_message
     oosh_jobs_current_marker
+    oosh_pipeline_three_stage
+    oosh_pipeline_sigpipe_safe
+    oosh_bridge_capture_lines
+    oosh_bridge_multiword
     oosh_fd_redirect_output_dup
     oosh_fd_redirect_input_dup
     oosh_print_method
@@ -650,8 +658,12 @@ if(BUILD_TESTING)
     PROPERTIES
       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  set_tests_properties(oosh_wait_done_message   PROPERTIES PASS_REGULAR_EXPRESSION "done")
-  set_tests_properties(oosh_jobs_current_marker PROPERTIES PASS_REGULAR_EXPRESSION "\\+")
+  set_tests_properties(oosh_wait_done_message    PROPERTIES PASS_REGULAR_EXPRESSION "done")
+  set_tests_properties(oosh_jobs_current_marker  PROPERTIES PASS_REGULAR_EXPRESSION "\\+")
+  set_tests_properties(oosh_pipeline_three_stage  PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(oosh_pipeline_sigpipe_safe PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(oosh_bridge_capture_lines  PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(oosh_bridge_multiword      PROPERTIES PASS_REGULAR_EXPRESSION "3")
   if(NOT WIN32)
     set_tests_properties(
       oosh_fd_redirect_output_dup

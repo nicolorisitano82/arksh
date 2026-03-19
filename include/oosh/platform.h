@@ -88,7 +88,8 @@ int oosh_platform_run_process_pipeline(
   char *out,
   size_t out_size,
   int *out_exit_code,
-  OoshPlatformAsyncProcess *out_stopped
+  OoshPlatformAsyncProcess *out_stopped,
+  int force_capture  /* 1 = capture stdout even when running interactively */
 );
 int oosh_platform_glob(
   const char *pattern,

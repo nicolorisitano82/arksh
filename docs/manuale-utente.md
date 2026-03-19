@@ -2481,6 +2481,11 @@ oosh gestisce i process group correttamente: quando una pipeline e in foreground
 
 oosh rileva il segnale `WIFSTOPPED` nella risposta di `waitpid` e aggiunge automaticamente il job alla lista senza richiedere azioni esplicite dell'utente.
 
+Dettagli implementativi del signal handling (E4-S3):
+- `setpgid` viene chiamato nel figlio **prima** di ripristinare `SIGINT`/`SIGQUIT` a `SIG_DFL`, eliminando la race condition dove un Ctrl-C poteva uccidere il figlio prima che si spostasse nel proprio process group
+- `SIGPIPE` e esplicitamente ripristinato a `SIG_DFL` in ogni processo figlio della pipeline
+- Il loop di attesa (`waitpid`) gestisce `EINTR` con retry, in modo che un segnale spurio non salti silenziosamente la raccolta dello stato di uscita
+
 ---
 
 ## 15. Editor di riga interattivo

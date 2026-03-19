@@ -1056,7 +1056,8 @@ int oosh_platform_run_process_pipeline(
   char *out,
   size_t out_size,
   int *out_exit_code,
-  OoshPlatformAsyncProcess *out_stopped
+  OoshPlatformAsyncProcess *out_stopped,
+  int force_capture
 ) {
   if (out == NULL || out_size == 0) {
     return 1;
@@ -1371,12 +1372,16 @@ windows_stage_cleanup:
     pid_t pgid_leader = 0;
     size_t i;
 
+    /* interactive: controls tcsetpgrp / process groups / WUNTRACED.
+     * When force_capture is set we still hand the TTY to the child if
+     * interactive (so job control works), but we always create the
+     * capture pipe so stdout is collected for the caller. */
     interactive = isatty(STDIN_FILENO);
 
     for (i = 0; i < spec_count; ++i) {
       int next_pipe[2] = {-1, -1};
       int capture_pipe[2] = {-1, -1};
-      int should_capture_output = (!interactive) && (i + 1 == spec_count);
+      int should_capture_output = (!interactive || force_capture) && (i + 1 == spec_count);
       pid_t target_pgid = (pid_count == 0) ? 0 : pids[0];
       pid_t pid;
 
@@ -1423,12 +1428,19 @@ windows_stage_cleanup:
         memset(opened_fds, -1, sizeof(opened_fds));
 
 #ifndef _WIN32
-        signal(SIGINT, SIG_DFL);
-        signal(SIGQUIT, SIG_DFL);
-        signal(SIGTSTP, SIG_DFL);
+        /* E4-S3: setpgid BEFORE restoring signals.
+         * The shell has SIGINT/SIGQUIT ignored (SIG_IGN); the child inherits
+         * that disposition.  Resetting to SIG_DFL *before* setpgid would open
+         * a window where a Ctrl-C sent to the shell's pgid can kill the child
+         * before it moves to its own process group.  Moving setpgid first
+         * closes that race. */
         if (interactive) {
           setpgid(0, target_pgid);
         }
+        signal(SIGINT,  SIG_DFL);
+        signal(SIGQUIT, SIG_DFL);
+        signal(SIGTSTP, SIG_DFL);
+        signal(SIGPIPE, SIG_DFL); /* E4-S3: ensure SIGPIPE is not ignored */
 #endif
         if (cwd != NULL && cwd[0] != '\0' && chdir(cwd) != 0) {
           _exit(127);
@@ -1439,7 +1451,7 @@ windows_stage_cleanup:
         }
         if (i + 1 < spec_count && next_pipe[1] != -1) {
           dup2(next_pipe[1], STDOUT_FILENO);
-        } else if (!interactive && capture_pipe[1] != -1) {
+        } else if ((!interactive || force_capture) && capture_pipe[1] != -1) {
           dup2(capture_pipe[1], STDOUT_FILENO);
         }
 
@@ -1588,8 +1600,16 @@ windows_stage_cleanup:
       for (i = 0; i < pid_count; ++i) {
         int wait_status = 0;
         int wflags = interactive ? WUNTRACED : 0;
+        pid_t wpid;
 
-        if (waitpid(pids[i], &wait_status, wflags) < 0) {
+        /* E4-S3: retry on EINTR so a stray signal (e.g. SIGCHLD from an
+         * unrelated background job) does not silently skip the wait and
+         * leave the child as a zombie or mark the wrong exit code. */
+        do {
+          wpid = waitpid(pids[i], &wait_status, wflags);
+        } while (wpid < 0 && errno == EINTR);
+
+        if (wpid < 0) {
           continue;
         }
 

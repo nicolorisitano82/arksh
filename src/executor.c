@@ -2668,7 +2668,9 @@ static int execute_capture_source(OoshShell *shell, const char *raw_command, int
   }
 
   capture_output[0] = '\0';
+  shell->force_capture = 1;
   if (oosh_shell_execute_line(shell, command_text, capture_output, sizeof(capture_output)) != 0) {
+    shell->force_capture = 0;
     if (capture_output[0] != '\0') {
       copy_string(out, out_size, capture_output);
     } else {
@@ -2676,6 +2678,7 @@ static int execute_capture_source(OoshShell *shell, const char *raw_command, int
     }
     return 1;
   }
+  shell->force_capture = 0;
 
   if (split_lines) {
     if (split_text_lines_into_value(capture_output, value) != 0) {
@@ -2828,11 +2831,16 @@ static int evaluate_value_source(OoshShell *shell, const OoshValueSourceNode *so
     case OOSH_VALUE_SOURCE_CAPTURE_SHELL: {
       /* E3-S3 bridge: execute source->raw_text as a shell line verbatim and
          capture stdout as a text value.  Unlike CAPTURE_TEXT, no
-         quote-stripping is applied — raw_text is already the plain command. */
+         quote-stripping is applied — raw_text is already the plain command.
+         force_capture ensures stdout is collected even in interactive REPL. */
       char capture_output[OOSH_MAX_OUTPUT];
+      int bridge_status;
 
       capture_output[0] = '\0';
-      if (oosh_shell_execute_line(shell, source->raw_text, capture_output, sizeof(capture_output)) != 0) {
+      shell->force_capture = 1;
+      bridge_status = oosh_shell_execute_line(shell, source->raw_text, capture_output, sizeof(capture_output));
+      shell->force_capture = 0;
+      if (bridge_status != 0) {
         if (capture_output[0] != '\0') {
           copy_string(out, out_size, capture_output);
         } else {
@@ -3949,7 +3957,7 @@ int oosh_execute_external_command(OoshShell *shell, int argc, char **argv, char 
   }
 
   memset(&stopped_process, 0, sizeof(stopped_process));
-  status = oosh_platform_run_process_pipeline(shell->cwd, &spec, 1, out, out_size, &exit_code, &stopped_process);
+  status = oosh_platform_run_process_pipeline(shell->cwd, &spec, 1, out, out_size, &exit_code, &stopped_process, shell->force_capture);
   if (status != 0) {
     if (out[0] == '\0') {
       snprintf(out, out_size, "unable to execute external command: %s", argv[0]);
@@ -4210,7 +4218,7 @@ static int execute_shell_pipeline(OoshShell *shell, const OoshCommandPipelineNod
       return 1;
     }
     memset(&stopped_process, 0, sizeof(stopped_process));
-    if (oosh_platform_run_process_pipeline(shell->cwd, specs, 1, out, out_size, &exit_code, &stopped_process) != 0) {
+    if (oosh_platform_run_process_pipeline(shell->cwd, specs, 1, out, out_size, &exit_code, &stopped_process, shell->force_capture) != 0) {
       if (out[0] == '\0') snprintf(out, out_size, "failed to execute shell pipeline");
       return 1;
     }
@@ -4285,7 +4293,7 @@ static int execute_shell_pipeline(OoshShell *shell, const OoshCommandPipelineNod
         }
 
         memset(&stopped_process, 0, sizeof(stopped_process));
-        if (oosh_platform_run_process_pipeline(shell->cwd, specs, pipeline->stage_count - 1, out, out_size, &exit_code, &stopped_process) != 0) {
+        if (oosh_platform_run_process_pipeline(shell->cwd, specs, pipeline->stage_count - 1, out, out_size, &exit_code, &stopped_process, shell->force_capture) != 0) {
           if (out[0] == '\0') snprintf(out, out_size, "failed to execute shell pipeline");
           return 1;
         }
@@ -4327,7 +4335,7 @@ static int execute_shell_pipeline(OoshShell *shell, const OoshCommandPipelineNod
   }
 
   memset(&stopped_process, 0, sizeof(stopped_process));
-  if (oosh_platform_run_process_pipeline(shell->cwd, specs, pipeline->stage_count, out, out_size, &exit_code, &stopped_process) != 0) {
+  if (oosh_platform_run_process_pipeline(shell->cwd, specs, pipeline->stage_count, out, out_size, &exit_code, &stopped_process, shell->force_capture) != 0) {
     if (out[0] == '\0') {
       snprintf(out, out_size, "failed to execute shell pipeline");
     }

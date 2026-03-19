@@ -242,6 +242,7 @@ typedef struct OoshShell {
   int positional_count;
   long long last_bg_pid;
   long long shell_pid;
+  int force_capture; /* 1 inside capture()/capture_lines()/bridge — always capture stdout */
 } OoshShell;
 
 int oosh_shell_init(OoshShell *shell);

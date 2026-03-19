@@ -10,10 +10,10 @@ Le shell analizzate sono: **bash**, **zsh**, **fish**, **nushell**, **dash** e *
 
 | Caratteristica         | bash 5.x          | zsh 5.x            | fish 3.x           | nushell 0.9x       | dash 0.5.x         | oosh               |
 |------------------------|-------------------|--------------------|--------------------|--------------------|--------------------|--------------------|
-| Anno di prima release  | 1989              | 1990               | 2005               | 2019               | 1997               | 2024               |
+| Anno di prima release  | 1989              | 1990               | 2005               | 2019               | 1997               | 2026               |
 | Linguaggio principale  | C                 | C                  | C++                | Rust               | C                  | C (C11)            |
 | Standard di riferimento| POSIX + GNU ext.  | POSIX + Zsh ext.   | Proprio            | Proprio            | POSIX stretto      | Proprio            |
-| Licenza                | GPL 3             | MIT-like (vari)    | GPL 2              | MIT                | BSD                | (non specificata)  |
+| Licenza                | GPL 3             | MIT-like (vari)    | GPL 2              | MIT                | BSD                | MIT                |
 | Portabilità OS         | Linux, macOS, Win | Linux, macOS       | Linux, macOS, Win  | Linux, macOS, Win  | Linux, macOS, Unix | Linux, macOS, Win  |
 | Shell di login default | Linux (comune)    | macOS (da 10.15)   | Opzionale          | Opzionale          | Debian `/bin/sh`   | No                 |
 
