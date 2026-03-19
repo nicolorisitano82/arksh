@@ -1487,9 +1487,9 @@ static int method_write_json(
   size_t out_size
 ) {
   char json_text[OOSH_MAX_OUTPUT];
-  OoshObject refreshed;
 
   (void) shell;
+  (void) out_value;
 
   if (receiver == NULL || args == NULL || out_value == NULL || out == NULL || out_size == 0) {
     return 1;
@@ -1511,11 +1511,6 @@ static int method_write_json(
     return 1;
   }
 
-  if (oosh_object_resolve(receiver->object.path, receiver->object.path, &refreshed) == 0) {
-    oosh_value_set_object(out_value, &refreshed);
-  } else {
-    oosh_value_set_object(out_value, &receiver->object);
-  }
   return 0;
 }
 

@@ -1636,9 +1636,14 @@ windows_stage_cleanup:
       }
     }
 
-    /* E4-S1: restore terminal control to the shell */
+    /* E4-S1: restore terminal control to the shell.
+     * We may be in a background process group at this point (we handed the
+     * TTY to the child above), so tcsetpgrp would normally raise SIGTTOU.
+     * Temporarily ignore it — same idiom used by bash/zsh. */
     if (interactive) {
+      signal(SIGTTOU, SIG_IGN);
       tcsetpgrp(STDIN_FILENO, getpgrp());
+      signal(SIGTTOU, SIG_DFL);
     }
 
     return 0;

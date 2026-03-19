@@ -3043,7 +3043,12 @@ static int apply_first_stage(OoshValue *value, char *out, size_t out_size) {
     return 1;
   }
 
-  return oosh_value_set_from_item(value, &value->list.items[0]);
+  {
+    /* Copy item to stack before oosh_value_set_from_item reinitialises
+     * (memsets) *value — the source item lives inside that same struct. */
+    OoshValueItem item = value->list.items[0];
+    return oosh_value_set_from_item(value, &item);
+  }
 }
 
 static int apply_count_stage(OoshValue *value, char *out, size_t out_size) {

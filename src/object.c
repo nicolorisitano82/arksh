@@ -1201,6 +1201,19 @@ int oosh_value_get_property_value(const OoshValue *value, const char *property, 
     case OOSH_VALUE_OBJECT: {
       char rendered[OOSH_MAX_OUTPUT];
 
+      if (strcmp(property, "child_count") == 0 &&
+          (value->object.kind == OOSH_OBJECT_DIRECTORY || value->object.kind == OOSH_OBJECT_MOUNT_POINT)) {
+        char child_names[OOSH_MAX_COLLECTION_ITEMS][OOSH_MAX_PATH];
+        size_t count = 0;
+
+        if (oosh_platform_list_children_names(value->object.path, child_names, OOSH_MAX_COLLECTION_ITEMS, &count) != 0) {
+          snprintf(error, error_size, "unable to count children for %s", value->object.path);
+          return 1;
+        }
+        oosh_value_set_number(out_value, (double) count);
+        return 0;
+      }
+
       if (oosh_object_get_property(&value->object, property, rendered, sizeof(rendered)) == 0) {
         oosh_value_set_string(out_value, rendered);
         return 0;
