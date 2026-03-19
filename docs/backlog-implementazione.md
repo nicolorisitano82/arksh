@@ -349,12 +349,12 @@ Stato epoca: `[ ]`
 
 ### E6-S1. Namespace object-aware aggiuntivi
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E6-S1-T1` progettare `fs()`
-- `[ ]` `E6-S1-T2` progettare `user()`
-- `[ ]` `E6-S1-T3` progettare `sys()` e `time()`
-- `[ ]` `E6-S1-T4` decidere se `net()` entra nel core o come plugin ufficiale
+- `[x]` `E6-S1-T1` progettare `fs()` — `cwd`, `home`, `temp`, `separator`
+- `[x]` `E6-S1-T2` progettare `user()` — `name`, `home`, `shell`, `uid`/`gid` (POSIX)
+- `[x]` `E6-S1-T3` progettare `sys()` e `time()` — `sys`: os/host/arch/cpu_count; `time`: epoch/year/month/day/hour/minute/second/iso
+- `[x]` `E6-S1-T4` decidere se `net()` entra nel core o come plugin ufficiale — **plugin** (operazioni bloccanti, dipendenze socket, non universale)
 
 ### E6-S2. Plugin che introducono nuovi tipi completi
 

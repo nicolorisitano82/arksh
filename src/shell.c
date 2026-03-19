@@ -2,9 +2,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #ifndef _WIN32
 #include <signal.h>
+#include <sys/types.h>
+#include <unistd.h>
 #endif
 
 #include "oosh/executor.h"
@@ -3504,6 +3507,259 @@ static int resolver_shell_namespace(
   return 0;
 }
 
+/* E6-S1-T1: fs() — filesystem namespace */
+static int resolver_fs(
+  OoshShell *shell,
+  int argc,
+  const OoshValue *args,
+  OoshValue *out_value,
+  char *error,
+  size_t error_size
+) {
+  const char *home;
+  const char *tmp_dir;
+
+  (void) args;
+
+  if (shell == NULL || out_value == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+  if (argc != 0) {
+    snprintf(error, error_size, "fs() does not accept arguments");
+    return 1;
+  }
+
+  home = getenv("HOME");
+#ifdef _WIN32
+  if (home == NULL) {
+    home = getenv("USERPROFILE");
+  }
+  tmp_dir = getenv("TEMP");
+  if (tmp_dir == NULL) {
+    tmp_dir = getenv("TMP");
+  }
+  if (tmp_dir == NULL) {
+    tmp_dir = "C:\\Temp";
+  }
+#else
+  tmp_dir = "/tmp";
+#endif
+
+  if (home == NULL) {
+    home = "";
+  }
+
+  oosh_value_set_map(out_value);
+  if (map_add_string_entry(out_value, "cwd", shell->cwd) != 0 ||
+      map_add_string_entry(out_value, "home", home) != 0 ||
+      map_add_string_entry(out_value, "temp", tmp_dir) != 0 ||
+      map_add_string_entry(out_value, "separator", oosh_platform_path_separator()) != 0) {
+    snprintf(error, error_size, "fs namespace is too large");
+    return 1;
+  }
+
+  return 0;
+}
+
+/* E6-S1-T2: user() — current user namespace */
+static int resolver_user(
+  OoshShell *shell,
+  int argc,
+  const OoshValue *args,
+  OoshValue *out_value,
+  char *error,
+  size_t error_size
+) {
+  const char *username;
+  const char *home;
+  const char *login_shell;
+
+  (void) shell;
+  (void) args;
+
+  if (out_value == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+  if (argc != 0) {
+    snprintf(error, error_size, "user() does not accept arguments");
+    return 1;
+  }
+
+  username = getenv("USER");
+#ifdef _WIN32
+  if (username == NULL) {
+    username = getenv("USERNAME");
+  }
+#else
+  if (username == NULL) {
+    username = getenv("LOGNAME");
+  }
+#endif
+  if (username == NULL) {
+    username = "";
+  }
+
+  home = getenv("HOME");
+#ifdef _WIN32
+  if (home == NULL) {
+    home = getenv("USERPROFILE");
+  }
+#endif
+  if (home == NULL) {
+    home = "";
+  }
+
+  login_shell = getenv("SHELL");
+  if (login_shell == NULL) {
+    login_shell = "";
+  }
+
+  oosh_value_set_map(out_value);
+  if (map_add_string_entry(out_value, "name", username) != 0 ||
+      map_add_string_entry(out_value, "home", home) != 0 ||
+      map_add_string_entry(out_value, "shell", login_shell) != 0) {
+    snprintf(error, error_size, "user namespace is too large");
+    return 1;
+  }
+
+#ifndef _WIN32
+  if (map_add_number_entry(out_value, "uid", (double) getuid()) != 0 ||
+      map_add_number_entry(out_value, "gid", (double) getgid()) != 0) {
+    snprintf(error, error_size, "user namespace is too large");
+    return 1;
+  }
+#endif
+
+  return 0;
+}
+
+/* E6-S1-T3: sys() — system/hardware namespace */
+static int resolver_sys(
+  OoshShell *shell,
+  int argc,
+  const OoshValue *args,
+  OoshValue *out_value,
+  char *error,
+  size_t error_size
+) {
+  char hostname[OOSH_MAX_NAME];
+  int cpu_count = 1;
+  const char *arch;
+
+  (void) shell;
+  (void) args;
+
+  if (out_value == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+  if (argc != 0) {
+    snprintf(error, error_size, "sys() does not accept arguments");
+    return 1;
+  }
+
+  hostname[0] = '\0';
+  oosh_platform_gethostname(hostname, sizeof(hostname));
+
+#ifdef _WIN32
+  {
+    const char *nop = getenv("NUMBER_OF_PROCESSORS");
+    if (nop != NULL) {
+      cpu_count = atoi(nop);
+      if (cpu_count < 1) {
+        cpu_count = 1;
+      }
+    }
+  }
+#else
+  {
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    if (n > 0) {
+      cpu_count = (int) n;
+    }
+  }
+#endif
+
+#if defined(__x86_64__) || defined(_M_X64)
+  arch = "x86_64";
+#elif defined(__aarch64__) || defined(_M_ARM64)
+  arch = "arm64";
+#elif defined(__i386__) || defined(_M_IX86)
+  arch = "x86";
+#elif defined(__arm__) || defined(_M_ARM)
+  arch = "arm";
+#else
+  arch = "unknown";
+#endif
+
+  oosh_value_set_map(out_value);
+  if (map_add_string_entry(out_value, "os", oosh_platform_os_name()) != 0 ||
+      map_add_string_entry(out_value, "host", hostname) != 0 ||
+      map_add_string_entry(out_value, "arch", arch) != 0 ||
+      map_add_number_entry(out_value, "cpu_count", (double) cpu_count) != 0) {
+    snprintf(error, error_size, "sys namespace is too large");
+    return 1;
+  }
+
+  return 0;
+}
+
+/* E6-S1-T3: time() — current local time namespace */
+static int resolver_time(
+  OoshShell *shell,
+  int argc,
+  const OoshValue *args,
+  OoshValue *out_value,
+  char *error,
+  size_t error_size
+) {
+  time_t now;
+  struct tm tm_buf;
+  struct tm *tm_info;
+  char iso[32];
+
+  (void) shell;
+  (void) args;
+
+  if (out_value == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+  if (argc != 0) {
+    snprintf(error, error_size, "time() does not accept arguments");
+    return 1;
+  }
+
+  now = time(NULL);
+#ifdef _WIN32
+  localtime_s(&tm_buf, &now);
+  tm_info = &tm_buf;
+#else
+  tm_info = localtime_r(&now, &tm_buf);
+#endif
+
+  snprintf(iso, sizeof(iso), "%04d-%02d-%02dT%02d:%02d:%02d",
+           tm_info->tm_year + 1900,
+           tm_info->tm_mon + 1,
+           tm_info->tm_mday,
+           tm_info->tm_hour,
+           tm_info->tm_min,
+           tm_info->tm_sec);
+
+  oosh_value_set_map(out_value);
+  if (map_add_number_entry(out_value, "epoch",  (double) now) != 0 ||
+      map_add_number_entry(out_value, "year",   (double)(tm_info->tm_year + 1900)) != 0 ||
+      map_add_number_entry(out_value, "month",  (double)(tm_info->tm_mon + 1)) != 0 ||
+      map_add_number_entry(out_value, "day",    (double) tm_info->tm_mday) != 0 ||
+      map_add_number_entry(out_value, "hour",   (double) tm_info->tm_hour) != 0 ||
+      map_add_number_entry(out_value, "minute", (double) tm_info->tm_min) != 0 ||
+      map_add_number_entry(out_value, "second", (double) tm_info->tm_sec) != 0 ||
+      map_add_string_entry(out_value, "iso",    iso) != 0) {
+    snprintf(error, error_size, "time namespace is too large");
+    return 1;
+  }
+
+  return 0;
+}
+
 static int map_method_keys(
   OoshShell *shell,
   const OoshValue *receiver,
@@ -3725,6 +3981,19 @@ static int register_builtin_value_resolvers(OoshShell *shell) {
     return 1;
   }
   if (oosh_shell_register_value_resolver(shell, "shell", resolver_shell_namespace, 0) != 0) {
+    return 1;
+  }
+  /* E6-S1 namespaces */
+  if (oosh_shell_register_value_resolver(shell, "fs", resolver_fs, 0) != 0) {
+    return 1;
+  }
+  if (oosh_shell_register_value_resolver(shell, "user", resolver_user, 0) != 0) {
+    return 1;
+  }
+  if (oosh_shell_register_value_resolver(shell, "sys", resolver_sys, 0) != 0) {
+    return 1;
+  }
+  if (oosh_shell_register_value_resolver(shell, "time", resolver_time, 0) != 0) {
     return 1;
   }
 

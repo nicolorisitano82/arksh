@@ -735,6 +735,34 @@ if(BUILD_TESTING)
     )
   endif()
 
+  # E6-S1: namespace resolvers
+  add_test(NAME oosh_ns_fs_cwd       COMMAND oosh -c "fs() -> cwd")
+  add_test(NAME oosh_ns_fs_home      COMMAND oosh -c "fs() -> home")
+  add_test(NAME oosh_ns_fs_temp      COMMAND oosh -c "fs() -> temp")
+  add_test(NAME oosh_ns_fs_separator COMMAND oosh -c "fs() -> separator")
+  add_test(NAME oosh_ns_user_name    COMMAND oosh -c "user() -> name")
+  add_test(NAME oosh_ns_user_home    COMMAND oosh -c "user() -> home")
+  add_test(NAME oosh_ns_sys_os       COMMAND oosh -c "sys() -> os")
+  add_test(NAME oosh_ns_sys_arch     COMMAND oosh -c "sys() -> arch")
+  add_test(NAME oosh_ns_sys_cpus     COMMAND oosh -c "sys() -> cpu_count")
+  add_test(NAME oosh_ns_time_iso     COMMAND oosh -c "time() -> iso")
+  add_test(NAME oosh_ns_time_year    COMMAND oosh -c "time() -> year")
+  add_test(NAME oosh_ns_time_epoch   COMMAND oosh -c "time() -> epoch")
+  set_tests_properties(
+    oosh_ns_fs_cwd oosh_ns_fs_home oosh_ns_fs_temp oosh_ns_fs_separator
+    oosh_ns_user_name oosh_ns_user_home
+    oosh_ns_sys_os oosh_ns_sys_arch oosh_ns_sys_cpus
+    oosh_ns_time_iso oosh_ns_time_year oosh_ns_time_epoch
+    PROPERTIES PASS_REGULAR_EXPRESSION ".+" WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  if(NOT WIN32)
+    add_test(NAME oosh_ns_user_uid COMMAND oosh -c "user() -> uid")
+    add_test(NAME oosh_ns_user_gid COMMAND oosh -c "user() -> gid")
+    set_tests_properties(oosh_ns_user_uid oosh_ns_user_gid
+      PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+" WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+  endif()
+
   # E8-S1-T1: lexer unit tests
   add_test(NAME oosh_unit_lexer COMMAND oosh_unit_lexer)
   set_tests_properties(oosh_unit_lexer PROPERTIES
