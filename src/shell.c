@@ -969,6 +969,18 @@ static int extension_target_matches_value(const OoshObjectExtension *extension, 
       return receiver->kind == extension->value_kind;
     case OOSH_EXTENSION_TARGET_OBJECT_KIND:
       return receiver->kind == OOSH_VALUE_OBJECT && receiver->object.kind == extension->object_kind;
+    case OOSH_EXTENSION_TARGET_TYPED_MAP: {
+      /* E6-S2-T1: match typed-map values whose __type__ tag equals the target name. */
+      const OoshValueItem *type_entry;
+      if (receiver->kind != OOSH_VALUE_MAP) {
+        return 0;
+      }
+      type_entry = oosh_value_map_get_item(receiver, "__type__");
+      if (type_entry == NULL || type_entry->kind != OOSH_VALUE_STRING) {
+        return 0;
+      }
+      return strcmp(type_entry->text, extension->target_name) == 0;
+    }
     default:
       return 0;
   }
@@ -1319,7 +1331,11 @@ static int parse_extension_target(
     return 0;
   }
 
-  return 1;
+  /* E6-S2-T1: any unrecognised target is treated as a custom typed-map type
+   * name.  The target string is already stored in extension->target_name by
+   * register_extension_common, so nothing extra is needed here. */
+  *out_kind = OOSH_EXTENSION_TARGET_TYPED_MAP;
+  return 0;
 }
 
 static OoshObjectExtension *find_extension_entry(OoshShell *shell, const char *target, OoshMemberKind member_kind, const char *name) {
@@ -1434,6 +1450,29 @@ int oosh_shell_register_native_method_extension(
     return 1;
   }
   return register_extension_common(shell, target, name, OOSH_MEMBER_METHOD, OOSH_EXTENSION_IMPL_NATIVE, NULL, NULL, fn, is_plugin_extension);
+}
+
+int oosh_shell_register_type_descriptor(OoshShell *shell, const char *type_name, const char *description) {
+  size_t i;
+
+  if (shell == NULL || type_name == NULL || type_name[0] == '\0') {
+    return 1;
+  }
+  /* Ignore duplicate registrations */
+  for (i = 0; i < shell->type_descriptor_count; ++i) {
+    if (strcmp(shell->type_descriptors[i].type_name, type_name) == 0) {
+      return 0;
+    }
+  }
+  if (shell->type_descriptor_count >= OOSH_MAX_TYPE_DESCRIPTORS) {
+    return 1;
+  }
+  copy_string(shell->type_descriptors[shell->type_descriptor_count].type_name,
+              OOSH_MAX_NAME, type_name);
+  copy_string(shell->type_descriptors[shell->type_descriptor_count].description,
+              OOSH_MAX_DESCRIPTION, description != NULL ? description : "");
+  shell->type_descriptor_count++;
+  return 0;
 }
 
 static int receiver_is_json_file_target(const OoshValue *receiver) {

@@ -87,6 +87,11 @@ endfunction()
 
 oosh_add_plugin(oosh_sample_plugin plugins/sample/sample_plugin.c)
 oosh_add_plugin(oosh_skeleton_plugin plugins/skeleton/skeleton_plugin.c)
+# E6-S2-T3: typed-map example plugin (links against libm for sqrt)
+oosh_add_plugin(oosh_point_plugin plugins/point/point_plugin.c)
+if(NOT WIN32)
+  target_link_libraries(oosh_point_plugin PRIVATE m)
+endif()
 
 include(CTest)
 
@@ -762,6 +767,31 @@ if(BUILD_TESTING)
       PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+" WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     )
   endif()
+
+  # E6-S2-T3: point plugin custom type tests
+  add_test(NAME oosh_point_type
+    COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_point_plugin> ; point(3, 4) -> type")
+  add_test(NAME oosh_point_x
+    COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_point_plugin> ; point(3, 4) -> x")
+  add_test(NAME oosh_point_y
+    COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_point_plugin> ; point(3, 4) -> y")
+  add_test(NAME oosh_point_distance
+    COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_point_plugin> ; point(3, 4) -> distance()")
+  add_test(NAME oosh_point_translate
+    COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_point_plugin> ; point(1, 2) -> translate(2, 3) -> type")
+  add_test(NAME oosh_point_stage
+    COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_point_plugin> ; text(\"6,8\") |> as_point")
+  set_tests_properties(
+    oosh_point_type oosh_point_x oosh_point_y oosh_point_distance
+    oosh_point_translate oosh_point_stage
+    PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  set_tests_properties(oosh_point_type      PROPERTIES PASS_REGULAR_EXPRESSION "Point")
+  set_tests_properties(oosh_point_x         PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(oosh_point_y         PROPERTIES PASS_REGULAR_EXPRESSION "4")
+  set_tests_properties(oosh_point_distance  PROPERTIES PASS_REGULAR_EXPRESSION "5")
+  set_tests_properties(oosh_point_translate PROPERTIES PASS_REGULAR_EXPRESSION "Point")
+  set_tests_properties(oosh_point_stage     PROPERTIES PASS_REGULAR_EXPRESSION "Point")
 
   # E8-S1-T1: lexer unit tests
   add_test(NAME oosh_unit_lexer COMMAND oosh_unit_lexer)

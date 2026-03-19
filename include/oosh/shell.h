@@ -14,6 +14,7 @@ extern "C" {
 #endif
 
 #define OOSH_MAX_COMMANDS 64
+#define OOSH_MAX_TYPE_DESCRIPTORS 16
 #define OOSH_MAX_PLUGINS 16
 #define OOSH_MAX_DESCRIPTION 160
 #define OOSH_MAX_SHELL_VARS 64
@@ -170,7 +171,10 @@ typedef struct {
 typedef enum {
   OOSH_EXTENSION_TARGET_ANY = 0,
   OOSH_EXTENSION_TARGET_VALUE_KIND,
-  OOSH_EXTENSION_TARGET_OBJECT_KIND
+  OOSH_EXTENSION_TARGET_OBJECT_KIND,
+  /* E6-S2-T1: custom type backed by a typed MAP.  The target_name field on
+   * OoshObjectExtension holds the expected __type__ tag value. */
+  OOSH_EXTENSION_TARGET_TYPED_MAP
 } OoshExtensionTargetKind;
 
 typedef enum {
@@ -192,6 +196,12 @@ typedef struct {
   int is_plugin_extension;
   int owner_plugin_index;
 } OoshObjectExtension;
+
+/* E6-S2-T1: metadata record for a plugin-defined custom type. */
+typedef struct {
+  char type_name[OOSH_MAX_NAME];
+  char description[OOSH_MAX_DESCRIPTION];
+} OoshTypeDescriptor;
 
 typedef struct OoshShell {
   int running;
@@ -243,6 +253,8 @@ typedef struct OoshShell {
   long long last_bg_pid;
   long long shell_pid;
   int force_capture; /* 1 inside capture()/capture_lines()/bridge — always capture stdout */
+  OoshTypeDescriptor type_descriptors[OOSH_MAX_TYPE_DESCRIPTORS];
+  size_t type_descriptor_count;
 } OoshShell;
 
 int oosh_shell_init(OoshShell *shell);
@@ -285,6 +297,8 @@ int oosh_shell_register_block_property_extension(OoshShell *shell, const char *t
 int oosh_shell_register_block_method_extension(OoshShell *shell, const char *target, const char *name, const OoshBlock *block);
 int oosh_shell_register_native_property_extension(OoshShell *shell, const char *target, const char *name, OoshExtensionPropertyFn fn, int is_plugin_extension);
 int oosh_shell_register_native_method_extension(OoshShell *shell, const char *target, const char *name, OoshExtensionMethodFn fn, int is_plugin_extension);
+/* E6-S2-T1: register a custom named type so the shell can list and describe it. */
+int oosh_shell_register_type_descriptor(OoshShell *shell, const char *type_name, const char *description);
 const char *oosh_shell_get_alias(const OoshShell *shell, const char *name);
 int oosh_shell_set_alias(OoshShell *shell, const char *name, const char *value);
 int oosh_shell_unset_alias(OoshShell *shell, const char *name);

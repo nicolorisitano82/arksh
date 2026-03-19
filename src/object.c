@@ -876,6 +876,23 @@ void oosh_value_set_map(OoshValue *value) {
   value->kind = OOSH_VALUE_MAP;
 }
 
+void oosh_value_set_typed_map(OoshValue *value, const char *type_name) {
+  OoshValue tag;
+
+  if (value == NULL || type_name == NULL) {
+    return;
+  }
+
+  oosh_value_init(value);
+  value->kind = OOSH_VALUE_MAP;
+
+  /* Store the type tag as a string entry; ignore allocation failures here
+   * since the caller checks properties independently. */
+  oosh_value_set_string(&tag, type_name);
+  oosh_value_map_set(value, "__type__", &tag);
+  oosh_value_free(&tag);
+}
+
 int oosh_value_set_from_item(OoshValue *value, const OoshValueItem *item) {
   if (value == NULL || item == NULL) {
     return 1;
@@ -1159,6 +1176,15 @@ int oosh_value_get_property_value(const OoshValue *value, const char *property, 
       }
       oosh_value_set_string(out_value, rendered);
       return 0;
+    }
+    /* E6-S2-T1: typed maps carry a __type__ tag that overrides the generic
+     * "map" kind name, allowing plugins to expose custom named types. */
+    if (value->kind == OOSH_VALUE_MAP) {
+      const OoshValueItem *type_entry = oosh_value_map_get_item(value, "__type__");
+      if (type_entry != NULL && type_entry->kind == OOSH_VALUE_STRING) {
+        oosh_value_set_string(out_value, type_entry->text);
+        return 0;
+      }
     }
     oosh_value_set_string(out_value, oosh_value_kind_name(value->kind));
     return 0;

@@ -2019,6 +2019,13 @@ static int extension_target_matches(const OoshObjectExtension *extension, const 
       return receiver->kind == extension->value_kind;
     case OOSH_EXTENSION_TARGET_OBJECT_KIND:
       return receiver->kind == OOSH_VALUE_OBJECT && receiver->object.kind == extension->object_kind;
+    case OOSH_EXTENSION_TARGET_TYPED_MAP: {
+      const OoshValueItem *type_entry;
+      if (receiver->kind != OOSH_VALUE_MAP) return 0;
+      type_entry = oosh_value_map_get_item(receiver, "__type__");
+      if (type_entry == NULL || type_entry->kind != OOSH_VALUE_STRING) return 0;
+      return strcmp(type_entry->text, extension->target_name) == 0;
+    }
     default:
       return 0;
   }

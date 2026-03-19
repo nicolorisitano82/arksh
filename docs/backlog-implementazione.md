@@ -358,11 +358,11 @@ Stato story: `[x]`
 
 ### E6-S2. Plugin che introducono nuovi tipi completi
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E6-S2-T1` estendere ABI plugin con descrizione di nuovi tipi/value kind
-- `[ ]` `E6-S2-T2` chiarire ownership memoria per valori creati dai plugin
-- `[ ]` `E6-S2-T3` aggiungere plugin di esempio con tipo custom completo
+- `[x]` `E6-S2-T1` estendere ABI plugin con descrizione di nuovi tipi/value kind
+- `[x]` `E6-S2-T2` chiarire ownership memoria per valori creati dai plugin
+- `[x]` `E6-S2-T3` aggiungere plugin di esempio con tipo custom completo
 
 ### E6-S3. Pipeline object-aware piu espressive
 
@@ -617,8 +617,8 @@ Stato story: `[ ]`
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`
-**In corso:** —
-**Aperte:** E6 (object model), E7 (JSON), E8 (qualità), E9 (release)
+**In corso:** E6 (S1 `[x]`, S2 `[x]`, S3–S6 aperte), E8 (S1-T1/T2 `[x]`, S3-T1 `[x]`)
+**Aperte:** E6 (S3–S6), E7 (JSON), E8 (resto), E9 (release)
 
 ---
 
@@ -627,10 +627,13 @@ Stato story: `[ ]`
 Nessun blocco aperto nelle epoche precedenti: è il momento giusto per consolidare
 il test bed prima di affrontare l'object model avanzato.
 
-1. `E8-S1-T1` (test unitari mirati su parser e expander)
-2. `E8-S1-T2` (test unitari su executor e object model)
-3. `E8-S3-T1` (AddressSanitizer / UBSan in CI)
-4. `E8-S4-T1` (CI multipiattaforma — macOS + Linux + Windows)
+1. ~~`E8-S1-T1` (test unitari mirati su parser e expander)~~ `[x]`
+2. ~~`E8-S1-T2` (test unitari su executor e object model)~~ `[x]`
+3. ~~`E8-S3-T1` (AddressSanitizer / UBSan in CI)~~ `[x]`
+4. `E8-S1-T3` (test unitari per executor)
+5. `E8-S1-T4` (test unitari per object model)
+6. `E8-S3-T2` (integrare ASan/UBSan in CI)
+7. `E8-S4-T1` (CI multipiattaforma — macOS + Linux + Windows)
 
 ### Percorso B — pipeline object più ricca (quick wins su E6-S3)
 

@@ -165,7 +165,8 @@ OOSH_PLUGIN_EXPORT int oosh_plugin_init(OoshShell *shell, const OoshPluginHost *
       host->register_property_extension == NULL ||
       host->register_method_extension == NULL ||
       host->register_value_resolver == NULL ||
-      host->register_pipeline_stage == NULL) {
+      host->register_pipeline_stage == NULL ||
+      host->register_type_descriptor == NULL) {
     return 1;
   }
 

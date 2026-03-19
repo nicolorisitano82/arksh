@@ -116,6 +116,11 @@ void oosh_value_set_block(OoshValue *value, const OoshBlock *block);
 void oosh_value_set_class(OoshValue *value, const char *class_name);
 void oosh_value_set_instance(OoshValue *value, const char *class_name, int instance_id);
 void oosh_value_set_map(OoshValue *value);
+/* E6-S2-T1: create a MAP value tagged with a custom type name.
+ * The type name is stored as the "__type__" entry in the map and is returned
+ * by "-> type".  Extensions registered with this type name as target will
+ * match receivers created with this function. */
+void oosh_value_set_typed_map(OoshValue *value, const char *type_name);
 int oosh_value_set_from_item(OoshValue *value, const OoshValueItem *item);
 int oosh_value_item_set_from_value(OoshValueItem *item, const OoshValue *value);
 int oosh_value_list_append_item(OoshValue *value, const OoshValueItem *item);

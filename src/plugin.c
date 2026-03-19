@@ -25,6 +25,10 @@ static int host_register_pipeline_stage(OoshShell *shell, const char *name, Oosh
   return oosh_shell_register_pipeline_stage(shell, name, fn, 1);
 }
 
+static int host_register_type_descriptor(OoshShell *shell, const char *type_name, const char *description) {
+  return oosh_shell_register_type_descriptor(shell, type_name, description);
+}
+
 static void copy_string(char *dest, size_t dest_size, const char *src) {
   if (dest_size == 0) {
     return;
@@ -89,6 +93,7 @@ int oosh_shell_load_plugin(OoshShell *shell, const char *path, char *out, size_t
   host.register_method_extension = host_register_method_extension;
   host.register_value_resolver = host_register_value_resolver;
   host.register_pipeline_stage = host_register_pipeline_stage;
+  host.register_type_descriptor = host_register_type_descriptor;
 
   memset(&shell->plugins[shell->plugin_count], 0, sizeof(shell->plugins[shell->plugin_count]));
   copy_string(shell->plugins[shell->plugin_count].path, sizeof(shell->plugins[shell->plugin_count].path), resolved);
