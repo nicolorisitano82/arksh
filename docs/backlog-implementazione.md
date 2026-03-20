@@ -546,6 +546,20 @@ let d4 = Dict() -> from_json(j)       # importa da stringa JSON
 
 ---
 
+### E6-S7. Stage di encoding: base64
+
+Stato story: `[ ]`
+
+Due stage simmetrici per codifica e decodifica Base64 RFC 4648, integrati nella pipeline
+oggetti (`|>`). L'implementazione è in C puro senza dipendenze esterne: un encoder
+standard e un decoder con gestione degli errori.
+
+- `[ ]` `E6-S7-T1` **`base64_encode` stage** — implementare in `shell.c` lo stage `base64_encode`: riceve un valore stringa (o qualsiasi valore renderizzato come stringa), produce la stringa Base64 corrispondente secondo RFC 4648 §4 (alfabeto `A-Za-z0-9+/`, padding con `=`); la funzione C di encoding è pura e non richiede dipendenze esterne; registrare lo stage con `arksh_shell_register_pipeline_stage` con descrizione `"encode a string to Base64 (RFC 4648)"`; lo stage opera su `ARKSH_VALUE_STRING` e restituisce `ARKSH_VALUE_STRING`
+- `[ ]` `E6-S7-T2` **`base64_decode` stage** — implementare lo stage `base64_decode`: riceve una stringa Base64 valida, produce la stringa decodificata; gestire correttamente il padding (`=`, `==`) e il caso di input vuoto; in caso di carattere non valido nell'alfabeto Base64 ritornare un errore esplicito (`"base64_decode: invalid character at position N"`); registrare con descrizione `"decode a Base64-encoded string (RFC 4648)"`
+- `[ ]` `E6-S7-T3` **Test** — `text("hello") |> base64_encode` → `"aGVsbG8="` ; `text("aGVsbG8=") |> base64_decode` → `"hello"`; round-trip `text("arksh") |> base64_encode |> base64_decode` → `"arksh"`; input vuoto encode → `""`; input vuoto decode → `""`; input non valido decode → errore; verifica che lo stage sia visibile in `help stages`
+
+---
+
 ## E7. JSON e dati strutturati a livello prodotto
 
 Stato epoca: `[ ]`
@@ -666,35 +680,25 @@ Stato story: `[ ]`
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`
-**In corso:** E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S3 `[x]`, S4–S6 aperte), E8 (S1-T1/T2 `[x]`, S3-T1 `[x]`)
-**Aperte:** E5-S6 (tab-advance), E6 (S4–S6), E7 (JSON), E8 (resto), E9 (release)
+**In corso:** E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S4 `[x]`, S5–S7 aperte), E8 (S1-T1/T2 `[x]`, S3-T1 `[x]`)
+**Aperte:** E5-S6 (tab-advance), E6 (S5–S7), E7 (JSON), E8 (resto), E9 (release)
 
 ---
-
-### Percorso H — sintassi POSIX di base (E1-S7, completata)
-
-Tutti i task di E1-S7 sono stati implementati. Rimane aperto T3 (`$((...))` come
-espansione di argomento shell) che richiede modifiche a `expand.c`.
 
 ### Percorso A — qualità e CI (E8, raccomandato — sblocca E9)
 
 Nessun blocco aperto nelle epoche precedenti: è il momento giusto per consolidare
 il test bed prima di affrontare l'object model avanzato.
 
-1. ~~`E8-S1-T1` (test unitari mirati su parser e expander)~~ `[x]`
-2. ~~`E8-S1-T2` (test unitari su executor e object model)~~ `[x]`
-3. ~~`E8-S3-T1` (AddressSanitizer / UBSan in CI)~~ `[x]`
-4. `E8-S1-T3` (test unitari per executor)
-5. `E8-S1-T4` (test unitari per object model)
-6. `E8-S3-T2` (integrare ASan/UBSan in CI)
-7. `E8-S4-T1` (CI multipiattaforma — macOS + Linux + Windows)
+1. ~~`E8-S1-T1`~~ `[x]`  ~~`E8-S1-T2`~~ `[x]`  ~~`E8-S3-T1`~~ `[x]`
+2. `E8-S1-T3` (test unitari per executor)
+3. `E8-S1-T4` (test unitari per object model)
+4. `E8-S3-T2` (integrare ASan/UBSan in CI)
+5. `E8-S4-T1` (CI multipiattaforma — macOS + Linux + Windows)
 
-### Percorso B — compatibilità POSIX (E1-S6)
+### Percorso B — compatibilità POSIX (E1-S6, E1-S7)
 
 ~~Completato.~~
-
-- ~~`E1-S6-T1`~~ `[x]`  ~~`E1-S6-T2`~~ `[x]`  ~~`E1-S6-T3`~~ `[x]`  ~~`E1-S6-T4`~~ `[x]`
-- ~~`E1-S6-T5`~~ `[x]`  ~~`E1-S6-T6`~~ `[x]`  ~~`E1-S6-T7`~~ `[x]`  ~~`E1-S6-T8`~~ `[x]`
 
 ### Percorso C — tab completion avanzata (E5-S6)
 
@@ -710,8 +714,6 @@ Alta visibilità nella sessione interattiva quotidiana.
 ### Percorso D — pipeline object più ricca (E6-S3)
 
 ~~Completato.~~
-
-- ~~`E6-S3-T1`~~ `[x]`  ~~`E6-S3-T2`~~ `[x]`  ~~`E6-S3-T3`~~ `[x]`  ~~`E6-S3-T4`~~ `[x]`  ~~`E6-S3-T5`~~ `[x]`
 
 ### Percorso E — tipi numerici espliciti (E6-S5)
 
@@ -743,6 +745,14 @@ Prerequisito naturale per script di automazione e integrazione con API esterne.
 3. `E7-S1-T3` (casi edge del serializer — pretty-print opzionale)
 4. `E7-S2-T1` (strutture annidate oltre `ARKSH_MAX_COLLECTION_ITEMS`)
 5. `E7-S3-T1` (stage `jq`-like o `select` per query su valori JSON)
+
+### Percorso I — stage di encoding (E6-S7)
+
+Basso costo, nessuna dipendenza esterna, utile per automazione e integrazione API.
+
+1. `E6-S7-T1` (stage `base64_encode`)
+2. `E6-S7-T2` (stage `base64_decode`)
+3. `E6-S7-T3` (test)
 
 ## Regola finale
 
