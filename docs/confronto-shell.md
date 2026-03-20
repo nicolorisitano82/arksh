@@ -90,10 +90,15 @@ La dimensione più importante per capire il posizionamento di arksh.
 | Scope locale per variabili             | Parziale (`local`) | Si (`local`) | Si | Si | Parziale | Si (per funzioni e block) |
 | Funzioni come valori                   | No     | No     | No     | Si      | No     | Parziale (block sono valori) |
 | Override di built-in con funzioni      | Si     | Si     | Si     | Si      | Si     | Si + `builtin` per escape |
-| `trap` / segnali                       | Si (completo) | Si | Parziale | Parziale | Si | Parziale (solo `EXIT`) |
+| `trap` / segnali                       | Si (completo) | Si | Parziale | Parziale | Si | Si (POSIX completo + `ERR`, `trap -p`) |
 | `eval`                                 | Si     | Si     | Si (limitato) | Si | Si | Si |
 | `exec`                                 | Si     | Si     | Si     | Parziale | Si | Si |
 | Heredoc (`<<`, `<<-`)                  | Si     | Si     | Si     | Si      | Si     | Si |
+| `set -e` / `-u` / `-x` / `-o`         | Si     | Si     | No     | No      | Si     | Si (`errexit`, `nounset`, `xtrace`, `pipefail`) |
+| `read` built-in                        | Si     | Si     | Si     | Si      | Si     | Si (`-r -p -t -n`, IFS splitting) |
+| `printf` built-in                      | Si     | Si     | Si     | Si      | Si     | Si (spec POSIX, padding, escape) |
+| `getopts` built-in                     | Si     | Si     | No     | No      | Si     | Si (POSIX, silent mode, `OPTIND`/`OPTARG`) |
+| `test` / `[` completi                  | Si     | Si     | Si     | Si      | Si     | Si (file, stringa, aritmetica, `-a -o !`) |
 | Operatore ternario                     | No     | No     | No     | `if` inline | No | Si (`? :`) |
 | Operatori aritmetici in-language       | `$((...))` | `$((...))` | `math` | Nativi | `$((...))` | `+`, `-`, `*`, `/` in value expr |
 | Classi / tipi custom                   | No     | No     | No     | No      | No     | Si |
@@ -106,12 +111,12 @@ La dimensione più importante per capire il posizionamento di arksh.
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
 | Background job (`&`)                   | Si     | Si     | Si     | Si      | Si     | Si     |
 | `jobs`, `fg`, `bg`                     | Si     | Si     | Si     | Si      | Parziale | Si |
-| Process group per pipeline foreground  | Si     | Si     | Si     | Si      | Si     | Si (E4-S1) |
+| Process group per pipeline foreground  | Si     | Si     | Si     | Si      | Si     | Si     |
 | `Ctrl-Z` → stop job foreground         | Si     | Si     | Si     | Si      | Si     | Si (POSIX) |
 | Aggiunta automatica del job stoppato   | Si     | Si     | Si     | Si      | Parziale | Si |
 | `tcsetpgrp` / cessione terminale       | Si     | Si     | Si     | Si      | Parziale | Si |
 | `wait`                                 | Si     | Si     | Si     | Si      | Si     | Si |
-| Subshell `$(...)` / `(...)`            | Si     | Si     | Si     | Si      | Si     | Parziale (`$(...)`) |
+| Subshell `$(...)` / `(...)`            | Si     | Si     | Si     | Si      | Si     | Si (`$(...)`, `$(< file)`) |
 
 ---
 
@@ -181,7 +186,7 @@ Nushell è la shell che si avvicina di più al posizionamento di arksh. Le diffe
 | Integrazione filesystem come oggetti| Parziale (LS come tabella)               | Completa (ogni path è un oggetto interrogabile)|
 | JSON                                | Si (nativo)                              | Si (nativo)                                    |
 | Ereditarietà / OOP                  | No                                       | Si (classi con ereditarietà multipla)          |
-| `group_by`, `sum`, `min`, `max`     | Si (built-in)                            | Si (built-in, E6-S3)                           |
+| `group_by`, `sum`, `min`, `max`     | Si (built-in)                            | Si (built-in)                                  |
 | Namespace di sistema                | Parziale (`$env`, `$nu`)                 | Si (`fs()`, `user()`, `sys()`, `time()`)       |
 | Sintassi pipeline oggetti           | `\|` (stessa della shell)                | `\|>` (distinta dalla shell `\|`)              |
 | Disponibilità su Windows            | Si (nativo)                              | Si (nativo, stesso codice C)                   |

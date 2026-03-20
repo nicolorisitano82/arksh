@@ -648,9 +648,9 @@ Stato story: `[ ]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E2 `[x]`, E3 `[x]`, E4 `[x]`
-**In corso:** E1 (S1–S5 `[x]`, S6 aperta), E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S3 `[x]`, S4–S6 aperte), E8 (S1-T1/T2 `[x]`, S3-T1 `[x]`)
-**Aperte:** E1-S6 (posix), E5-S6 (tab-advance), E6 (S4–S6), E7 (JSON), E8 (resto), E9 (release)
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`
+**In corso:** E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S3 `[x]`, S4–S6 aperte), E8 (S1-T1/T2 `[x]`, S3-T1 `[x]`)
+**Aperte:** E5-S6 (tab-advance), E6 (S4–S6), E7 (JSON), E8 (resto), E9 (release)
 
 ---
 
@@ -669,16 +669,10 @@ il test bed prima di affrontare l'object model avanzato.
 
 ### Percorso B — compatibilità POSIX (E1-S6)
 
-Impatto immediato su script reali. I task sono indipendenti tra loro.
+~~Completato.~~
 
-1. `E1-S6-T3` — `read` built-in (usato in quasi ogni script interattivo)
-2. `E1-S6-T2` — `set -e`/`-u`/`-x` (usato in header di ogni script robusto)
-3. `E1-S6-T1` — `trap` completo (segnali INT/TERM/ERR oltre EXIT)
-4. `E1-S6-T4` — `printf` built-in (alternativa portabile a `echo`)
-5. `E1-S6-T5` — `${var/pat/repl}` (sostituzione nei parametri)
-6. `E1-S6-T6` — `getopts` (parsing opzioni stile POSIX)
-7. `E1-S6-T7` — `test`/`[` completo (operatori su file e stringa)
-8. `E1-S6-T8` — `$()` subshell — casi edge e annidamento
+- ~~`E1-S6-T1`~~ `[x]`  ~~`E1-S6-T2`~~ `[x]`  ~~`E1-S6-T3`~~ `[x]`  ~~`E1-S6-T4`~~ `[x]`
+- ~~`E1-S6-T5`~~ `[x]`  ~~`E1-S6-T6`~~ `[x]`  ~~`E1-S6-T7`~~ `[x]`  ~~`E1-S6-T8`~~ `[x]`
 
 ### Percorso C — tab completion avanzata (E5-S6)
 
@@ -691,7 +685,7 @@ Alta visibilità nella sessione interattiva quotidiana.
 5. `E5-S6-T3` — completion opzioni `--flag`
 6. `E5-S6-T6` — fuzzy / substring matching
 
-### Percorso D — pipeline object più ricca (quick wins su E6-S3)
+### Percorso D — pipeline object più ricca (E6-S3)
 
 ~~Completato.~~
 
@@ -705,15 +699,28 @@ Impatto visibile nell'aritmetica e nei confronti tipizzati.
 2. `E6-S5-T2` (implementare resolver `Integer()`, `Float()`, `Double()`, `Imaginary()`)
 3. `E6-S5-T3` (proprietà e metodi di conversione)
 4. `E6-S5-T4` (regole di promozione in espressioni miste)
+5. `E6-S5-T5` (test)
 
-### Percorso F — JSON robusto (E7)
+### Percorso F — tipo Dict (E6-S6)
+
+Abilita strutture dati chiave-valore native; prerequisito naturale per E7 (JSON avanzato).
+
+1. `E6-S6-T1` (struttura interna `ARKSH_VALUE_DICT`)
+2. `E6-S6-T2` (resolver `Dict()`)
+3. `E6-S6-T3` (metodi di scrittura: `set`, `delete`)
+4. `E6-S6-T4` (proprietà e metodi di lettura: `get`, `has`, `keys`, `values`, `count`)
+5. `E6-S6-T5` (bridge JSON: `to_json` / `from_json`)
+6. `E6-S6-T6` (test)
+
+### Percorso G — JSON robusto (E7)
 
 Prerequisito naturale per script di automazione e integrazione con API esterne.
 
-1. `E7-S1-T1` (parser JSON completo — gestione escape, unicode, numeri float)
-2. `E7-S1-T2` (serializer con pretty-print opzionale)
-3. `E7-S2-T1` (strutture annidate oltre `ARKSH_MAX_COLLECTION_ITEMS`)
-4. `E7-S3-T1` (stage `jq`-like o `select` per query su valori JSON)
+1. `E7-S1-T1` (migliorare diagnostica parser con posizione/offset dell'errore)
+2. `E7-S1-T2` (casi edge del parser — escape, unicode, numeri float)
+3. `E7-S1-T3` (casi edge del serializer — pretty-print opzionale)
+4. `E7-S2-T1` (strutture annidate oltre `ARKSH_MAX_COLLECTION_ITEMS`)
+5. `E7-S3-T1` (stage `jq`-like o `select` per query su valori JSON)
 
 ## Regola finale
 
