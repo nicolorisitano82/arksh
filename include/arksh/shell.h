@@ -27,7 +27,7 @@ extern "C" {
 #define ARKSH_MAX_VALUE_BINDINGS 64
 #define ARKSH_MAX_EXTENSIONS 64
 #define ARKSH_MAX_VALUE_RESOLVERS 32
-#define ARKSH_MAX_PIPELINE_STAGE_HANDLERS 32
+#define ARKSH_MAX_PIPELINE_STAGE_HANDLERS 64
 #define ARKSH_MAX_FUNCTIONS 32
 #define ARKSH_MAX_POSITIONAL_PARAMS 64
 #define ARKSH_MAX_CLASSES 32
@@ -123,6 +123,7 @@ typedef struct {
 
 typedef struct {
   char name[ARKSH_MAX_NAME];
+  char description[ARKSH_MAX_DESCRIPTION];
   ArkshValueResolverFn fn;
   int is_plugin_resolver;
   int owner_plugin_index;
@@ -130,7 +131,8 @@ typedef struct {
 
 typedef struct {
   char name[ARKSH_MAX_NAME];
-  ArkshPipelineStageFn fn;
+  char description[ARKSH_MAX_DESCRIPTION];
+  ArkshPipelineStageFn fn; /* NULL for metadata-only (built-in) entries */
   int is_plugin_stage;
   int owner_plugin_index;
 } ArkshPipelineStageDef;
@@ -312,8 +314,8 @@ int arksh_shell_instantiate_class(
 );
 int arksh_shell_get_class_property_value(ArkshShell *shell, const ArkshValue *receiver, const char *property, ArkshValue *out_value, char *out, size_t out_size);
 int arksh_shell_call_class_method(ArkshShell *shell, const ArkshValue *receiver, const char *method, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size);
-int arksh_shell_register_value_resolver(ArkshShell *shell, const char *name, ArkshValueResolverFn fn, int is_plugin_resolver);
-int arksh_shell_register_pipeline_stage(ArkshShell *shell, const char *name, ArkshPipelineStageFn fn, int is_plugin_stage);
+int arksh_shell_register_value_resolver(ArkshShell *shell, const char *name, const char *description, ArkshValueResolverFn fn, int is_plugin_resolver);
+int arksh_shell_register_pipeline_stage(ArkshShell *shell, const char *name, const char *description, ArkshPipelineStageFn fn, int is_plugin_stage);
 const ArkshValueResolverDef *arksh_shell_find_value_resolver(const ArkshShell *shell, const char *name);
 const ArkshPipelineStageDef *arksh_shell_find_pipeline_stage(const ArkshShell *shell, const char *name);
 int arksh_shell_register_block_property_extension(ArkshShell *shell, const char *target, const char *name, const ArkshBlock *block);

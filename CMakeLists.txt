@@ -899,4 +899,26 @@ if(BUILD_TESTING)
     PASS_REGULAR_EXPRESSION "all tests passed"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+
+  # E6-S4: introspection and typed help
+  add_test(NAME arksh_help_stages
+    COMMAND arksh -c "help stages")
+  set_tests_properties(arksh_help_stages PROPERTIES
+    PASS_REGULAR_EXPRESSION "where.*filter"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+
+  add_test(NAME arksh_help_resolvers
+    COMMAND arksh -c "help resolvers")
+  set_tests_properties(arksh_help_resolvers PROPERTIES
+    PASS_REGULAR_EXPRESSION "env.*environment"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+
+  add_test(NAME arksh_help_named_lookup
+    COMMAND arksh -c "help where")
+  set_tests_properties(arksh_help_named_lookup PROPERTIES
+    PASS_REGULAR_EXPRESSION "\\[stage\\]"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
 endif()

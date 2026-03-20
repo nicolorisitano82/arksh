@@ -17,12 +17,12 @@ static int host_register_method_extension(ArkshShell *shell, const char *target,
   return arksh_shell_register_native_method_extension(shell, target, name, fn, 1);
 }
 
-static int host_register_value_resolver(ArkshShell *shell, const char *name, ArkshValueResolverFn fn) {
-  return arksh_shell_register_value_resolver(shell, name, fn, 1);
+static int host_register_value_resolver(ArkshShell *shell, const char *name, const char *description, ArkshValueResolverFn fn) {
+  return arksh_shell_register_value_resolver(shell, name, description, fn, 1);
 }
 
-static int host_register_pipeline_stage(ArkshShell *shell, const char *name, ArkshPipelineStageFn fn) {
-  return arksh_shell_register_pipeline_stage(shell, name, fn, 1);
+static int host_register_pipeline_stage(ArkshShell *shell, const char *name, const char *description, ArkshPipelineStageFn fn) {
+  return arksh_shell_register_pipeline_stage(shell, name, description, fn, 1);
 }
 
 static int host_register_type_descriptor(ArkshShell *shell, const char *type_name, const char *description) {

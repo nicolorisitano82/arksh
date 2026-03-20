@@ -177,10 +177,10 @@ ARKSH_PLUGIN_EXPORT int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHo
   if (host->register_command(shell, "hello-plugin", "sample plugin greeting command", hello_plugin_command) != 0) {
     return 1;
   }
-  if (host->register_value_resolver(shell, "sample", sample_value_resolver) != 0) {
+  if (host->register_value_resolver(shell, "sample", "sample typed-map value (name, version)", sample_value_resolver) != 0) {
     return 1;
   }
-  if (host->register_pipeline_stage(shell, "sample_wrap", sample_wrap_stage) != 0) {
+  if (host->register_pipeline_stage(shell, "sample_wrap", "wrap a text value in sample brackets", sample_wrap_stage) != 0) {
     return 1;
   }
   if (host->register_property_extension(shell, "directory", "sample_tag", sample_directory_tag) != 0) {

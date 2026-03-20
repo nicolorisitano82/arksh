@@ -200,7 +200,7 @@ ARKSH_PLUGIN_EXPORT int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHo
    * - accessibile come `skeleton_namespace()`
    * - utile per esporre uno stato typed dal plugin
    */
-  if (host->register_value_resolver(shell, "skeleton_namespace", skeleton_namespace_resolver) != 0) {
+  if (host->register_value_resolver(shell, "skeleton_namespace", "skeleton namespace (sostituire con una descrizione breve)", skeleton_namespace_resolver) != 0) {
     return 1;
   }
 
@@ -209,7 +209,7 @@ ARKSH_PLUGIN_EXPORT int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHo
    * - accessibile come `|> skeleton_stage(...)`
    * - utile per trasformare valori o collezioni dentro una pipeline
    */
-  if (host->register_pipeline_stage(shell, "skeleton_stage", skeleton_pipeline_stage) != 0) {
+  if (host->register_pipeline_stage(shell, "skeleton_stage", "skeleton stage (sostituire con una descrizione breve)", skeleton_pipeline_stage) != 0) {
     return 1;
   }
 

@@ -875,7 +875,7 @@ int arksh_shell_set_function(ArkshShell *shell, const ArkshFunctionCommandNode *
   return 0;
 }
 
-int arksh_shell_register_value_resolver(ArkshShell *shell, const char *name, ArkshValueResolverFn fn, int is_plugin_resolver) {
+int arksh_shell_register_value_resolver(ArkshShell *shell, const char *name, const char *description, ArkshValueResolverFn fn, int is_plugin_resolver) {
   size_t i;
 
   if (shell == NULL || name == NULL || name[0] == '\0' || fn == NULL || !is_valid_identifier(name)) {
@@ -884,6 +884,9 @@ int arksh_shell_register_value_resolver(ArkshShell *shell, const char *name, Ark
 
   for (i = 0; i < shell->value_resolver_count; ++i) {
     if (strcmp(shell->value_resolvers[i].name, name) == 0) {
+      if (description != NULL && description[0] != '\0') {
+        copy_string(shell->value_resolvers[i].description, sizeof(shell->value_resolvers[i].description), description);
+      }
       shell->value_resolvers[i].fn = fn;
       shell->value_resolvers[i].is_plugin_resolver = is_plugin_resolver;
       shell->value_resolvers[i].owner_plugin_index = is_plugin_resolver ? shell->loading_plugin_index : -1;
@@ -896,6 +899,7 @@ int arksh_shell_register_value_resolver(ArkshShell *shell, const char *name, Ark
   }
 
   copy_string(shell->value_resolvers[shell->value_resolver_count].name, sizeof(shell->value_resolvers[shell->value_resolver_count].name), name);
+  copy_string(shell->value_resolvers[shell->value_resolver_count].description, sizeof(shell->value_resolvers[shell->value_resolver_count].description), description != NULL ? description : "");
   shell->value_resolvers[shell->value_resolver_count].fn = fn;
   shell->value_resolvers[shell->value_resolver_count].is_plugin_resolver = is_plugin_resolver;
   shell->value_resolvers[shell->value_resolver_count].owner_plugin_index = is_plugin_resolver ? shell->loading_plugin_index : -1;
@@ -903,16 +907,22 @@ int arksh_shell_register_value_resolver(ArkshShell *shell, const char *name, Ark
   return 0;
 }
 
-int arksh_shell_register_pipeline_stage(ArkshShell *shell, const char *name, ArkshPipelineStageFn fn, int is_plugin_stage) {
+int arksh_shell_register_pipeline_stage(ArkshShell *shell, const char *name, const char *description, ArkshPipelineStageFn fn, int is_plugin_stage) {
   size_t i;
 
-  if (shell == NULL || name == NULL || name[0] == '\0' || fn == NULL || !is_valid_identifier(name)) {
+  /* fn may be NULL for metadata-only (built-in) entries. */
+  if (shell == NULL || name == NULL || name[0] == '\0' || !is_valid_identifier(name)) {
     return 1;
   }
 
   for (i = 0; i < shell->pipeline_stage_count; ++i) {
     if (strcmp(shell->pipeline_stages[i].name, name) == 0) {
-      shell->pipeline_stages[i].fn = fn;
+      if (description != NULL && description[0] != '\0') {
+        copy_string(shell->pipeline_stages[i].description, sizeof(shell->pipeline_stages[i].description), description);
+      }
+      if (fn != NULL) {
+        shell->pipeline_stages[i].fn = fn;
+      }
       shell->pipeline_stages[i].is_plugin_stage = is_plugin_stage;
       shell->pipeline_stages[i].owner_plugin_index = is_plugin_stage ? shell->loading_plugin_index : -1;
       return 0;
@@ -924,6 +934,7 @@ int arksh_shell_register_pipeline_stage(ArkshShell *shell, const char *name, Ark
   }
 
   copy_string(shell->pipeline_stages[shell->pipeline_stage_count].name, sizeof(shell->pipeline_stages[shell->pipeline_stage_count].name), name);
+  copy_string(shell->pipeline_stages[shell->pipeline_stage_count].description, sizeof(shell->pipeline_stages[shell->pipeline_stage_count].description), description != NULL ? description : "");
   shell->pipeline_stages[shell->pipeline_stage_count].fn = fn;
   shell->pipeline_stages[shell->pipeline_stage_count].is_plugin_stage = is_plugin_stage;
   shell->pipeline_stages[shell->pipeline_stage_count].owner_plugin_index = is_plugin_stage ? shell->loading_plugin_index : -1;
@@ -4043,32 +4054,82 @@ static int register_builtin_value_resolvers(ArkshShell *shell) {
     return 1;
   }
 
-  if (arksh_shell_register_value_resolver(shell, "map", resolver_map, 0) != 0) {
+  if (arksh_shell_register_value_resolver(shell, "map",   "typed map of key-value pairs", resolver_map, 0) != 0) {
     return 1;
   }
-  if (arksh_shell_register_value_resolver(shell, "env", resolver_env, 0) != 0) {
+  if (arksh_shell_register_value_resolver(shell, "env",   "environment variables namespace (HOME, PATH, …)", resolver_env, 0) != 0) {
     return 1;
   }
-  if (arksh_shell_register_value_resolver(shell, "proc", resolver_proc, 0) != 0) {
+  if (arksh_shell_register_value_resolver(shell, "proc",  "current process info (pid, args, …)", resolver_proc, 0) != 0) {
     return 1;
   }
-  if (arksh_shell_register_value_resolver(shell, "shell", resolver_shell_namespace, 0) != 0) {
+  if (arksh_shell_register_value_resolver(shell, "shell", "arksh runtime introspection (vars, functions, plugins, …)", resolver_shell_namespace, 0) != 0) {
     return 1;
   }
   /* E6-S1 namespaces */
-  if (arksh_shell_register_value_resolver(shell, "fs", resolver_fs, 0) != 0) {
+  if (arksh_shell_register_value_resolver(shell, "fs",   "filesystem namespace (cwd, home, temp, separator)", resolver_fs, 0) != 0) {
     return 1;
   }
-  if (arksh_shell_register_value_resolver(shell, "user", resolver_user, 0) != 0) {
+  if (arksh_shell_register_value_resolver(shell, "user", "current user info (name, home, uid, shell)", resolver_user, 0) != 0) {
     return 1;
   }
-  if (arksh_shell_register_value_resolver(shell, "sys", resolver_sys, 0) != 0) {
+  if (arksh_shell_register_value_resolver(shell, "sys",  "system info (os, host, arch, cpu_count)", resolver_sys, 0) != 0) {
     return 1;
   }
-  if (arksh_shell_register_value_resolver(shell, "time", resolver_time, 0) != 0) {
+  if (arksh_shell_register_value_resolver(shell, "time", "current time (epoch, year, month, day, hour, minute, second, iso)", resolver_time, 0) != 0) {
     return 1;
   }
 
+  return 0;
+}
+
+/* E6-S4-T1: register built-in pipeline stages as metadata entries so that
+   help, completion and type introspection can discover them.  fn is NULL
+   because dispatch is handled by the hardcoded strcmp chain in executor.c. */
+static int register_builtin_pipeline_stages(ArkshShell *shell) {
+  static const struct { const char *name; const char *desc; } stages[] = {
+    /* filtering / selection */
+    { "where",     "filter list by predicate (property name, value, or block)" },
+    { "filter",    "alias for where: filter list by predicate" },
+    { "grep",      "keep items or lines that match a pattern string" },
+    /* ordering */
+    { "sort",      "sort list by property and optional direction (asc|desc)" },
+    /* slicing */
+    { "take",      "take the first N items from a list" },
+    { "first",     "return the first item of a list" },
+    /* counting / aggregation */
+    { "count",     "count items in a list or lines in text" },
+    { "sum",       "sum numeric items (optional property selector)" },
+    { "min",       "minimum numeric item (optional property selector)" },
+    { "max",       "maximum numeric item (optional property selector)" },
+    { "reduce",    "fold list into a single value with an accumulator block" },
+    /* projection / transformation */
+    { "each",      "project each item to a property name or block result" },
+    { "map",       "transform each item with a block, return new list" },
+    { "flat_map",  "transform each item with a block and flatten one level" },
+    { "group_by",  "group items by property or block into a map" },
+    /* text operations */
+    { "lines",     "split text value into a list of lines" },
+    { "trim",      "remove leading and trailing whitespace from text" },
+    { "split",     "split text at a separator string" },
+    { "join",      "join list items into text with a separator" },
+    /* JSON */
+    { "to_json",   "serialize value to a JSON string" },
+    { "from_json", "parse a JSON string into a value" },
+    /* misc */
+    { "render",    "render any value to its text representation" },
+    { NULL, NULL }
+  };
+  size_t i;
+
+  if (shell == NULL) {
+    return 1;
+  }
+  for (i = 0; stages[i].name != NULL; ++i) {
+    if (arksh_shell_register_pipeline_stage(shell, stages[i].name, stages[i].desc, NULL, 0) != 0) {
+      return 1;
+    }
+  }
   return 0;
 }
 
@@ -5497,10 +5558,97 @@ static int resolve_command_path(const ArkshShell *shell, const char *name, char 
   return 1;
 }
 
+/* E6-S4-T2: structured help with topic filtering and per-name lookup. */
 static int command_help(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
-  (void) argc;
-  (void) argv;
-  arksh_shell_print_help(shell, out, out_size);
+  const char *topic = argc >= 2 ? argv[1] : NULL;
+  size_t i;
+  int found = 0;
+
+  if (topic == NULL) {
+    arksh_shell_print_help(shell, out, out_size);
+    return 0;
+  }
+
+  /* help commands */
+  if (strcmp(topic, "commands") == 0) {
+    snprintf(out, out_size, "Commands (%zu):\n", shell->command_count);
+    for (i = 0; i < shell->command_count; ++i) {
+      if (shell->commands[i].is_plugin_command && !plugin_index_is_active(shell, shell->commands[i].owner_plugin_index)) continue;
+      snprintf(out + strlen(out), out_size - strlen(out), "  %-14s %s%s\n",
+        shell->commands[i].name,
+        shell->commands[i].description,
+        shell->commands[i].is_plugin_command ? " [plugin]" : "");
+    }
+    return 0;
+  }
+
+  /* help resolvers */
+  if (strcmp(topic, "resolvers") == 0) {
+    snprintf(out, out_size, "Value Resolvers (%zu):\n", shell->value_resolver_count);
+    for (i = 0; i < shell->value_resolver_count; ++i) {
+      if (shell->value_resolvers[i].is_plugin_resolver && !plugin_index_is_active(shell, shell->value_resolvers[i].owner_plugin_index)) continue;
+      snprintf(out + strlen(out), out_size - strlen(out), "  %-14s %s%s\n",
+        shell->value_resolvers[i].name,
+        shell->value_resolvers[i].description,
+        shell->value_resolvers[i].is_plugin_resolver ? " [plugin]" : "");
+    }
+    return 0;
+  }
+
+  /* help stages */
+  if (strcmp(topic, "stages") == 0) {
+    snprintf(out, out_size, "Pipeline Stages (%zu):\n", shell->pipeline_stage_count);
+    for (i = 0; i < shell->pipeline_stage_count; ++i) {
+      if (shell->pipeline_stages[i].is_plugin_stage && !plugin_index_is_active(shell, shell->pipeline_stages[i].owner_plugin_index)) continue;
+      snprintf(out + strlen(out), out_size - strlen(out), "  %-14s %s%s\n",
+        shell->pipeline_stages[i].name,
+        shell->pipeline_stages[i].description,
+        shell->pipeline_stages[i].is_plugin_stage ? " [plugin]" : "");
+    }
+    return 0;
+  }
+
+  /* help types */
+  if (strcmp(topic, "types") == 0) {
+    snprintf(out, out_size, "Types (%zu):\n", shell->type_descriptor_count);
+    for (i = 0; i < shell->type_descriptor_count; ++i) {
+      snprintf(out + strlen(out), out_size - strlen(out), "  %-14s %s\n",
+        shell->type_descriptors[i].type_name,
+        shell->type_descriptors[i].description);
+    }
+    return 0;
+  }
+
+  /* help <name> — search across all categories */
+  for (i = 0; i < shell->command_count; ++i) {
+    if (strcmp(shell->commands[i].name, topic) == 0) {
+      snprintf(out + strlen(out), out_size - strlen(out), "%s  [command]\n  %s\n", shell->commands[i].name, shell->commands[i].description);
+      found = 1;
+    }
+  }
+  for (i = 0; i < shell->value_resolver_count; ++i) {
+    if (strcmp(shell->value_resolvers[i].name, topic) == 0) {
+      snprintf(out + strlen(out), out_size - strlen(out), "%s  [resolver]\n  %s\n", shell->value_resolvers[i].name, shell->value_resolvers[i].description);
+      found = 1;
+    }
+  }
+  for (i = 0; i < shell->pipeline_stage_count; ++i) {
+    if (strcmp(shell->pipeline_stages[i].name, topic) == 0) {
+      snprintf(out + strlen(out), out_size - strlen(out), "%s  [stage]\n  %s\n", shell->pipeline_stages[i].name, shell->pipeline_stages[i].description);
+      found = 1;
+    }
+  }
+  for (i = 0; i < shell->type_descriptor_count; ++i) {
+    if (strcmp(shell->type_descriptors[i].type_name, topic) == 0) {
+      snprintf(out + strlen(out), out_size - strlen(out), "%s  [type]\n  %s\n", shell->type_descriptors[i].type_name, shell->type_descriptors[i].description);
+      found = 1;
+    }
+  }
+
+  if (!found) {
+    snprintf(out, out_size, "no help entry for '%s'\nTopics: commands, resolvers, stages, types", topic);
+    return 1;
+  }
   return 0;
 }
 
@@ -7790,6 +7938,9 @@ int arksh_shell_init(ArkshShell *shell) {
   if (register_builtin_value_resolvers(shell) != 0) {
     return 1;
   }
+  if (register_builtin_pipeline_stages(shell) != 0) {
+    return 1;
+  }
   if (register_builtin_extensions(shell) != 0) {
     return 1;
   }
@@ -7890,21 +8041,54 @@ void arksh_shell_print_help(const ArkshShell *shell, char *out, size_t out_size)
   }
 
   out[0] = '\0';
-  snprintf(out + strlen(out), out_size - strlen(out), "Commands:\n");
 
+  /* ── Commands ─────────────────────────────────────────────────────────── */
+  snprintf(out + strlen(out), out_size - strlen(out), "Commands (%zu):\n", shell->command_count);
   for (i = 0; i < shell->command_count; ++i) {
     if (shell->commands[i].is_plugin_command && !plugin_index_is_active(shell, shell->commands[i].owner_plugin_index)) {
       continue;
     }
-    snprintf(
-      out + strlen(out),
-      out_size - strlen(out),
-      "  %-12s %s%s\n",
+    snprintf(out + strlen(out), out_size - strlen(out), "  %-14s %s%s\n",
       shell->commands[i].name,
       shell->commands[i].description,
-      shell->commands[i].is_plugin_command ? " [plugin]" : ""
-    );
+      shell->commands[i].is_plugin_command ? " [plugin]" : "");
   }
+
+  /* ── Value Resolvers ──────────────────────────────────────────────────── */
+  snprintf(out + strlen(out), out_size - strlen(out), "\nValue Resolvers (%zu):\n", shell->value_resolver_count);
+  for (i = 0; i < shell->value_resolver_count; ++i) {
+    if (shell->value_resolvers[i].is_plugin_resolver && !plugin_index_is_active(shell, shell->value_resolvers[i].owner_plugin_index)) {
+      continue;
+    }
+    snprintf(out + strlen(out), out_size - strlen(out), "  %-14s %s%s\n",
+      shell->value_resolvers[i].name,
+      shell->value_resolvers[i].description,
+      shell->value_resolvers[i].is_plugin_resolver ? " [plugin]" : "");
+  }
+
+  /* ── Pipeline Stages ──────────────────────────────────────────────────── */
+  snprintf(out + strlen(out), out_size - strlen(out), "\nPipeline Stages (%zu):\n", shell->pipeline_stage_count);
+  for (i = 0; i < shell->pipeline_stage_count; ++i) {
+    if (shell->pipeline_stages[i].is_plugin_stage && !plugin_index_is_active(shell, shell->pipeline_stages[i].owner_plugin_index)) {
+      continue;
+    }
+    snprintf(out + strlen(out), out_size - strlen(out), "  %-14s %s%s\n",
+      shell->pipeline_stages[i].name,
+      shell->pipeline_stages[i].description,
+      shell->pipeline_stages[i].is_plugin_stage ? " [plugin]" : "");
+  }
+
+  /* ── Types ────────────────────────────────────────────────────────────── */
+  if (shell->type_descriptor_count > 0) {
+    snprintf(out + strlen(out), out_size - strlen(out), "\nTypes (%zu):\n", shell->type_descriptor_count);
+    for (i = 0; i < shell->type_descriptor_count; ++i) {
+      snprintf(out + strlen(out), out_size - strlen(out), "  %-14s %s\n",
+        shell->type_descriptors[i].type_name,
+        shell->type_descriptors[i].description);
+    }
+  }
+
+  snprintf(out + strlen(out), out_size - strlen(out), "\nUse 'help commands|resolvers|stages|types' for a section, 'help <name>' for details.\n");
 
   snprintf(
     out + strlen(out),

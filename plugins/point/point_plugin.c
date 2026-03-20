@@ -270,7 +270,7 @@ ARKSH_PLUGIN_EXPORT int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHo
   }
 
   /* Resolver: point(x, y) */
-  if (host->register_value_resolver(shell, "point", point_resolver) != 0) {
+  if (host->register_value_resolver(shell, "point", "2D point value (x, y) with distance and translate", point_resolver) != 0) {
     return 1;
   }
 
@@ -287,7 +287,7 @@ ARKSH_PLUGIN_EXPORT int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHo
   }
 
   /* Pipeline stage */
-  if (host->register_pipeline_stage(shell, "as_point", point_stage_as_point) != 0) {
+  if (host->register_pipeline_stage(shell, "as_point", "convert a list(x, y) value to a Point", point_stage_as_point) != 0) {
     return 1;
   }
 

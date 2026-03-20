@@ -752,27 +752,13 @@ static int is_pipeline_stage_position(const char *buffer, size_t token_start) {
   return i >= 2 && buffer[i - 1] == '>' && buffer[i - 2] == '|';
 }
 
-/* Known built-in pipeline stages (must stay in sync with apply_pipeline_stage). */
-static const char *s_builtin_stages[] = {
-  "count", "each", "filter", "first", "flat_map", "from_json", "grep", "group_by",
-  "join", "lines", "map", "max", "min", "reduce", "render", "sort", "split",
-  "sum", "take", "to_json", "trim", "where",
-  NULL
-};
-
-/* T5: pipeline stage completion — activated after '|>'. */
+/* E6-S4-T1: pipeline stage completion — driven entirely by shell->pipeline_stages[],
+   which now includes both built-in (registered at init) and plugin stages. */
 static void collect_stage_matches(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches) {
-  const char **s;
   size_t i;
 
   if (shell == NULL || prefix == NULL || matches == NULL) {
     return;
-  }
-
-  for (s = s_builtin_stages; *s != NULL; ++s) {
-    if (starts_with(*s, prefix)) {
-      append_match_kind(matches, *s, ARKSH_CMATCH_STAGE);
-    }
   }
 
   for (i = 0; i < shell->pipeline_stage_count; ++i) {

@@ -51,15 +51,15 @@ typedef struct {
   int (*register_command)(ArkshShell *shell, const char *name, const char *description, ArkshCommandFn fn);
   int (*register_property_extension)(ArkshShell *shell, const char *target, const char *name, ArkshExtensionPropertyFn fn);
   int (*register_method_extension)(ArkshShell *shell, const char *target, const char *name, ArkshExtensionMethodFn fn);
-  int (*register_value_resolver)(ArkshShell *shell, const char *name, ArkshValueResolverFn fn);
-  int (*register_pipeline_stage)(ArkshShell *shell, const char *name, ArkshPipelineStageFn fn);
+  int (*register_value_resolver)(ArkshShell *shell, const char *name, const char *description, ArkshValueResolverFn fn);
+  int (*register_pipeline_stage)(ArkshShell *shell, const char *name, const char *description, ArkshPipelineStageFn fn);
   /* E6-S2-T1: describe a custom named type to the host.  After registration,
    * extensions targeting type_name match typed-map values whose __type__
    * entry equals type_name.  Call arksh_value_set_typed_map() to create them. */
   int (*register_type_descriptor)(ArkshShell *shell, const char *type_name, const char *description);
 } ArkshPluginHost;
 
-#define ARKSH_PLUGIN_API_VERSION 3
+#define ARKSH_PLUGIN_API_VERSION 4
 
 #ifdef _WIN32
 #define ARKSH_PLUGIN_EXPORT __declspec(dllexport)

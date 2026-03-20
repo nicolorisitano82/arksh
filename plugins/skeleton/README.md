@@ -42,6 +42,69 @@ cc -std=c11 -Wall -Wextra -pedantic -Iinclude -shared plugins/skeleton/skeleton_
 3. sostituisci gli stub con logica reale
 4. carica il plugin con `plugin load ...`
 
+## API per plugin author (v4)
+
+### Versione ABI
+
+`ARKSH_PLUGIN_API_VERSION 4`. Verificare sempre la versione prima di usare i puntatori a funzione:
+
+```c
+if (host->api_version < 4) { return 1; }
+```
+
+### Registrare un value resolver
+
+```c
+host->register_value_resolver(shell, "myns", "breve descrizione (max 160 car.)", my_resolver_fn);
+```
+
+La descrizione appare in `help resolvers` e in `help myns`. Limitarla a una frase.
+
+### Registrare uno stage di pipeline
+
+```c
+host->register_pipeline_stage(shell, "my_stage", "breve descrizione", my_stage_fn);
+```
+
+Firma del callback:
+
+```c
+int my_stage_fn(ArkshShell *shell, ArkshValue *value,
+                const char *raw_args, char *error, size_t error_size);
+```
+
+- `value` è il valore in ingresso; modificarlo in-place o liberarlo con `arksh_value_free` e riassegnare.
+- `raw_args` è la stringa grezza degli argomenti dello stage (es. `"3"` per `|> my_stage(3)`).
+- Restituire 0 per successo, 1 per errore (scrivere il messaggio in `error`).
+
+### Registrare un tipo custom
+
+```c
+host->register_type_descriptor(shell, "MyType", "breve descrizione del tipo");
+```
+
+Dopo la registrazione il tipo appare in `help types`. Per creare istanze di quel tipo:
+
+```c
+arksh_value_set_typed_map(value, "MyType");
+```
+
+Le extension di proprietà e metodi registrate con `target = "MyType"` saranno disponibili
+automaticamente su qualunque valore con `__type__ == "MyType"`.
+
+### Introspezione a runtime
+
+Un plugin può leggere i metadati registrati dagli altri plugin tramite i campi pubblici di `ArkshShell`:
+
+```c
+for (i = 0; i < shell->pipeline_stage_count; i++) {
+    printf("%s: %s\n", shell->pipeline_stages[i].name,
+                       shell->pipeline_stages[i].description);
+}
+```
+
+Stessa struttura per `shell->value_resolvers[]` e `shell->type_descriptors[]`.
+
 ## Membri registrati dallo skeleton
 
 - comando: `skeleton-info`

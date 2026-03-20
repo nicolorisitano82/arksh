@@ -425,11 +425,11 @@ Stato story: `[x]`
 
 ### E6-S4. Introspezione e aiuto typed
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E6-S4-T1` esporre metadati su resolver, stage e tipi
-- `[ ]` `E6-S4-T2` migliorare `help` e completion con introspezione typed
-- `[ ]` `E6-S4-T3` aggiungere documentazione per plugin author
+- `[x]` `E6-S4-T1` esporre metadati su resolver, stage e tipi — `description` aggiunto a `ArkshValueResolverDef` e `ArkshPipelineStageDef`; tutti i resolver e stage built-in registrati con descrizione; `register_builtin_pipeline_stages()` registra i 22 stage built-in al boot; `ARKSH_MAX_PIPELINE_STAGE_HANDLERS` alzato a 64; `ABI v4`
+- `[x]` `E6-S4-T2` migliorare `help` e completion con introspezione typed — `help commands|resolvers|stages|types` mostra la sezione corrispondente con descrizioni; `help <name>` ricerca in tutte le categorie e mostra categoria + descrizione; `arksh_shell_print_help` ristrutturato con sezioni dinamiche; completion stage ora guidata da `shell->pipeline_stages[]` (rimosso array statico hardcoded da `line_editor.c`)
+- `[x]` `E6-S4-T3` documentare per plugin author — `plugins/skeleton/README.md` aggiornato con guida completa: versione ABI, firma callback, descrizioni, `register_type_descriptor`, introspezione runtime; `sample_plugin.c` e `point_plugin.c` aggiornati con descrizioni
 
 ### E6-S5. Tipi numerici espliciti: Integer, Float, Double, Imaginary
 
