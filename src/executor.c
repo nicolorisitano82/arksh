@@ -3663,6 +3663,424 @@ static int apply_each_stage(OoshShell *shell, OoshValue *value, const OoshPipeli
   return 0;
 }
 
+/* ── E6-S3-T1: map ───────────────────────────────────────────────────────── */
+
+static int apply_map_stage(OoshShell *shell, OoshValue *value, const OoshPipelineStageNode *stage, char *out, size_t out_size) {
+  OoshBlock block;
+  OoshValue *result;
+  OoshValue *temp_values;
+  size_t i;
+
+  if (shell == NULL || value == NULL || stage == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (value->kind != OOSH_VALUE_LIST) {
+    snprintf(out, out_size, "map() expects a list");
+    return 1;
+  }
+
+  if (resolve_stage_block_argument(shell, stage->raw_args, &block, out, out_size) != 0) {
+    snprintf(out, out_size, "map() expects a block: map([:it | ...])");
+    return 1;
+  }
+
+  result = (OoshValue *) allocate_temp_buffer(1, sizeof(*result), "map() result", out, out_size);
+  if (result == NULL) {
+    return 1;
+  }
+
+  temp_values = (OoshValue *) allocate_temp_buffer(2, sizeof(*temp_values), "map() block values", out, out_size);
+  if (temp_values == NULL) {
+    free(result);
+    return 1;
+  }
+
+  oosh_value_init(result);
+  result->kind = OOSH_VALUE_LIST;
+
+  for (i = 0; i < value->list.count; ++i) {
+    OoshValueItem item;
+
+    if (oosh_value_set_from_item(&temp_values[0], &value->list.items[i]) != 0) {
+      free(temp_values);
+      oosh_value_free(result);
+      free(result);
+      snprintf(out, out_size, "unable to prepare map() block argument");
+      return 1;
+    }
+    if (evaluate_block(shell, &block, &temp_values[0], 1, &temp_values[1], out, out_size) != 0) {
+      oosh_value_free(&temp_values[0]);
+      free(temp_values);
+      oosh_value_free(result);
+      free(result);
+      return 1;
+    }
+    if (set_item_from_value(&temp_values[1], &item, out, out_size) != 0 ||
+        oosh_value_list_append_item(result, &item) != 0) {
+      oosh_value_item_free(&item);
+      oosh_value_free(&temp_values[0]);
+      oosh_value_free(&temp_values[1]);
+      free(temp_values);
+      oosh_value_free(result);
+      free(result);
+      snprintf(out, out_size, "map() output list is too large");
+      return 1;
+    }
+    oosh_value_item_free(&item);
+    oosh_value_free(&temp_values[0]);
+    oosh_value_free(&temp_values[1]);
+  }
+
+  oosh_value_free(value);
+  if (oosh_value_copy(value, result) != 0) {
+    oosh_value_free(result);
+    free(temp_values);
+    free(result);
+    snprintf(out, out_size, "unable to finalize map() result");
+    return 1;
+  }
+  oosh_value_free(result);
+  free(temp_values);
+  free(result);
+  return 0;
+}
+
+/* ── E6-S3-T3: flat_map ──────────────────────────────────────────────────── */
+
+static int apply_flat_map_stage(OoshShell *shell, OoshValue *value, const OoshPipelineStageNode *stage, char *out, size_t out_size) {
+  OoshBlock block;
+  OoshValue *result;
+  OoshValue *temp_values;
+  size_t i;
+  size_t j;
+
+  if (shell == NULL || value == NULL || stage == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (value->kind != OOSH_VALUE_LIST) {
+    snprintf(out, out_size, "flat_map() expects a list");
+    return 1;
+  }
+
+  if (resolve_stage_block_argument(shell, stage->raw_args, &block, out, out_size) != 0) {
+    snprintf(out, out_size, "flat_map() expects a block: flat_map([:it | ...])");
+    return 1;
+  }
+
+  result = (OoshValue *) allocate_temp_buffer(1, sizeof(*result), "flat_map() result", out, out_size);
+  if (result == NULL) {
+    return 1;
+  }
+
+  temp_values = (OoshValue *) allocate_temp_buffer(2, sizeof(*temp_values), "flat_map() block values", out, out_size);
+  if (temp_values == NULL) {
+    free(result);
+    return 1;
+  }
+
+  oosh_value_init(result);
+  result->kind = OOSH_VALUE_LIST;
+
+  for (i = 0; i < value->list.count; ++i) {
+    if (oosh_value_set_from_item(&temp_values[0], &value->list.items[i]) != 0) {
+      free(temp_values);
+      oosh_value_free(result);
+      free(result);
+      snprintf(out, out_size, "unable to prepare flat_map() block argument");
+      return 1;
+    }
+    if (evaluate_block(shell, &block, &temp_values[0], 1, &temp_values[1], out, out_size) != 0) {
+      oosh_value_free(&temp_values[0]);
+      free(temp_values);
+      oosh_value_free(result);
+      free(result);
+      return 1;
+    }
+
+    if (temp_values[1].kind == OOSH_VALUE_LIST) {
+      for (j = 0; j < temp_values[1].list.count; ++j) {
+        if (oosh_value_list_append_item(result, &temp_values[1].list.items[j]) != 0) {
+          oosh_value_free(&temp_values[0]);
+          oosh_value_free(&temp_values[1]);
+          free(temp_values);
+          oosh_value_free(result);
+          free(result);
+          snprintf(out, out_size, "flat_map() output list is too large");
+          return 1;
+        }
+      }
+    } else {
+      OoshValueItem item;
+
+      if (set_item_from_value(&temp_values[1], &item, out, out_size) != 0 ||
+          oosh_value_list_append_item(result, &item) != 0) {
+        oosh_value_item_free(&item);
+        oosh_value_free(&temp_values[0]);
+        oosh_value_free(&temp_values[1]);
+        free(temp_values);
+        oosh_value_free(result);
+        free(result);
+        snprintf(out, out_size, "flat_map() output list is too large");
+        return 1;
+      }
+      oosh_value_item_free(&item);
+    }
+
+    oosh_value_free(&temp_values[0]);
+    oosh_value_free(&temp_values[1]);
+  }
+
+  oosh_value_free(value);
+  if (oosh_value_copy(value, result) != 0) {
+    oosh_value_free(result);
+    free(temp_values);
+    free(result);
+    snprintf(out, out_size, "unable to finalize flat_map() result");
+    return 1;
+  }
+  oosh_value_free(result);
+  free(temp_values);
+  free(result);
+  return 0;
+}
+
+/* ── E6-S3-T4: group_by ──────────────────────────────────────────────────── */
+
+static int apply_group_by_stage(OoshShell *shell, OoshValue *value, const OoshPipelineStageNode *stage, char *out, size_t out_size) {
+  OoshBlock block;
+  int use_block = 0;
+  char property[OOSH_MAX_NAME];
+  OoshValue *result;
+  OoshValue *temp_vals;
+  size_t i;
+
+  if (shell == NULL || value == NULL || stage == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (value->kind != OOSH_VALUE_LIST) {
+    snprintf(out, out_size, "group_by() expects a list");
+    return 1;
+  }
+
+  if (resolve_stage_block_argument(shell, stage->raw_args, &block, out, out_size) == 0) {
+    use_block = 1;
+    out[0] = '\0';
+  } else {
+    out[0] = '\0';
+    if (sscanf(stage->raw_args, "%127s", property) != 1 || property[0] == '\0') {
+      snprintf(out, out_size, "group_by() expects a property name or block");
+      return 1;
+    }
+  }
+
+  result = (OoshValue *) allocate_temp_buffer(1, sizeof(*result), "group_by() result", out, out_size);
+  if (result == NULL) {
+    return 1;
+  }
+  oosh_value_set_map(result);
+
+  temp_vals = (OoshValue *) allocate_temp_buffer(3, sizeof(*temp_vals), "group_by() temp", out, out_size);
+  if (temp_vals == NULL) {
+    free(result);
+    return 1;
+  }
+
+  for (i = 0; i < value->list.count; ++i) {
+    char key[OOSH_MAX_TOKEN];
+    const OoshValueItem *existing;
+
+    if (use_block) {
+      if (oosh_value_set_from_item(&temp_vals[0], &value->list.items[i]) != 0) {
+        free(temp_vals);
+        oosh_value_free(result);
+        free(result);
+        snprintf(out, out_size, "unable to prepare group_by() block argument");
+        return 1;
+      }
+      if (evaluate_block(shell, &block, &temp_vals[0], 1, &temp_vals[1], out, out_size) != 0) {
+        oosh_value_free(&temp_vals[0]);
+        free(temp_vals);
+        oosh_value_free(result);
+        free(result);
+        return 1;
+      }
+      if (oosh_value_render(&temp_vals[1], key, sizeof(key)) != 0) {
+        oosh_value_free(&temp_vals[0]);
+        oosh_value_free(&temp_vals[1]);
+        free(temp_vals);
+        oosh_value_free(result);
+        free(result);
+        snprintf(out, out_size, "group_by(): unable to render block result as key");
+        return 1;
+      }
+      oosh_value_free(&temp_vals[0]);
+      oosh_value_free(&temp_vals[1]);
+    } else {
+      if (get_item_property_text(shell, &value->list.items[i], property, key, sizeof(key)) != 0) {
+        free(temp_vals);
+        oosh_value_free(result);
+        free(result);
+        snprintf(out, out_size, "group_by(): unknown property: %s", property);
+        return 1;
+      }
+    }
+
+    oosh_value_init(&temp_vals[2]);
+    existing = oosh_value_map_get_item(result, key);
+    if (existing != NULL) {
+      if (oosh_value_set_from_item(&temp_vals[2], existing) != 0) {
+        free(temp_vals);
+        oosh_value_free(result);
+        free(result);
+        snprintf(out, out_size, "group_by(): unable to read existing group");
+        return 1;
+      }
+    } else {
+      temp_vals[2].kind = OOSH_VALUE_LIST;
+    }
+
+    if (oosh_value_list_append_item(&temp_vals[2], &value->list.items[i]) != 0) {
+      oosh_value_free(&temp_vals[2]);
+      free(temp_vals);
+      oosh_value_free(result);
+      free(result);
+      snprintf(out, out_size, "group_by(): group list is too large");
+      return 1;
+    }
+    if (oosh_value_map_set(result, key, &temp_vals[2]) != 0) {
+      oosh_value_free(&temp_vals[2]);
+      free(temp_vals);
+      oosh_value_free(result);
+      free(result);
+      snprintf(out, out_size, "group_by(): too many groups");
+      return 1;
+    }
+    oosh_value_free(&temp_vals[2]);
+  }
+
+  free(temp_vals);
+  oosh_value_free(value);
+  if (oosh_value_copy(value, result) != 0) {
+    oosh_value_free(result);
+    free(result);
+    snprintf(out, out_size, "unable to finalize group_by() result");
+    return 1;
+  }
+  oosh_value_free(result);
+  free(result);
+  return 0;
+}
+
+/* ── E6-S3-T5: sum / min / max ───────────────────────────────────────────── */
+
+static int item_as_number(OoshShell *shell, const OoshValueItem *item, const char *property, double *out_number, char *out, size_t out_size) {
+  if (property != NULL && property[0] != '\0') {
+    char text[OOSH_MAX_TOKEN];
+
+    if (get_item_property_text(shell, item, property, text, sizeof(text)) != 0) {
+      snprintf(out, out_size, "sum/min/max: unknown property: %s", property);
+      return 1;
+    }
+    *out_number = atof(text);
+    return 0;
+  }
+
+  if (item->kind == OOSH_VALUE_NUMBER) {
+    *out_number = item->number;
+    return 0;
+  }
+  if (item->kind == OOSH_VALUE_STRING) {
+    *out_number = atof(item->text);
+    return 0;
+  }
+  snprintf(out, out_size, "sum/min/max: item is not a number");
+  return 1;
+}
+
+static int apply_sum_stage(OoshShell *shell, OoshValue *value, const OoshPipelineStageNode *stage, char *out, size_t out_size) {
+  double total = 0.0;
+  size_t i;
+
+  if (value->kind != OOSH_VALUE_LIST) {
+    snprintf(out, out_size, "sum() expects a list");
+    return 1;
+  }
+
+  for (i = 0; i < value->list.count; ++i) {
+    double n;
+
+    if (item_as_number(shell, &value->list.items[i], stage->raw_args, &n, out, out_size) != 0) {
+      return 1;
+    }
+    total += n;
+  }
+  oosh_value_set_number(value, total);
+  return 0;
+}
+
+static int apply_min_stage(OoshShell *shell, OoshValue *value, const OoshPipelineStageNode *stage, char *out, size_t out_size) {
+  double best;
+  size_t i;
+
+  if (value->kind != OOSH_VALUE_LIST) {
+    snprintf(out, out_size, "min() expects a list");
+    return 1;
+  }
+  if (value->list.count == 0) {
+    snprintf(out, out_size, "min() cannot be used on an empty list");
+    return 1;
+  }
+
+  if (item_as_number(shell, &value->list.items[0], stage->raw_args, &best, out, out_size) != 0) {
+    return 1;
+  }
+  for (i = 1; i < value->list.count; ++i) {
+    double n;
+
+    if (item_as_number(shell, &value->list.items[i], stage->raw_args, &n, out, out_size) != 0) {
+      return 1;
+    }
+    if (n < best) {
+      best = n;
+    }
+  }
+  oosh_value_set_number(value, best);
+  return 0;
+}
+
+static int apply_max_stage(OoshShell *shell, OoshValue *value, const OoshPipelineStageNode *stage, char *out, size_t out_size) {
+  double best;
+  size_t i;
+
+  if (value->kind != OOSH_VALUE_LIST) {
+    snprintf(out, out_size, "max() expects a list");
+    return 1;
+  }
+  if (value->list.count == 0) {
+    snprintf(out, out_size, "max() cannot be used on an empty list");
+    return 1;
+  }
+
+  if (item_as_number(shell, &value->list.items[0], stage->raw_args, &best, out, out_size) != 0) {
+    return 1;
+  }
+  for (i = 1; i < value->list.count; ++i) {
+    double n;
+
+    if (item_as_number(shell, &value->list.items[i], stage->raw_args, &n, out, out_size) != 0) {
+      return 1;
+    }
+    if (n > best) {
+      best = n;
+    }
+  }
+  oosh_value_set_number(value, best);
+  return 0;
+}
+
 static int apply_pipeline_stage(OoshShell *shell, OoshValue *value, const OoshPipelineStageNode *stage, char *out, size_t out_size) {
   const OoshPipelineStageDef *handler;
 
@@ -3724,6 +4142,35 @@ static int apply_pipeline_stage(OoshShell *shell, OoshValue *value, const OoshPi
 
   if (strcmp(stage->name, "render") == 0) {
     return render_value_in_place(value, out, out_size);
+  }
+
+  /* E6-S3 stages */
+  if (strcmp(stage->name, "map") == 0) {
+    return apply_map_stage(shell, value, stage, out, out_size);
+  }
+
+  if (strcmp(stage->name, "filter") == 0) {
+    return apply_where_stage(shell, value, stage, out, out_size);
+  }
+
+  if (strcmp(stage->name, "flat_map") == 0) {
+    return apply_flat_map_stage(shell, value, stage, out, out_size);
+  }
+
+  if (strcmp(stage->name, "group_by") == 0) {
+    return apply_group_by_stage(shell, value, stage, out, out_size);
+  }
+
+  if (strcmp(stage->name, "sum") == 0) {
+    return apply_sum_stage(shell, value, stage, out, out_size);
+  }
+
+  if (strcmp(stage->name, "min") == 0) {
+    return apply_min_stage(shell, value, stage, out, out_size);
+  }
+
+  if (strcmp(stage->name, "max") == 0) {
+    return apply_max_stage(shell, value, stage, out, out_size);
   }
 
   handler = oosh_shell_find_pipeline_stage(shell, stage->name);

@@ -76,7 +76,7 @@ Il backlog sotto copre **il rimanente** verso una shell completa e usabile.
 
 ## E1. Linguaggio shell completo
 
-Stato epoca: `[x]`
+Stato epoca: `[ ]`
 
 ### E1-S1. Funzioni shell
 
@@ -128,6 +128,23 @@ Stato story: `[x]`
 - `[x]` `E1-S5-T3` implementare esecuzione heredoc nel platform layer
 - `[x]` `E1-S5-T4` aggiungere redirection su fd arbitrari: `3>`, `n>&m`, `n<&m`
 - `[x]` `E1-S5-T5` aggiungere test su pipe, heredoc e fd custom
+
+### E1-S6. Compatibilità POSIX — gap residui
+
+Stato story: `[ ]`
+
+Colma le lacune emerse dal confronto con le shell POSIX. Ogni task è indipendente e
+può essere implementato isolatamente. L'ordine suggerito riflette l'impatto pratico
+sugli script reali.
+
+- `[ ]` `E1-S6-T1` `(posix)` `trap` completo — estendere la tabella trap a tutti i segnali standard POSIX (`HUP INT QUIT ILL ABRT FPE SEGV PIPE ALRM TERM USR1 USR2 CHLD TSTP TTIN TTOU`); handler `ERR` (eseguito dopo ogni comando con exit code ≠ 0); `trap -p` per listare i trap attivi; `trap - SIG` per ripristinare il default
+- `[ ]` `E1-S6-T2` `(posix)` `set -e` / `-u` / `-x` / `-o` — implementare le opzioni di shell più usate negli script: `errexit` (esce al primo errore), `nounset` (errore su variabile non definita), `xtrace` (stampa ogni comando espanso con `+ `), `pipefail` (propaga il codice di uscita non-zero in pipeline); `set -o` per listare lo stato di tutte le opzioni; `set +e` per disabilitare
+- `[ ]` `E1-S6-T3` `(posix)` built-in `read` — `read [-r] [-p prompt] [-t timeout] [-n nchars] var...`: legge una riga da stdin, applica `IFS` splitting sui token, assegna i campi alle variabili; `-r` disabilita l'escape backslash; `-p` scrive il prompt senza newline; `-t` timeout con exit 1 se scade; `-n` legge al massimo N caratteri
+- `[ ]` `E1-S6-T4` `(posix)` built-in `printf` completo — `printf format [args...]` con format string POSIX: `%s %d %i %u %o %x %X %f %e %g %c %%`; escape `\n \t \r \\ \0NNN \xNN`; padding e precisione (`%-10s`, `%.2f`); comportamento coerente con `/usr/bin/printf`
+- `[ ]` `E1-S6-T5` `(posix)` `${var/pattern/replacement}` e `${var//pattern/replacement}` — parameter substitution: prima occorrenza vs tutte; `${var/#pat/repl}` e `${var/%pat/repl}` per ancorare al prefisso o suffisso; pattern segue glob POSIX; `//` con replacement vuoto = cancellazione
+- `[ ]` `E1-S6-T6` `(posix)` built-in `getopts` — `getopts optstring name [args]`: parsing opzioni stile POSIX; aggiorna `OPTIND` e `OPTARG`; termina su `--` o primo argomento non-opzione; gestisce opzioni con argomento obbligatorio (`:`) e silent error mode (optstring inizia con `:`); necessario per script portabili con `while getopts ...`
+- `[ ]` `E1-S6-T7` `(posix)` `test` / `[` — completare gli operatori mancanti: test su file (`-e -f -d -r -w -x -s -L -p -b -c -S -g -u -k`); confronto stringa (`-z -n = != < >`); aritmetica intera (`-eq -ne -lt -le -gt -ge`); operatori compositi (`-a -o !`); verifica che `[ "$var" = "val" ]` e `test -f "$path"` producano il codice di uscita corretto
+- `[ ]` `E1-S6-T8` `(posix)` `$( )` command substitution — completare i casi edge: sostituzione annidata `$(cmd $(inner))`; sostituzione in assegnazione e in argomento di funzione; preservazione del trailing newline nell'interprete (rimozione solo nell'espansione); `$(< file)` come alternativa efficiente a `$(cat file)`
 
 ---
 
@@ -285,7 +302,7 @@ Stato story: `[x]`
 
 ## E5. UX interattiva di livello quotidiano
 
-Stato epoca: `[x]`
+Stato epoca: `[ ]`
 
 ### E5-S1. Modello editor multilinea
 
@@ -341,6 +358,21 @@ Entrambe le funzionalità implementate nel core (in `line_editor.c`), attive sol
 - `[x]` `E5-S5-T2` **Autosuggestion** — `find_autosuggestion()`: cerca nella history (dal più recente) la prima entry che inizia con il buffer corrente; mostra il suffisso in grigio (`\033[90m`) dopo il cursore quando `cursor == length`; il cursore viene riposizionato correttamente contando anche i caratteri visibili del ghost text.
 - `[x]` `E5-S5-T3` **Decisione architetturale**: nel core — `redraw_line()` ora accetta `OoshShell *shell`; passa `NULL` nei contesti senza UX (search mode); entrambe le feature disabilitate automaticamente in modalità non-interattiva (pipe/script).
 
+### E5-S6. Tab completion di livello avanzato
+
+Stato story: `[ ]`
+
+Porta la completion al livello di zsh / fish: contestuale per tipo di argomento,
+filtrata per operatore di redirection, con double-TAB intelligente e fuzzy matching.
+Ogni task è indipendente; i task T1–T3 sono prerequisiti naturali per T4–T6.
+
+- `[ ]` `E5-S6-T1` `(tab-advance)` completion path-aware dopo redirection — dopo `>`, `>>`, `<`, `<&`, `>&` attivare `collect_file_matches` invece del match generico; dopo `2>` e `2>>` stesso comportamento; il contesto di redirection è già rilevabile dal token precedente nel buffer
+- `[ ]` `E5-S6-T2` `(tab-advance)` completion filtrata per tipo di argomento — dopo `cd ` proporre solo directory; dopo `source ` solo file `.oosh`/`.sh`; dopo `plugin load ` solo `.dylib`/`.so`/`.dll`; meccanismo: tabella statica `command → argument_filter_fn` in `line_editor.c`
+- `[ ]` `E5-S6-T3` `(tab-advance)` completion delle opzioni (`--flag`) — quando il token inizia con `-` in posizione argomento, cercare nel registry un descrittore di opzioni per il comando corrente; struttura `OoshCommandOptionSpec { char name[]; char description[]; }` aggiunta opzionalmente alla `OoshCommandDef`; i comandi built-in principali (`ls`, `cd`, `set`, `trap`, `read`, `printf`) espongono le proprie opzioni
+- `[ ]` `E5-S6-T4` `(tab-advance)` completion proprietà e metodi dopo `->` — quando il buffer contiene `expr ->` e `expr` è un binding il cui tipo è noto, proporre le proprietà/metodi registrati per quel tipo (da `shell->extensions` filtrando per `target_name`); fallback a lista generica se il tipo non è determinabile staticamente
+- `[ ]` `E5-S6-T5` `(tab-advance)` double-TAB per listare tutti i match — se si preme TAB su un prefisso vuoto (o se i match superano una soglia configurabile), mostrare la lista completa dei candidati invece di non fare nulla; comportamento coerente con bash/zsh: primo TAB completa il prefisso comune, secondo TAB lista tutti
+- `[ ]` `E5-S6-T6` `(tab-advance)` fuzzy / substring matching — se il matching esatto per prefisso non trova candidati, tentare un matching per sottostringa (`strstr`); opzionalmente un matching abbreviato (`gi` completa `git init`); configurabile via opzione shell `set completion_mode fuzzy|prefix`
+
 ---
 
 ## E6. Object model avanzato e plugin typed
@@ -366,13 +398,13 @@ Stato story: `[x]`
 
 ### E6-S3. Pipeline object-aware piu espressive
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E6-S3-T1` aggiungere `map`
-- `[ ]` `E6-S3-T2` aggiungere `filter` come alias o variante di `where`
-- `[ ]` `E6-S3-T3` aggiungere `flat_map`
-- `[ ]` `E6-S3-T4` aggiungere `group_by`
-- `[ ]` `E6-S3-T5` aggiungere operatori aggregati: `sum`, `min`, `max`
+- `[x]` `E6-S3-T1` aggiungere `map`
+- `[x]` `E6-S3-T2` aggiungere `filter` come alias o variante di `where`
+- `[x]` `E6-S3-T3` aggiungere `flat_map`
+- `[x]` `E6-S3-T4` aggiungere `group_by`
+- `[x]` `E6-S3-T5` aggiungere operatori aggregati: `sum`, `min`, `max`
 
 ### E6-S4. Introspezione e aiuto typed
 
@@ -616,9 +648,9 @@ Stato story: `[ ]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`
-**In corso:** E6 (S1 `[x]`, S2 `[x]`, S3–S6 aperte), E8 (S1-T1/T2 `[x]`, S3-T1 `[x]`)
-**Aperte:** E6 (S3–S6), E7 (JSON), E8 (resto), E9 (release)
+**Epoche completate:** E2 `[x]`, E3 `[x]`, E4 `[x]`
+**In corso:** E1 (S1–S5 `[x]`, S6 aperta), E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S3 `[x]`, S4–S6 aperte), E8 (S1-T1/T2 `[x]`, S3-T1 `[x]`)
+**Aperte:** E1-S6 (posix), E5-S6 (tab-advance), E6 (S4–S6), E7 (JSON), E8 (resto), E9 (release)
 
 ---
 
@@ -635,16 +667,37 @@ il test bed prima di affrontare l'object model avanzato.
 6. `E8-S3-T2` (integrare ASan/UBSan in CI)
 7. `E8-S4-T1` (CI multipiattaforma — macOS + Linux + Windows)
 
-### Percorso B — pipeline object più ricca (quick wins su E6-S3)
+### Percorso B — compatibilità POSIX (E1-S6)
 
-Alta visibilità utente, nessuna dipendenza da E7/E8.
+Impatto immediato su script reali. I task sono indipendenti tra loro.
 
-1. `E6-S3-T1` (aggiungere stage `map`)
-2. `E6-S3-T2` (aggiungere stage `filter` come alias di `where` con block)
-3. `E6-S3-T3` (aggiungere stage `flat_map`)
-4. `E6-S3-T5` (aggregati `sum`, `min`, `max`)
+1. `E1-S6-T3` — `read` built-in (usato in quasi ogni script interattivo)
+2. `E1-S6-T2` — `set -e`/`-u`/`-x` (usato in header di ogni script robusto)
+3. `E1-S6-T1` — `trap` completo (segnali INT/TERM/ERR oltre EXIT)
+4. `E1-S6-T4` — `printf` built-in (alternativa portabile a `echo`)
+5. `E1-S6-T5` — `${var/pat/repl}` (sostituzione nei parametri)
+6. `E1-S6-T6` — `getopts` (parsing opzioni stile POSIX)
+7. `E1-S6-T7` — `test`/`[` completo (operatori su file e stringa)
+8. `E1-S6-T8` — `$()` subshell — casi edge e annidamento
 
-### Percorso C — tipi numerici espliciti (E6-S5)
+### Percorso C — tab completion avanzata (E5-S6)
+
+Alta visibilità nella sessione interattiva quotidiana.
+
+1. `E5-S6-T1` — completion path-aware dopo redirection (`>`, `<`, `2>`)
+2. `E5-S6-T2` — completion filtrata per tipo (`cd` → directory, `source` → script)
+3. `E5-S6-T5` — double-TAB per listare tutti i match
+4. `E5-S6-T4` — completion proprietà/metodi dopo `->`
+5. `E5-S6-T3` — completion opzioni `--flag`
+6. `E5-S6-T6` — fuzzy / substring matching
+
+### Percorso D — pipeline object più ricca (quick wins su E6-S3)
+
+~~Completato.~~
+
+- ~~`E6-S3-T1`~~ `[x]`  ~~`E6-S3-T2`~~ `[x]`  ~~`E6-S3-T3`~~ `[x]`  ~~`E6-S3-T4`~~ `[x]`  ~~`E6-S3-T5`~~ `[x]`
+
+### Percorso E — tipi numerici espliciti (E6-S5)
 
 Impatto visibile nell'aritmetica e nei confronti tipizzati.
 
@@ -653,7 +706,7 @@ Impatto visibile nell'aritmetica e nei confronti tipizzati.
 3. `E6-S5-T3` (proprietà e metodi di conversione)
 4. `E6-S5-T4` (regole di promozione in espressioni miste)
 
-### Percorso D — JSON robusto (E7)
+### Percorso F — JSON robusto (E7)
 
 Prerequisito naturale per script di automazione e integrazione con API esterne.
 

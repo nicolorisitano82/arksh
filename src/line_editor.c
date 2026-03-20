@@ -754,8 +754,9 @@ static int is_pipeline_stage_position(const char *buffer, size_t token_start) {
 
 /* Known built-in pipeline stages (must stay in sync with apply_pipeline_stage). */
 static const char *s_builtin_stages[] = {
-  "count", "each", "filter", "first", "from_json", "grep", "join", "lines",
-  "reduce", "render", "sort", "split", "take", "to_json", "trim", "where",
+  "count", "each", "filter", "first", "flat_map", "from_json", "grep", "group_by",
+  "join", "lines", "map", "max", "min", "reduce", "render", "sort", "split",
+  "sum", "take", "to_json", "trim", "where",
   NULL
 };
 

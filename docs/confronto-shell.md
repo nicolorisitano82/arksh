@@ -28,15 +28,17 @@ La dimensione più importante per capire il posizionamento di oosh.
 | Tipo di dato nativo               | Stringa| Stringa| Stringa| Strutturato | Stringa | Object-aware |
 | Interi nativi                     | Si (aritmetica `$((...))`) | Si | No (solo stringhe) | Si | No | Parziale (`number`) |
 | Liste native                      | Array indicizzati | Array + hash | Liste | Liste tipizzate | No | `list(...)` object-aware |
-| Dizionari / mappe native          | Array associativi (bash 4+) | Hash | No | Record strutturati | No | `map(...)` (in corso: `Dict()`) |
+| Dizionari / mappe native          | Array associativi (bash 4+) | Hash | No | Record strutturati | No | `map(...)` typed-map (in corso: `Dict()`) |
 | Booleani come tipo                | No (0/1 o stringhe) | No | No | Si | No | Si (`true`, `false`, `bool(...)`) |
 | Oggetti filesystem come tipo      | No     | No     | No     | Si (LS restituisce tabella) | No | Si (file, directory, device, mount) |
+| Namespace di sistema built-in     | No     | No     | No     | Parziale | No | Si (`fs()`, `user()`, `sys()`, `time()`) |
 | Proprietà su oggetti (`-> size`)  | No     | No     | No     | Colonne nella tabella | No | Si, con sintassi `path -> property` |
 | Metodi su oggetti (`-> children()`)| No    | No     | No     | Comandi | No | Si, con sintassi `path -> method()` |
 | Block / closure come valori       | No     | No     | No     | Block (limitati) | No | Si, Smalltalk-style `[:x \| body]` |
 | JSON nativo                       | No (jq esterno) | No | No | Si | No | Si (`to_json`, `from_json`, `read_json`, `write_json`) |
 | Classi definibili dall'utente     | No     | No     | No     | No      | No     | Si (`class ... endclass`) |
 | Ereditarietà                      | No     | No     | No     | No      | No     | Si, multipla a precedenza sinistra |
+| Tipi custom da plugin             | No     | No     | No     | Parziale | No    | Si (typed-map con proprietà/metodi da plugin) |
 | Estensioni di tipo runtime        | No     | No     | No     | No      | No     | Si (`extend target property/method`) |
 
 ---
@@ -48,11 +50,12 @@ La dimensione più importante per capire il posizionamento di oosh.
 | Pipeline testuale (`\|`)               | Si     | Si     | Si     | Si      | Si     | Si     |
 | Pipeline di oggetti strutturati        | No     | No     | No     | Si (tabelle) | No | Si (`\|>`) |
 | Operatore pipeline oggetti             | —      | —      | —      | `\|`    | —      | `\|>`  |
-| Filtraggio (`where`)                   | No (grep esterno) | No | No | Si (`where`) | No | Si (`where(type == "file")` o block) |
+| Filtraggio (`where`, `filter`)         | No (grep esterno) | No | No | Si (`where`) | No | Si (`where`/`filter` con prop o block) |
 | Ordinamento (`sort`)                   | No (sort esterno) | No | No | Si (`sort-by`) | No | Si (`sort(size desc)`) |
-| Proiezione (`each`)                    | No     | No     | No     | Si      | No     | Si (`each(name)` o block) |
+| Proiezione (`each`, `map`, `flat_map`) | No     | No     | No     | Si      | No     | Si (`each(name)`, `map(block)`, `flat_map(block)`) |
+| Raggruppamento (`group_by`)            | No     | No     | No     | Si (`group-by`) | No | Si (`group_by(property)` o block) |
 | Slice (`take`, `first`)                | No (head) | No  | No     | Si (`first`, `take`) | No | Si |
-| Aggregazione (`count`, `reduce`)       | No (wc) | No   | No     | Si      | No     | Si |
+| Aggregazione (`count`, `reduce`, `sum`, `min`, `max`) | No (wc) | No | No | Si | No | Si |
 | Split/join testo                       | No (tr, cut) | No | No  | Si      | No     | Si (`split`, `join`, `trim`, `lines`) |
 | Bridge output esterno → pipeline oggetti| No   | No     | No     | Parziale| No     | Si (`cmd \|> stage`) |
 | Stage definibili da plugin             | No     | No     | No     | Si (custom commands) | No | Si |
@@ -118,9 +121,9 @@ La dimensione più importante per capire il posizionamento di oosh.
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
 | Plugin / moduli di terze parti         | No (solo script) | Si (zplug, zinit, ecc.) | Si (fisher, oh-my-fish) | Si (moduli) | No | Si (ABI C stabile) |
 | Aggiungere comandi da plugin           | Script | Script | Script | Script/plugin | No | Si (libreria dinamica) |
-| Aggiungere tipi / resolver da plugin   | No     | No     | No     | Parziale | No | Si |
+| Aggiungere tipi / resolver da plugin   | No     | No     | No     | Parziale | No | Si (typed-map con `register_type_descriptor`, API v3) |
 | Aggiungere stage pipeline da plugin    | No     | No     | No     | Parziale | No | Si |
-| Aggiungere proprietà/metodi oggetto    | No     | No     | No     | No      | No     | Si |
+| Aggiungere proprietà/metodi oggetto    | No     | No     | No     | No      | No     | Si (su tipi built-in e su tipi custom del plugin) |
 | Framework di configurazione community  | Oh My Bash | Oh My Zsh, Prezto | Oh My Fish | Parziale | No | No (early stage) |
 | Caricamento RC all'avvio               | `~/.bashrc` / `~/.bash_profile` | `~/.zshrc` | `~/.config/fish/config.fish` | `~/.config/nushell/config.nu` | `~/.profile` | `~/.ooshrc` / `OOSH_RC` |
 
@@ -178,5 +181,7 @@ Nushell è la shell che si avvicina di più al posizionamento di oosh. Le differ
 | Integrazione filesystem come oggetti| Parziale (LS come tabella)               | Completa (ogni path è un oggetto interrogabile)|
 | JSON                                | Si (nativo)                              | Si (nativo)                                    |
 | Ereditarietà / OOP                  | No                                       | Si (classi con ereditarietà multipla)          |
+| `group_by`, `sum`, `min`, `max`     | Si (built-in)                            | Si (built-in, E6-S3)                           |
+| Namespace di sistema                | Parziale (`$env`, `$nu`)                 | Si (`fs()`, `user()`, `sys()`, `time()`)       |
 | Sintassi pipeline oggetti           | `\|` (stessa della shell)                | `\|>` (distinta dalla shell `\|`)              |
 | Disponibilità su Windows            | Si (nativo)                              | Si (nativo, stesso codice C)                   |

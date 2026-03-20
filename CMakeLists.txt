@@ -793,6 +793,41 @@ if(BUILD_TESTING)
   set_tests_properties(oosh_point_translate PROPERTIES PASS_REGULAR_EXPRESSION "Point")
   set_tests_properties(oosh_point_stage     PROPERTIES PASS_REGULAR_EXPRESSION "Point")
 
+  # E6-S3: pipeline object-aware stages
+  add_test(NAME oosh_map_block
+    COMMAND oosh -c "list(1, 2, 3) |> map([:it | it]) |> count()")
+  add_test(NAME oosh_filter_alias
+    COMMAND oosh -c ". -> children() |> filter(type == \"file\") |> count()")
+  add_test(NAME oosh_flat_map_block
+    COMMAND oosh -c "list(1, 2) |> flat_map([:it | list(it, it)]) |> count()")
+  add_test(NAME oosh_group_by_property
+    COMMAND oosh -c ". -> children() |> group_by(type) |> count()")
+  add_test(NAME oosh_group_by_block
+    COMMAND oosh -c "list(\"a\", \"b\", \"a\") |> group_by([:it | it]) |> count()")
+  add_test(NAME oosh_sum_numbers
+    COMMAND oosh -c "list(1, 2, 3) |> sum()")
+  add_test(NAME oosh_min_numbers
+    COMMAND oosh -c "list(3, 1, 4, 1, 5) |> min()")
+  add_test(NAME oosh_max_numbers
+    COMMAND oosh -c "list(3, 1, 4, 1, 5) |> max()")
+  add_test(NAME oosh_sum_property
+    COMMAND oosh -c ". -> children() |> where(type == \"file\") |> sum(size)")
+  set_tests_properties(
+    oosh_map_block oosh_filter_alias oosh_flat_map_block
+    oosh_group_by_property oosh_group_by_block
+    oosh_sum_numbers oosh_min_numbers oosh_max_numbers oosh_sum_property
+    PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  set_tests_properties(oosh_map_block       PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(oosh_filter_alias    PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
+  set_tests_properties(oosh_flat_map_block  PROPERTIES PASS_REGULAR_EXPRESSION "4")
+  set_tests_properties(oosh_group_by_property PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
+  set_tests_properties(oosh_group_by_block  PROPERTIES PASS_REGULAR_EXPRESSION "2")
+  set_tests_properties(oosh_sum_numbers     PROPERTIES PASS_REGULAR_EXPRESSION "6")
+  set_tests_properties(oosh_min_numbers     PROPERTIES PASS_REGULAR_EXPRESSION "1")
+  set_tests_properties(oosh_max_numbers     PROPERTIES PASS_REGULAR_EXPRESSION "5")
+  set_tests_properties(oosh_sum_property    PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
+
   # E8-S1-T1: lexer unit tests
   add_test(NAME oosh_unit_lexer COMMAND oosh_unit_lexer)
   set_tests_properties(oosh_unit_lexer PROPERTIES
