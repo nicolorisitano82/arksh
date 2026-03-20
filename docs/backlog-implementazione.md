@@ -621,12 +621,12 @@ Stato story: `[x]`
 
 ### E8-S4. CI multipiattaforma
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E8-S4-T1` creare workflow CI Linux
-- `[ ]` `E8-S4-T2` creare workflow CI macOS
-- `[ ]` `E8-S4-T3` creare workflow CI Windows
-- `[ ]` `E8-S4-T4` pubblicare matrice minima di supporto
+- `[x]` `E8-S4-T1` creare workflow CI Linux
+- `[x]` `E8-S4-T2` creare workflow CI macOS
+- `[x]` `E8-S4-T3` creare workflow CI Windows
+- `[x]` `E8-S4-T4` pubblicare matrice minima di supporto
 
 ---
 
@@ -735,21 +735,20 @@ Stato story: `[ ]`
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`
-**In corso:** E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S4 `[x]`, S5–S7 aperte), E8 (S1 `[x]`, S3 `[x]`, S2/S4 aperte)
-**Aperte:** E5-S6 (tab-advance), E6 (S5–S7), E7 (JSON), E8 (resto), E9 (release), E10 (HTTP plugin)
+**In corso:** E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S4 `[x]`, S5–S7 aperte), E8 (S1 `[x]`, S3 `[x]`, S4 `[x]`, S2 aperta)
+**Aperte:** E5-S6 (tab-advance), E6 (S5–S7), E7 (JSON), E8-S2 (golden/PTY), E9 (release), E10 (HTTP plugin)
 
 ---
 
 ### Percorso A — qualità e CI (E8, raccomandato — sblocca E9)
 
-Nessun blocco aperto nelle epoche precedenti: è il momento giusto per consolidare
-il test bed prima di affrontare l'object model avanzato.
+~~Quasi completato.~~ Rimane solo E8-S2 (golden test e PTY test).
 
-1. ~~`E8-S1-T1`~~ `[x]`  ~~`E8-S1-T2`~~ `[x]`  ~~`E8-S3-T1`~~ `[x]`
-2. `E8-S1-T3` (test unitari per executor)
-3. `E8-S1-T4` (test unitari per object model)
-4. `E8-S3-T2` (integrare ASan/UBSan in CI)
-5. `E8-S4-T1` (CI multipiattaforma — macOS + Linux + Windows)
+~~`E8-S1`~~ `[x]`  ~~`E8-S3`~~ `[x]`  ~~`E8-S4`~~ `[x]`
+
+1. `E8-S2-T1` (golden test per script `.arksh`)
+2. `E8-S2-T2` (PTY test per REPL e line editor)
+3. `E8-S2-T3` (job control smoke test ripetibili)
 
 ### Percorso B — compatibilità POSIX (E1-S6, E1-S7)
 

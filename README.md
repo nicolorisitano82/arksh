@@ -45,6 +45,16 @@ README.md -> read_text(256)
 - Sistema plugin con ABI C stabile per aggiungere comandi, proprietà, metodi, resolver e stage
 - Documentazione architetturale e reference manual completo
 
+## Piattaforme supportate
+
+| Piattaforma | Compilatore | Build type | CI |
+|-------------|-------------|------------|----|
+| Linux (Ubuntu 22.04+) | gcc ≥ 11 | Debug + Release | Ubuntu Latest |
+| macOS (13 Ventura+) | clang ≥ 15 (Xcode) | Debug + Release | macOS Latest |
+| Windows (10/11) | MSVC ≥ 19.38 (VS 2022) | Release | Windows Latest |
+
+Requisiti minimi: CMake ≥ 3.20, compilatore C11.
+
 ## Build
 
 ```bash
