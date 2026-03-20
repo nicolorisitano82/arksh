@@ -752,6 +752,145 @@ static int is_pipeline_stage_position(const char *buffer, size_t token_start) {
   return i >= 2 && buffer[i - 1] == '>' && buffer[i - 2] == '|';
 }
 
+/* E5-S6-T1: path-aware completion after redirection operators.
+   Returns 1 when the token immediately before token_start (ignoring whitespace)
+   is a shell redirection operator ('>', '<', '>>' etc.). */
+static int is_redirection_position(const char *buffer, size_t token_start) {
+  size_t i = token_start;
+
+  while (i > 0 && isspace((unsigned char)buffer[i - 1])) {
+    i--;
+  }
+  if (i == 0) {
+    return 0;
+  }
+  return buffer[i - 1] == '>' || buffer[i - 1] == '<';
+}
+
+/* E5-S6-T2: per-argument filtering based on the current command.
+   NONE — default file completion
+   DIR  — directories only      (cd, pushd)
+   SCRIPT — .arksh/.sh files   (source, .)
+   PLUGIN — .dylib/.so/.dll    (plugin load ...) */
+typedef enum {
+  ARKSH_ARG_FILTER_NONE   = 0,
+  ARKSH_ARG_FILTER_DIR    = 1,
+  ARKSH_ARG_FILTER_SCRIPT = 2,
+  ARKSH_ARG_FILTER_PLUGIN = 3
+} ArkshArgFilter;
+
+static void get_current_command_name(const char *buffer, size_t token_start, char *out, size_t out_size) {
+  size_t cmd_start = 0;
+  size_t i;
+  size_t cmd_len;
+
+  out[0] = '\0';
+  i = token_start;
+  while (i > 0) {
+    i--;
+    if (buffer[i] == '|' || buffer[i] == '&' || buffer[i] == ';') {
+      cmd_start = i + 1;
+      break;
+    }
+  }
+  while (cmd_start < token_start && isspace((unsigned char)buffer[cmd_start])) {
+    cmd_start++;
+  }
+  i = cmd_start;
+  while (i < token_start && !isspace((unsigned char)buffer[i]) && buffer[i] != '\0') {
+    i++;
+  }
+  cmd_len = i - cmd_start;
+  if (cmd_len == 0 || cmd_len >= out_size) {
+    return;
+  }
+  memcpy(out, buffer + cmd_start, cmd_len);
+  out[cmd_len] = '\0';
+}
+
+static ArkshArgFilter get_argument_filter(const char *buffer, size_t token_start) {
+  static const struct { const char *cmd; ArkshArgFilter filter; } s_arg_filter_table[] = {
+    { "cd",     ARKSH_ARG_FILTER_DIR    },
+    { "pushd",  ARKSH_ARG_FILTER_DIR    },
+    { "source", ARKSH_ARG_FILTER_SCRIPT },
+    { ".",      ARKSH_ARG_FILTER_SCRIPT },
+    { "plugin", ARKSH_ARG_FILTER_PLUGIN },
+  };
+  char cmd[ARKSH_MAX_NAME];
+  size_t i;
+
+  get_current_command_name(buffer, token_start, cmd, sizeof(cmd));
+  if (cmd[0] == '\0') {
+    return ARKSH_ARG_FILTER_NONE;
+  }
+  for (i = 0; i < sizeof(s_arg_filter_table) / sizeof(s_arg_filter_table[0]); ++i) {
+    if (strcmp(cmd, s_arg_filter_table[i].cmd) == 0) {
+      return s_arg_filter_table[i].filter;
+    }
+  }
+  return ARKSH_ARG_FILTER_NONE;
+}
+
+/* Return 1 if name ends with ext (case-sensitive). */
+static int has_extension(const char *name, const char *ext) {
+  size_t nlen = strlen(name);
+  size_t elen = strlen(ext);
+
+  return nlen > elen && strcmp(name + nlen - elen, ext) == 0;
+}
+
+/* Filtered file matching — reuses split_path_prefix logic with an optional type filter. */
+static void collect_file_matches_filtered(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches, ArkshArgFilter filter) {
+  char raw_dir_prefix[ARKSH_MAX_PATH];
+  char lookup_dir[ARKSH_MAX_PATH];
+  char base_prefix[ARKSH_MAX_NAME];
+  char names[ARKSH_MAX_COMPLETION_MATCHES][ARKSH_MAX_PATH];
+  size_t count = 0;
+  size_t i;
+
+  if (shell == NULL || prefix == NULL || matches == NULL) {
+    return;
+  }
+
+  split_path_prefix(shell, prefix, raw_dir_prefix, sizeof(raw_dir_prefix), lookup_dir, sizeof(lookup_dir), base_prefix, sizeof(base_prefix));
+  if (lookup_dir[0] == '\0' || arksh_platform_list_children_names(lookup_dir, names, ARKSH_MAX_COMPLETION_MATCHES, &count) != 0) {
+    return;
+  }
+
+  for (i = 0; i < count; ++i) {
+    ArkshPlatformFileInfo info;
+    char candidate_path[ARKSH_MAX_PATH];
+    int accept;
+
+    if (!starts_with(names[i], base_prefix)) {
+      continue;
+    }
+    if (arksh_platform_resolve_path(lookup_dir, names[i], candidate_path, sizeof(candidate_path)) != 0 ||
+        arksh_platform_stat(candidate_path, &info) != 0) {
+      continue;
+    }
+
+    switch (filter) {
+      case ARKSH_ARG_FILTER_DIR:
+        accept = info.is_directory;
+        break;
+      case ARKSH_ARG_FILTER_SCRIPT:
+        accept = info.is_directory || has_extension(names[i], ".arksh") || has_extension(names[i], ".sh");
+        break;
+      case ARKSH_ARG_FILTER_PLUGIN:
+        accept = info.is_directory || has_extension(names[i], ".dylib") || has_extension(names[i], ".so") || has_extension(names[i], ".dll");
+        break;
+      default:
+        accept = 1;
+        break;
+    }
+
+    if (accept) {
+      append_path_match(matches, raw_dir_prefix, names[i], info.is_directory);
+    }
+  }
+}
+
 /* E6-S4-T1: pipeline stage completion — driven entirely by shell->pipeline_stages[],
    which now includes both built-in (registered at init) and plugin stages. */
 static void collect_stage_matches(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches) {
@@ -768,23 +907,138 @@ static void collect_stage_matches(ArkshShell *shell, const char *prefix, ArkshCo
   }
 }
 
-static void collect_completion_matches(ArkshShell *shell, const char *prefix, int command_position, int stage_position, ArkshCompletionMatches *matches) {
+/* E5-S6-T3: flag/option completion — static table of known options per built-in.
+   Activated when the current token starts with '-' in non-command position. */
+static const struct {
+  const char *cmd;
+  const char *flags[14]; /* NULL-terminated */
+} s_flag_table[] = {
+  { "ls",     { "-l", "-a", "-h", "-r", "-t", "-1", "-R", "-s", "-d", "-F", "--color", "--sort", NULL, NULL } },
+  { "set",    { "-e", "-x", "-u", "-o", "--", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL } },
+  { "export", { "-n", "--", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL } },
+  { "read",   { "-r", "-p", "-t", "-n", "--", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL } },
+  { "trap",   { "--", "-l", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL } },
+  { "printf", { "--", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL } },
+  { "cd",     { "-", "--", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL } },
+};
+
+static void collect_flag_matches(const char *buffer, size_t token_start, const char *prefix, ArkshCompletionMatches *matches) {
+  char cmd[ARKSH_MAX_NAME];
+  size_t i;
+  size_t j;
+
+  get_current_command_name(buffer, token_start, cmd, sizeof(cmd));
+  if (cmd[0] == '\0') {
+    return;
+  }
+  for (i = 0; i < sizeof(s_flag_table) / sizeof(s_flag_table[0]); ++i) {
+    if (strcmp(s_flag_table[i].cmd, cmd) != 0) {
+      continue;
+    }
+    for (j = 0; j < sizeof(s_flag_table[i].flags) / sizeof(s_flag_table[i].flags[0]); ++j) {
+      const char *flag = s_flag_table[i].flags[j];
+
+      if (flag == NULL) {
+        break;
+      }
+      if (starts_with(flag, prefix)) {
+        append_match_kind(matches, flag, ARKSH_CMATCH_CMD);
+      }
+    }
+    return;
+  }
+}
+
+/* E5-S6-T6: fuzzy / substring matching helpers.
+   Activated when prefix-based matching yields no candidates and
+   the shell variable `completion_mode` is set to "fuzzy". */
+static int is_fuzzy_mode(ArkshShell *shell) {
+  const char *mode = arksh_shell_get_var(shell, "completion_mode");
+
+  return mode != NULL && strcmp(mode, "fuzzy") == 0;
+}
+
+static void collect_registered_command_matches_fuzzy(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches) {
+  size_t i;
+
+  if (shell == NULL || prefix == NULL || matches == NULL || prefix[0] == '\0') {
+    return;
+  }
+  for (i = 0; i < shell->command_count; ++i) {
+    if (strstr(shell->commands[i].name, prefix) != NULL) {
+      append_match_kind(matches, shell->commands[i].name, ARKSH_CMATCH_CMD);
+    }
+  }
+  for (i = 0; i < shell->alias_count; ++i) {
+    if (strstr(shell->aliases[i].name, prefix) != NULL) {
+      append_match_kind(matches, shell->aliases[i].name, ARKSH_CMATCH_ALIAS);
+    }
+  }
+  for (i = 0; i < shell->function_count; ++i) {
+    if (strstr(shell->functions[i].name, prefix) != NULL) {
+      append_match_kind(matches, shell->functions[i].name, ARKSH_CMATCH_FN);
+    }
+  }
+}
+
+static void collect_file_matches_fuzzy(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches) {
+  char raw_dir_prefix[ARKSH_MAX_PATH];
+  char lookup_dir[ARKSH_MAX_PATH];
+  char base_prefix[ARKSH_MAX_NAME];
+  char names[ARKSH_MAX_COMPLETION_MATCHES][ARKSH_MAX_PATH];
+  size_t count = 0;
+  size_t i;
+
+  if (shell == NULL || prefix == NULL || matches == NULL || prefix[0] == '\0') {
+    return;
+  }
+
+  split_path_prefix(shell, prefix, raw_dir_prefix, sizeof(raw_dir_prefix), lookup_dir, sizeof(lookup_dir), base_prefix, sizeof(base_prefix));
+  if (base_prefix[0] == '\0' || lookup_dir[0] == '\0' ||
+      arksh_platform_list_children_names(lookup_dir, names, ARKSH_MAX_COMPLETION_MATCHES, &count) != 0) {
+    return;
+  }
+
+  for (i = 0; i < count; ++i) {
+    ArkshPlatformFileInfo info;
+    char candidate_path[ARKSH_MAX_PATH];
+
+    if (strstr(names[i], base_prefix) == NULL) {
+      continue;
+    }
+    if (arksh_platform_resolve_path(lookup_dir, names[i], candidate_path, sizeof(candidate_path)) != 0 ||
+        arksh_platform_stat(candidate_path, &info) != 0) {
+      continue;
+    }
+    append_path_match(matches, raw_dir_prefix, names[i], info.is_directory);
+  }
+}
+
+static void collect_completion_matches(ArkshShell *shell, const char *buffer, size_t token_start, const char *prefix, int command_position, int stage_position, ArkshCompletionMatches *matches) {
+  ArkshArgFilter arg_filter;
+
   if (matches == NULL) {
     return;
   }
 
   memset(matches, 0, sizeof(*matches));
 
-  /* T3: env var — activated by '$' prefix in any context. */
+  /* env var — activated by '$' prefix in any context. */
   if (prefix[0] == '$') {
     collect_env_var_matches(shell, prefix + 1, matches);
     return;
   }
 
-  /* T5: pipeline stage — activated after '|>'. */
+  /* pipeline stage — activated after '|>'. */
   if (stage_position) {
     collect_stage_matches(shell, prefix, matches);
     return;
+  }
+
+  /* E5-S6-T1: redirection context — always plain file completion. */
+  if (is_redirection_position(buffer, token_start)) {
+    collect_file_matches(shell, prefix, matches);
+    goto fuzzy_fallback;
   }
 
   if (command_position) {
@@ -793,12 +1047,38 @@ static void collect_completion_matches(ArkshShell *shell, const char *prefix, in
     if (prefix[0] == '\0') {
       return;
     }
+    collect_file_matches(shell, prefix, matches);
   } else {
-    /* T4: typed bindings — in non-command, non-stage positions. */
+    /* E5-S6-T3: flag completion when token starts with '-'. */
+    if (prefix[0] == '-') {
+      collect_flag_matches(buffer, token_start, prefix, matches);
+      if (matches->count > 0) {
+        return;
+      }
+    }
+
+    /* typed bindings — in non-command, non-stage positions. */
     collect_binding_matches(shell, prefix, matches);
+
+    /* E5-S6-T2: filtered file completion by current command. */
+    arg_filter = get_argument_filter(buffer, token_start);
+    if (arg_filter != ARKSH_ARG_FILTER_NONE) {
+      collect_file_matches_filtered(shell, prefix, matches, arg_filter);
+    } else {
+      collect_file_matches(shell, prefix, matches);
+    }
   }
 
-  collect_file_matches(shell, prefix, matches);
+  /* E5-S6-T6: fuzzy fallback — substring matching when prefix yields nothing. */
+  fuzzy_fallback:
+  if (matches->count == 0 && prefix[0] != '\0' && is_fuzzy_mode(shell)) {
+    if (command_position) {
+      collect_registered_command_matches_fuzzy(shell, prefix, matches);
+    }
+    if (matches->count == 0) {
+      collect_file_matches_fuzzy(shell, prefix, matches);
+    }
+  }
 }
 
 static void collect_member_completion_matches(
@@ -833,13 +1113,17 @@ static void collect_member_completion_matches(
   matches->count = (int) count;
 }
 
+/* E5-S6-T5: force_list — set to 1 when TAB is pressed twice consecutively.
+   When true and there are multiple matches, the full match list is always shown
+   (even if a common prefix extension is possible). */
 static void handle_completion(
   ArkshShell *shell,
   const char *prompt,
   char *buffer,
   size_t buffer_size,
   size_t *length,
-  size_t *cursor
+  size_t *cursor,
+  int force_list
 ) {
   size_t start;
   size_t receiver_start = 0;
@@ -872,11 +1156,30 @@ static void handle_completion(
   if (member_context) {
     collect_member_completion_matches(shell, buffer, receiver_start, receiver_end, prefix, &matches);
   } else {
-    collect_completion_matches(shell, prefix, command_position, stage_position, &matches);
+    collect_completion_matches(shell, buffer, start, prefix, command_position, stage_position, &matches);
   }
   if (matches.count == 0) {
     fputc('\a', stdout);
     fflush(stdout);
+    return;
+  }
+
+  /* T5: second TAB — extend prefix if possible, then always show all candidates. */
+  if (force_list && matches.count > 1) {
+    size_t shared = shared_prefix_length(&matches);
+
+    if (shared > prefix_len) {
+      char replacement[ARKSH_MAX_PATH];
+
+      if (shared < sizeof(replacement)) {
+        memcpy(replacement, matches.items[0], shared);
+        replacement[shared] = '\0';
+        replace_range(buffer, buffer_size, length, cursor, start, *cursor, replacement);
+        prefix_len = shared;
+      }
+    }
+    print_completion_matches(&matches);
+    redraw_line(prompt, buffer, *length, *cursor, shell);
     return;
   }
 
@@ -1464,8 +1767,13 @@ ArkshLineReadStatus arksh_line_editor_read_line(
     return ARKSH_LINE_READ_ERROR;
   }
 
+  {
+  int last_tab = 0; /* E5-S6-T5: tracks whether the previous key was also TAB */
+
   while (1) {
     int key = read_key();
+    int prev_tab = last_tab;
+    last_tab = (key == ARKSH_KEY_TAB) ? 1 : 0;
 
     if (key == -1) {
       terminal_leave_raw(&terminal_state);
@@ -1636,7 +1944,7 @@ ArkshLineReadStatus arksh_line_editor_read_line(
     }
 
     if (key == ARKSH_KEY_TAB) {
-      handle_completion(shell, active_prompt, line, sizeof(line), &length, &cursor);
+      handle_completion(shell, active_prompt, line, sizeof(line), &length, &cursor, prev_tab);
       continue;
     }
 
@@ -1748,4 +2056,6 @@ ArkshLineReadStatus arksh_line_editor_read_line(
       redraw_line(active_prompt, line, length, cursor, shell);
     }
   }
+  } /* end last_tab block */
+  return ARKSH_LINE_READ_ERROR; /* unreachable */
 }

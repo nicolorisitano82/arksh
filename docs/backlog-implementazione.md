@@ -319,7 +319,7 @@ Stato story: `[x]`
 
 ## E5. UX interattiva di livello quotidiano
 
-Stato epoca: `[ ]`
+Stato epoca: `[x]`
 
 ### E5-S1. Modello editor multilinea
 
@@ -377,18 +377,18 @@ Entrambe le funzionalità implementate nel core (in `line_editor.c`), attive sol
 
 ### E5-S6. Tab completion di livello avanzato
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
 Porta la completion al livello di zsh / fish: contestuale per tipo di argomento,
 filtrata per operatore di redirection, con double-TAB intelligente e fuzzy matching.
 Ogni task è indipendente; i task T1–T3 sono prerequisiti naturali per T4–T6.
 
-- `[ ]` `E5-S6-T1` `(tab-advance)` completion path-aware dopo redirection — dopo `>`, `>>`, `<`, `<&`, `>&` attivare `collect_file_matches` invece del match generico; dopo `2>` e `2>>` stesso comportamento; il contesto di redirection è già rilevabile dal token precedente nel buffer
-- `[ ]` `E5-S6-T2` `(tab-advance)` completion filtrata per tipo di argomento — dopo `cd ` proporre solo directory; dopo `source ` solo file `.arksh`/`.sh`; dopo `plugin load ` solo `.dylib`/`.so`/`.dll`; meccanismo: tabella statica `command → argument_filter_fn` in `line_editor.c`
-- `[ ]` `E5-S6-T3` `(tab-advance)` completion delle opzioni (`--flag`) — quando il token inizia con `-` in posizione argomento, cercare nel registry un descrittore di opzioni per il comando corrente; struttura `ArkshCommandOptionSpec { char name[]; char description[]; }` aggiunta opzionalmente alla `ArkshCommandDef`; i comandi built-in principali (`ls`, `cd`, `set`, `trap`, `read`, `printf`) espongono le proprie opzioni
-- `[ ]` `E5-S6-T4` `(tab-advance)` completion proprietà e metodi dopo `->` — quando il buffer contiene `expr ->` e `expr` è un binding il cui tipo è noto, proporre le proprietà/metodi registrati per quel tipo (da `shell->extensions` filtrando per `target_name`); fallback a lista generica se il tipo non è determinabile staticamente
-- `[ ]` `E5-S6-T5` `(tab-advance)` double-TAB per listare tutti i match — se si preme TAB su un prefisso vuoto (o se i match superano una soglia configurabile), mostrare la lista completa dei candidati invece di non fare nulla; comportamento coerente con bash/zsh: primo TAB completa il prefisso comune, secondo TAB lista tutti
-- `[ ]` `E5-S6-T6` `(tab-advance)` fuzzy / substring matching — se il matching esatto per prefisso non trova candidati, tentare un matching per sottostringa (`strstr`); opzionalmente un matching abbreviato (`gi` completa `git init`); configurabile via opzione shell `set completion_mode fuzzy|prefix`
+- `[x]` `E5-S6-T1` `(tab-advance)` completion path-aware dopo redirection — `is_redirection_position()`: se il token prima dell'attuale (saltando spazi) è `>` o `<`, attiva solo `collect_file_matches`
+- `[x]` `E5-S6-T2` `(tab-advance)` completion filtrata per tipo di argomento — tabella `s_arg_filter_table` + `ArkshArgFilter` enum; `cd`/`pushd` → solo dir; `source`/`.` → `.arksh`/`.sh`; `plugin` → `.dylib`/`.so`/`.dll`; `collect_file_matches_filtered()` con switch interno
+- `[x]` `E5-S6-T3` `(tab-advance)` completion delle opzioni (`--flag`) — tabella `s_flag_table` con opzioni per `ls`, `set`, `export`, `read`, `trap`, `printf`, `cd`; `collect_flag_matches()` attivata quando token inizia con `-` in posizione non-comando
+- `[x]` `E5-S6-T4` `(tab-advance)` completion proprietà e metodi dopo `->` — già implementata via `collect_member_completion_matches` + `arksh_shell_collect_member_completions`; filtra per tipo del receiver dal registro estensioni
+- `[x]` `E5-S6-T5` `(tab-advance)` double-TAB per listare tutti i match — `last_tab` + `prev_tab` tracciati nel main loop; `handle_completion(... force_list)`; primo TAB estende prefisso comune, secondo TAB mostra sempre la lista completa
+- `[x]` `E5-S6-T6` `(tab-advance)` fuzzy / substring matching — `is_fuzzy_mode()` legge `completion_mode` dalla shell; fallback `collect_file_matches_fuzzy()` + `collect_registered_command_matches_fuzzy()` con `strstr`; attivati solo se prefisso non-vuoto e zero risultati con prefix match
 
 ---
 
@@ -734,9 +734,9 @@ Stato story: `[ ]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`
-**In corso:** E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S4 `[x]`, S5–S7 aperte), E8 (S1 `[x]`, S3 `[x]`, S4 `[x]`, S2 aperta)
-**Aperte:** E5-S6 (tab-advance), E6 (S5–S7), E7 (JSON), E8-S2 (golden/PTY), E9 (release), E10 (HTTP plugin)
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`
+**In corso:** E6 (S1–S4 `[x]`, S5–S7 aperte), E8 (S1 `[x]`, S3 `[x]`, S4 `[x]`, S2 aperta)
+**Aperte:** E6 (S5–S7), E7 (JSON), E8-S2 (golden/PTY), E9 (release), E10 (HTTP plugin)
 
 ---
 
@@ -756,14 +756,7 @@ Stato story: `[ ]`
 
 ### Percorso C — tab completion avanzata (E5-S6)
 
-Alta visibilità nella sessione interattiva quotidiana.
-
-1. `E5-S6-T1` — completion path-aware dopo redirection (`>`, `<`, `2>`)
-2. `E5-S6-T2` — completion filtrata per tipo (`cd` → directory, `source` → script)
-3. `E5-S6-T5` — double-TAB per listare tutti i match
-4. `E5-S6-T4` — completion proprietà/metodi dopo `->`
-5. `E5-S6-T3` — completion opzioni `--flag`
-6. `E5-S6-T6` — fuzzy / substring matching
+~~Completato.~~
 
 ### Percorso D — pipeline object più ricca (E6-S3)
 
