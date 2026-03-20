@@ -677,11 +677,66 @@ Stato story: `[ ]`
 
 ---
 
+## E10. Plugin ufficiali HTTP
+
+Integrazione HTTP/HTTPS come plugin opzionale (`ARKSH_HTTP=ON`), basato su libcurl.
+Permette di costruire richieste tipizzate, eseguirle e collegare la risposta alla pipeline
+(Dict se JSON, testo se testuale, file se salvato su disco).
+
+### E10-S1. Oggetto HTTP e pipeline di rete
+
+Stato story: `[ ]`
+
+- `[ ]` `E10-S1-T1` **Scaffold plugin** — opzione CMake `ARKSH_HTTP=ON`, rilevamento libcurl
+  con `find_package(CURL)`, file sorgente `src/plugins/http.c`, header pubblico
+  `include/arksh/plugins/http.h`. Il plugin registra il resolver `http()` e i stage
+  `body_as_json`, `body_as_text`, `save_to` nella tabella dei resolver al momento del
+  `arksh_shell_init` (solo se compilato con `ARKSH_HTTP=ON`).
+
+- `[ ]` `E10-S1-T2` **Resolver `http()` e request builder** — `http()` restituisce un
+  typed-map `http_request` con campi: `method` (default `"GET"`), `url`, `headers`
+  (Dict, opzionale), `body` (stringa, opzionale), `content_type` (stringa, opzionale),
+  `timeout` (numero, default 30). Metodi di costruzione della richiesta accessibili via
+  `->`: `get(url)`, `post(url, body)`, `put(url, body)`, `delete(url)`,
+  `set_header(name, value)`, `set_timeout(seconds)`.
+
+- `[ ]` `E10-S1-T3` **Metodo `send()` e typed-map risposta** — `-> send()` esegue la
+  richiesta in modo bloccante tramite libcurl e restituisce un typed-map `http_response`
+  con: `status_code` (numero intero), `ok` (bool, vero se 2xx), `body` (stringa raw),
+  `content_type` (stringa, valore dell'header `Content-Type`),
+  `headers` (Dict chiave→valore per tutti gli header di risposta).
+
+- `[ ]` `E10-S1-T4` **Metodi sulla risposta** — sulla `http_response`: `-> body_as_json()`
+  converte `body` in un valore `Dict` usando il parser JSON di arksh;
+  `-> body_as_text()` restituisce `body` come stringa;
+  `-> raise_on_error()` fallisce con errore descrittivo se `ok == false`.
+
+- `[ ]` `E10-S1-T5` **Stage pipeline** — tre stage registrati nel pipeline resolver:
+  `body_as_json` (equivale a `-> body_as_json()` su una `http_response` in pipeline),
+  `body_as_text` (idem per testo),
+  `save_to(path)` (scrive `body` raw su file e restituisce il percorso come stringa).
+  Esempio d'uso: `http() -> get("https://api.example.com/data") -> send() | body_as_json | ...`
+
+- `[ ]` `E10-S1-T6` **Gestione errori, timeout, redirect e proxy** — errori di rete
+  (connessione rifiutata, timeout, TLS) vengono riportati come errore arksh con messaggio
+  descrittivo; redirect seguiti automaticamente (max 10); variabili d'ambiente
+  `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` rispettate tramite opzione libcurl
+  `CURLOPT_FOLLOWLOCATION` / `CURLOPT_PROXYTYPE`.
+
+- `[ ]` `E10-S1-T7` **Test** — helper di test `tests/http_mock.h` che avvia un server
+  HTTP minimale in-process (o usa `nc`/`socat` su localhost porta libera); test che
+  coprono: GET con status 200, POST con body, status 4xx/5xx + `raise_on_error`, timeout,
+  `body_as_json` su risposta JSON valida, `body_as_json` su risposta non-JSON (errore
+  atteso), `save_to` scrive file; test condizionali su disponibilità rete marcati
+  `SKIP_IF_OFFLINE`.
+
+---
+
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`
 **In corso:** E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S4 `[x]`, S5–S7 aperte), E8 (S1 `[x]`, S3 `[x]`, S2/S4 aperte)
-**Aperte:** E5-S6 (tab-advance), E6 (S5–S7), E7 (JSON), E8 (resto), E9 (release)
+**Aperte:** E5-S6 (tab-advance), E6 (S5–S7), E7 (JSON), E8 (resto), E9 (release), E10 (HTTP plugin)
 
 ---
 
@@ -745,6 +800,19 @@ Prerequisito naturale per script di automazione e integrazione con API esterne.
 3. `E7-S1-T3` (casi edge del serializer — pretty-print opzionale)
 4. `E7-S2-T1` (strutture annidate oltre `ARKSH_MAX_COLLECTION_ITEMS`)
 5. `E7-S3-T1` (stage `jq`-like o `select` per query su valori JSON)
+
+### Percorso H — plugin HTTP (E10)
+
+Aggiunge chiamate HTTP/HTTPS native ad arksh. Richiede libcurl; non blocca nessun'altra
+epoca. Sblocca integrazioni con API esterne direttamente dagli script.
+
+1. `E10-S1-T1` (scaffold plugin + CMake + rilevamento libcurl)
+2. `E10-S1-T2` (resolver `http()` e request builder)
+3. `E10-S1-T3` (metodo `send()` + typed-map risposta)
+4. `E10-S1-T4` (metodi `body_as_json`, `body_as_text`, `raise_on_error`)
+5. `E10-S1-T5` (stage pipeline: `body_as_json`, `body_as_text`, `save_to`)
+6. `E10-S1-T6` (errori, timeout, redirect, proxy)
+7. `E10-S1-T7` (test con mock server)
 
 ### Percorso I — stage di encoding (E6-S7)
 
