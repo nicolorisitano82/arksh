@@ -596,12 +596,12 @@ Stato epoca: `[ ]`
 
 ### E8-S1. Test unitari mirati
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
 - `[x]` `E8-S1-T1` aggiungere test unitari per lexer
 - `[x]` `E8-S1-T2` aggiungere test unitari per parser
-- `[ ]` `E8-S1-T3` aggiungere test unitari per executor
-- `[ ]` `E8-S1-T4` aggiungere test unitari per object model
+- `[x]` `E8-S1-T3` aggiungere test unitari per executor — `tests/unit_executor.c`: shell heap-allocata, 24 test su `execute_line`/`evaluate_line_value`/`execute_block`, control flow, POSIX functions, case, variabili
+- `[x]` `E8-S1-T4` aggiungere test unitari per object model — `tests/unit_object.c`: 30 test su init/setter/copy/list/map/render/JSON round-trip/object properties, senza dipendenza dalla shell
 
 ### E8-S2. Test golden e PTY
 
@@ -613,11 +613,11 @@ Stato story: `[ ]`
 
 ### E8-S3. Sanitizers e fuzzing
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
 - `[x]` `E8-S3-T1` aggiungere target ASan/UBSan
-- `[ ]` `E8-S3-T2` integrare ASan/UBSan in CI
-- `[ ]` `E8-S3-T3` aggiungere fuzzing su lexer/parser/expander
+- `[x]` `E8-S3-T2` integrare ASan/UBSan in CI — `.github/workflows/ci.yml`: 3 job (Linux ASan+UBSan, macOS UBSan, Linux Release); trigger su push/PR su `main`
+- `[x]` `E8-S3-T3` aggiungere fuzzing su lexer/parser/expander — `tests/fuzz_input.c`: libFuzzer entry point, esercita `arksh_lex_line`/`arksh_parse_line`/`arksh_parse_value_line`; build con `cmake -DARKSH_FUZZ=ON -DCMAKE_C_COMPILER=clang`
 
 ### E8-S4. CI multipiattaforma
 
@@ -680,7 +680,7 @@ Stato story: `[ ]`
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`
-**In corso:** E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S4 `[x]`, S5–S7 aperte), E8 (S1-T1/T2 `[x]`, S3-T1 `[x]`)
+**In corso:** E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S4 `[x]`, S5–S7 aperte), E8 (S1 `[x]`, S3 `[x]`, S2/S4 aperte)
 **Aperte:** E5-S6 (tab-advance), E6 (S5–S7), E7 (JSON), E8 (resto), E9 (release)
 
 ---

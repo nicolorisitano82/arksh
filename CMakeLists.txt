@@ -48,6 +48,21 @@ if(ARKSH_UBSAN)
   message(STATUS "Sanitizers enabled: -fsanitize=undefined")
 endif()
 
+# E8-S3-T3: libFuzzer target for lexer/parser/expander.
+#
+# Usage (requires clang):
+#   cmake -S . -B build-fuzz -DARKSH_FUZZ=ON -DCMAKE_BUILD_TYPE=Debug \
+#         -DCMAKE_C_COMPILER=clang
+#   cmake --build build-fuzz --target arksh_fuzz_input
+#   ./build-fuzz/arksh_fuzz_input [corpus/] [-max_len=512]
+option(ARKSH_FUZZ "Build libFuzzer target for lexer/parser (requires clang)" OFF)
+if(ARKSH_FUZZ)
+  if(MSVC)
+    message(FATAL_ERROR "ARKSH_FUZZ is not supported with MSVC")
+  endif()
+  message(STATUS "Fuzzer target enabled: arksh_fuzz_input")
+endif()
+
 add_library(arksh_core STATIC
   src/expand.c
   src/executor.c
@@ -101,11 +116,25 @@ if(BUILD_TESTING)
   add_executable(arksh_test_echo_stdin tests/echo_stdin.c)
   add_executable(arksh_test_pause tests/pause_seconds.c)
 
-  # E8-S1: unit test executables (link against arksh_core for lexer/parser APIs)
+  # E8-S1: unit test executables (link against arksh_core for all APIs)
   add_executable(arksh_unit_lexer tests/unit_lexer.c)
   target_link_libraries(arksh_unit_lexer PRIVATE arksh_core)
   add_executable(arksh_unit_parser tests/unit_parser.c)
   target_link_libraries(arksh_unit_parser PRIVATE arksh_core)
+  # E8-S1-T3: executor unit tests
+  add_executable(arksh_unit_executor tests/unit_executor.c)
+  target_link_libraries(arksh_unit_executor PRIVATE arksh_core)
+  # E8-S1-T4: object model unit tests (link with math library for fabs())
+  add_executable(arksh_unit_object tests/unit_object.c)
+  target_link_libraries(arksh_unit_object PRIVATE arksh_core m)
+
+  # E8-S3-T3: libFuzzer target — built only when ARKSH_FUZZ=ON
+  if(ARKSH_FUZZ)
+    add_executable(arksh_fuzz_input tests/fuzz_input.c)
+    target_link_libraries(arksh_fuzz_input PRIVATE arksh_core)
+    target_compile_options(arksh_fuzz_input PRIVATE -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer)
+    target_link_options(arksh_fuzz_input PRIVATE -fsanitize=fuzzer,address,undefined)
+  endif()
 
   file(COPY tests/fixtures DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tests")
 
@@ -935,6 +964,22 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_unit_parser PROPERTIES
     PASS_REGULAR_EXPRESSION "all tests passed"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+
+  # E8-S1-T3: executor unit tests
+  add_test(NAME arksh_unit_executor COMMAND arksh_unit_executor)
+  set_tests_properties(arksh_unit_executor PROPERTIES
+    PASS_REGULAR_EXPRESSION "all tests passed"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    TIMEOUT 30
+  )
+
+  # E8-S1-T4: object model unit tests
+  add_test(NAME arksh_unit_object COMMAND arksh_unit_object)
+  set_tests_properties(arksh_unit_object PROPERTIES
+    PASS_REGULAR_EXPRESSION "all tests passed"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    TIMEOUT 10
   )
 
   # E6-S4: introspection and typed help
