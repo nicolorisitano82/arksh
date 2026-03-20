@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="116" y1="44" x2="1144" y2="612" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07131D"/>
+      <stop offset="0.45" stop-color="#0C2030"/>
+      <stop offset="1" stop-color="#071018"/>
+    </linearGradient>
+    <radialGradient id="auraLeft" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(298 252) rotate(23.4) scale(412 286)">
+      <stop stop-color="#1BD8C0" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#1BD8C0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="auraRight" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(998 188) rotate(162) scale(364 264)">
+      <stop stop-color="#FF8B4A" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#FF8B4A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="terminalFrame" x1="377" y1="134" x2="926" y2="474" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#17344B"/>
+      <stop offset="1" stop-color="#0A1724"/>
+    </linearGradient>
+    <linearGradient id="terminalPanel" x1="395" y1="162" x2="919" y2="445" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#091723"/>
+      <stop offset="1" stop-color="#060D14"/>
+    </linearGradient>
+    <linearGradient id="lineGlow" x1="196" y1="306" x2="1084" y2="306" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2EF4D5"/>
+      <stop offset="0.46" stop-color="#73EAF8"/>
+      <stop offset="1" stop-color="#FF9855"/>
+    </linearGradient>
+    <linearGradient id="cardStroke" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#67E3D0"/>
+      <stop offset="1" stop-color="#FF9A59"/>
+    </linearGradient>
+    <filter id="blurLg" x="-160" y="-160" width="1600" height="960" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="36"/>
+    </filter>
+    <filter id="shadow" x="300" y="64" width="708" height="488" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feOffset dy="18"/>
+      <feGaussianBlur stdDeviation="28"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.00784314 0 0 0 0 0.0509804 0 0 0 0 0.0823529 0 0 0 0.55 0"/>
+    </filter>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" stroke="#8AE6D8" stroke-opacity="0.08"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="640" rx="28" fill="url(#bg)"/>
+  <rect width="1280" height="640" rx="28" fill="url(#grid)"/>
+
+  <g filter="url(#blurLg)">
+    <ellipse cx="302" cy="252" rx="222" ry="150" fill="url(#auraLeft)"/>
+    <ellipse cx="986" cy="194" rx="188" ry="126" fill="url(#auraRight)"/>
+    <ellipse cx="641" cy="548" rx="252" ry="84" fill="#31D8D0" fill-opacity="0.12"/>
+  </g>
+
+  <path d="M184 365C264 308 324 292 404 295C512 299 551 370 646 370C739 370 775 299 882 295C960 292 1020 306 1096 365"
+        stroke="url(#lineGlow)" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 11"/>
+  <path d="M206 270C284 234 357 232 431 252C493 269 549 319 638 319C735 319 776 250 863 239C936 229 1010 247 1074 286"
+        stroke="#6DE9F2" stroke-opacity="0.36" stroke-width="2"/>
+
+  <g opacity="0.92">
+    <circle cx="242" cy="250" r="5" fill="#26E5CB"/>
+    <circle cx="1044" cy="280" r="5" fill="#FF9B58"/>
+    <circle cx="322" cy="170" r="3" fill="#8ADDF4"/>
+    <circle cx="1002" cy="132" r="3" fill="#8ADDF4"/>
+    <circle cx="930" cy="392" r="4" fill="#26E5CB"/>
+    <circle cx="214" cy="415" r="4" fill="#FF9B58"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="348" y="106" width="584" height="412" rx="28" fill="#08131E"/>
+  </g>
+
+  <rect x="360" y="118" width="560" height="388" rx="24" fill="url(#terminalFrame)" stroke="#2E5D7D" stroke-opacity="0.52"/>
+  <rect x="380" y="146" width="520" height="332" rx="18" fill="url(#terminalPanel)" stroke="#4BD7CC" stroke-opacity="0.12"/>
+
+  <circle cx="408" cy="132" r="6" fill="#FF7E64"/>
+  <circle cx="428" cy="132" r="6" fill="#FFC85A"/>
+  <circle cx="448" cy="132" r="6" fill="#2FE2AB"/>
+
+  <g opacity="0.96">
+    <text x="416" y="214" fill="#8EECE2" font-family="'SFMono-Regular', 'Menlo', 'Consolas', monospace" font-size="22">[default] . -&gt; children() |&gt; where(type == "file")</text>
+    <text x="416" y="252" fill="#73D9FF" font-family="'SFMono-Regular', 'Menlo', 'Consolas', monospace" font-size="22">|&gt; each([:it | it -&gt; name]) |&gt; take(5)</text>
+    <text x="416" y="290" fill="#FFD49A" font-family="'SFMono-Regular', 'Menlo', 'Consolas', monospace" font-size="22">plugin load build/oosh_sample_plugin.dylib</text>
+    <text x="416" y="328" fill="#F4FAFF" font-family="'SFMono-Regular', 'Menlo', 'Consolas', monospace" font-size="22">env() -&gt; HOME     shell() -&gt; plugins     proc() -&gt; pid</text>
+    <text x="416" y="366" fill="#8EECE2" font-family="'SFMono-Regular', 'Menlo', 'Consolas', monospace" font-size="22">class Node extends File, Json do ... endclass</text>
+    <text x="416" y="404" fill="#73D9FF" font-family="'SFMono-Regular', 'Menlo', 'Consolas', monospace" font-size="22">text("%s") -&gt; print($(pwd))</text>
+    <rect x="416" y="428" width="11" height="24" rx="3" fill="#8EECE2">
+      <animate attributeName="opacity" values="1;0;1" dur="1.8s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+
+  <g transform="translate(170 165)">
+    <rect width="132" height="82" rx="18" fill="#0D1A27" stroke="url(#cardStroke)" stroke-opacity="0.55"/>
+    <text x="20" y="32" fill="#31E4CD" font-family="'SFMono-Regular', 'Menlo', monospace" font-size="16">OBJECT</text>
+    <text x="20" y="58" fill="#F4FAFF" font-family="'SFMono-Regular', 'Menlo', monospace" font-size="24">FILE</text>
+  </g>
+
+  <g transform="translate(118 352)">
+    <rect width="150" height="88" rx="18" fill="#0D1A27" stroke="url(#cardStroke)" stroke-opacity="0.55"/>
+    <text x="20" y="32" fill="#73D9FF" font-family="'SFMono-Regular', 'Menlo', monospace" font-size="16">PIPELINE</text>
+    <text x="20" y="59" fill="#F4FAFF" font-family="'SFMono-Regular', 'Menlo', monospace" font-size="24">BLOCK</text>
+  </g>
+
+  <g transform="translate(980 144)">
+    <rect width="162" height="88" rx="18" fill="#0D1A27" stroke="url(#cardStroke)" stroke-opacity="0.55"/>
+    <text x="20" y="32" fill="#FFA163" font-family="'SFMono-Regular', 'Menlo', monospace" font-size="16">EXTENSION</text>
+    <text x="20" y="59" fill="#F4FAFF" font-family="'SFMono-Regular', 'Menlo', monospace" font-size="24">PLUGIN</text>
+  </g>
+
+  <g transform="translate(1018 350)">
+    <rect width="132" height="82" rx="18" fill="#0D1A27" stroke="url(#cardStroke)" stroke-opacity="0.55"/>
+    <text x="20" y="32" fill="#FFCD74" font-family="'SFMono-Regular', 'Menlo', monospace" font-size="16">DATA</text>
+    <text x="20" y="58" fill="#F4FAFF" font-family="'SFMono-Regular', 'Menlo', monospace" font-size="24">JSON</text>
+  </g>
+
+  <path d="M308 206C362 220 386 228 411 255" stroke="#38E3CE" stroke-width="2.5" stroke-linecap="round" opacity="0.85"/>
+  <path d="M268 396C342 386 382 374 419 340" stroke="#73D9FF" stroke-width="2.5" stroke-linecap="round" opacity="0.85"/>
+  <path d="M979 187C920 201 892 213 853 246" stroke="#FF9D5C" stroke-width="2.5" stroke-linecap="round" opacity="0.85"/>
+  <path d="M1019 390C938 381 884 364 846 338" stroke="#FFCD74" stroke-width="2.5" stroke-linecap="round" opacity="0.85"/>
+
+  <text x="92" y="540" fill="#F4FAFF" font-family="'Avenir Next', 'Trebuchet MS', sans-serif" font-size="92" font-weight="700" letter-spacing="2">oosh</text>
+  <text x="96" y="584" fill="#91C9D7" font-family="'Avenir Next', 'Trebuchet MS', sans-serif" font-size="24" letter-spacing="6">OBJECT-ORIENTED SHELL IN C</text>
+
+  <g transform="translate(804 522)">
+    <rect x="0" y="0" width="90" height="34" rx="17" fill="#0E1F2E" stroke="#2EE3CB" stroke-opacity="0.35"/>
+    <text x="22" y="23" fill="#DDFDFA" font-family="'SFMono-Regular', 'Menlo', monospace" font-size="16">linux</text>
+    <rect x="102" y="0" width="96" height="34" rx="17" fill="#0E1F2E" stroke="#73D9FF" stroke-opacity="0.35"/>
+    <text x="120" y="23" fill="#DDFDFA" font-family="'SFMono-Regular', 'Menlo', monospace" font-size="16">macos</text>
+    <rect x="210" y="0" width="112" height="34" rx="17" fill="#0E1F2E" stroke="#FF9A59" stroke-opacity="0.35"/>
+    <text x="228" y="23" fill="#DDFDFA" font-family="'SFMono-Regular', 'Menlo', monospace" font-size="16">windows</text>
+  </g>
+</svg>

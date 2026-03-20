@@ -1,4 +1,7 @@
 #include <ctype.h>
+#include <errno.h>
+#include <math.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +9,7 @@
 
 #ifndef _WIN32
 #include <signal.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #endif
@@ -17,6 +21,35 @@
 #include "oosh/platform.h"
 #include "oosh/prompt.h"
 #include "oosh/shell.h"
+
+/* E1-S6-T1: per-signal pending flags set by the async signal handler. */
+static volatile sig_atomic_t s_pending_traps[OOSH_TRAP_COUNT];
+
+/* Mapping from OoshTrapKind to POSIX signal number (0 for pseudo-signals). */
+static const struct { const char *name; OoshTrapKind kind; int signum; }
+s_trap_map[] = {
+  { "EXIT",  OOSH_TRAP_EXIT,  0        },
+  { "ERR",   OOSH_TRAP_ERR,   0        },
+#ifndef _WIN32
+  { "HUP",   OOSH_TRAP_HUP,   SIGHUP   },
+  { "INT",   OOSH_TRAP_INT,   SIGINT   },
+  { "QUIT",  OOSH_TRAP_QUIT,  SIGQUIT  },
+  { "ILL",   OOSH_TRAP_ILL,   SIGILL   },
+  { "ABRT",  OOSH_TRAP_ABRT,  SIGABRT  },
+  { "FPE",   OOSH_TRAP_FPE,   SIGFPE   },
+  { "SEGV",  OOSH_TRAP_SEGV,  SIGSEGV  },
+  { "PIPE",  OOSH_TRAP_PIPE,  SIGPIPE  },
+  { "ALRM",  OOSH_TRAP_ALRM,  SIGALRM  },
+  { "TERM",  OOSH_TRAP_TERM,  SIGTERM  },
+  { "USR1",  OOSH_TRAP_USR1,  SIGUSR1  },
+  { "USR2",  OOSH_TRAP_USR2,  SIGUSR2  },
+  { "CHLD",  OOSH_TRAP_CHLD,  SIGCHLD  },
+  { "TSTP",  OOSH_TRAP_TSTP,  SIGTSTP  },
+  { "TTIN",  OOSH_TRAP_TTIN,  SIGTTIN  },
+  { "TTOU",  OOSH_TRAP_TTOU,  SIGTTOU  },
+#endif
+  { NULL,    OOSH_TRAP_COUNT, 0        }
+};
 
 static OoshValue *allocate_runtime_value(char *error, size_t error_size, const char *label);
 static int build_class_property_list(const OoshShell *shell, const char *class_name, OoshValue *out_value, char *out, size_t out_size);
@@ -5102,6 +5135,77 @@ int oosh_shell_run_exit_trap(OoshShell *shell, char *out, size_t out_size) {
   return status;
 }
 
+/* E1-S6-T1: Generic async signal handler — just sets the pending flag. */
+#ifndef _WIN32
+static void oosh_generic_signal_handler(int signum) {
+  int k;
+  for (k = 0; s_trap_map[k].name != NULL; k++) {
+    if (s_trap_map[k].signum == signum) {
+      s_pending_traps[s_trap_map[k].kind] = 1;
+      return;
+    }
+  }
+}
+#endif
+
+/* Translate a signal name (with or without "SIG" prefix) to its trap kind. */
+static OoshTrapKind trap_name_to_kind(const char *name) {
+  const char *n = name;
+  int k;
+  if (n == NULL) {
+    return OOSH_TRAP_COUNT;
+  }
+  /* Strip optional "SIG" prefix. */
+  if (strncmp(n, "SIG", 3) == 0) {
+    n += 3;
+  }
+  for (k = 0; s_trap_map[k].name != NULL; k++) {
+    if (strcmp(s_trap_map[k].name, n) == 0) {
+      return s_trap_map[k].kind;
+    }
+  }
+  return OOSH_TRAP_COUNT;
+}
+
+/* Install or remove the signal handler for the given trap kind. */
+static void install_trap_signal(OoshTrapKind kind, int install) {
+#ifndef _WIN32
+  int k;
+  for (k = 0; s_trap_map[k].name != NULL; k++) {
+    if (s_trap_map[k].kind == kind) {
+      int signum = s_trap_map[k].signum;
+      if (signum != 0) {
+        signal(signum, install ? oosh_generic_signal_handler : SIG_DFL);
+      }
+      return;
+    }
+  }
+#else
+  (void) kind;
+  (void) install;
+#endif
+}
+
+/* Fire all pending async trap commands.  Called after each top-level command. */
+static void fire_pending_traps(OoshShell *shell, char *out, size_t out_size) {
+  int k;
+  (void) out;
+  (void) out_size;
+  for (k = 0; k < OOSH_TRAP_COUNT; k++) {
+    if (s_pending_traps[k]) {
+      s_pending_traps[k] = 0;
+      if (shell->traps[k].active && shell->traps[k].command[0] != '\0') {
+        char trap_out[OOSH_MAX_OUTPUT];
+        trap_out[0] = '\0';
+        oosh_shell_execute_line(shell, shell->traps[k].command, trap_out, sizeof(trap_out));
+        if (trap_out[0] != '\0') {
+          oosh_shell_write_output(trap_out);
+        }
+      }
+    }
+  }
+}
+
 static void configure_shell_signals(void) {
 #ifndef _WIN32
   signal(SIGINT, SIG_IGN);
@@ -5763,7 +5867,9 @@ static int command_extend(OoshShell *shell, int argc, char **argv, char *out, si
   return 1;
 }
 
+/* E1-S6-T2: set built-in — handles -e/-u/-x/-o plus legacy assignment. */
 static int command_set(OoshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  int i;
   char name[OOSH_MAX_VAR_NAME];
   char value[OOSH_MAX_VAR_VALUE];
 
@@ -5771,24 +5877,91 @@ static int command_set(OoshShell *shell, int argc, char **argv, char *out, size_
     return format_var_list(shell, 0, out, out_size);
   }
 
-  if (argc == 2 && split_assignment(argv[1], name, sizeof(name), value, sizeof(value)) == 0) {
+  out[0] = '\0';
+
+  /* Process flags: -e -u -x +e +u +x -o pipefail -o nopipefail etc. */
+  for (i = 1; i < argc; i++) {
+    const char *arg = argv[i];
+    int enable;
+
+    if (arg[0] != '-' && arg[0] != '+') {
+      break; /* not a flag, fall through to legacy var-assign logic */
+    }
+    if (strcmp(arg, "--") == 0) {
+      i++;
+      break; /* end of options */
+    }
+
+    enable = (arg[0] == '-') ? 1 : 0;
+
+    if (strcmp(arg, "-o") == 0 || strcmp(arg, "+o") == 0) {
+      /* -o option / +o option */
+      i++;
+      if (i >= argc) {
+        snprintf(out, out_size, "set: -o requires an option name");
+        return 1;
+      }
+      const char *optname = argv[i];
+      if (strcmp(optname, "errexit") == 0) {
+        shell->opt_errexit = enable;
+      } else if (strcmp(optname, "nounset") == 0) {
+        shell->opt_nounset = enable;
+      } else if (strcmp(optname, "xtrace") == 0) {
+        shell->opt_xtrace = enable;
+      } else if (strcmp(optname, "pipefail") == 0) {
+        shell->opt_pipefail = enable;
+      } else if (strcmp(optname, "nopipefail") == 0) {
+        shell->opt_pipefail = !enable;
+      } else {
+        snprintf(out, out_size, "set: unknown option: %s", optname);
+        return 1;
+      }
+      continue;
+    }
+
+    /* Flags in a single arg like -eux */
+    {
+      const char *f = arg + 1;
+      while (*f != '\0') {
+        switch (*f) {
+          case 'e': shell->opt_errexit = enable; break;
+          case 'u': shell->opt_nounset = enable; break;
+          case 'x': shell->opt_xtrace  = enable; break;
+          default:
+            /* Unknown flag — stop flag processing, treat as positional. */
+            goto end_flags;
+        }
+        f++;
+      }
+    }
+    continue;
+  end_flags:
+    break;
+  }
+
+  /* If all args were flags, done. */
+  if (i >= argc) {
+    return 0;
+  }
+
+  /* Legacy: set name value  or  set name=value */
+  if (i == 1 && split_assignment(argv[1], name, sizeof(name), value, sizeof(value)) == 0) {
     if (!is_valid_identifier(name) || oosh_shell_set_var(shell, name, value, 0) != 0) {
       snprintf(out, out_size, "unable to set variable: %s", argv[1]);
       return 1;
     }
-    out[0] = '\0';
     return 0;
   }
 
-  copy_string(name, sizeof(name), argv[1]);
+  copy_string(name, sizeof(name), argv[i]);
   if (!is_valid_identifier(name)) {
-    snprintf(out, out_size, "invalid variable name: %s", argv[1]);
+    snprintf(out, out_size, "invalid variable name: %s", argv[i]);
     return 1;
   }
 
-  if (argc == 2) {
+  if (i + 1 >= argc) {
     value[0] = '\0';
-  } else if (join_arguments(argc, argv, 2, value, sizeof(value)) != 0) {
+  } else if (join_arguments(argc, argv, i + 1, value, sizeof(value)) != 0) {
     snprintf(out, out_size, "variable value too long");
     return 1;
   }
@@ -5798,7 +5971,6 @@ static int command_set(OoshShell *shell, int argc, char **argv, char *out, size_
     return 1;
   }
 
-  out[0] = '\0';
   return 0;
 }
 
@@ -6476,49 +6648,111 @@ static int command_exec(OoshShell *shell, int argc, char **argv, char *out, size
   return status;
 }
 
+/* E1-S6-T1: Full POSIX trap built-in. */
 static int command_trap(OoshShell *shell, int argc, char **argv, char *out, size_t out_size) {
-  int i;
+  int i, k;
+  int print_mode = 0;
 
   if (shell == NULL || out == NULL || out_size == 0) {
     return 1;
   }
-
   out[0] = '\0';
-  if (argc == 1) {
-    if (!shell->traps[OOSH_TRAP_EXIT].active || shell->traps[OOSH_TRAP_EXIT].command[0] == '\0') {
-      copy_string(out, out_size, "no traps");
-      return 0;
-    }
-    snprintf(out, out_size, "trap -- %s EXIT", shell->traps[OOSH_TRAP_EXIT].command);
-    return 0;
+
+  /* trap -p [signal ...]: print trap settings. */
+  if (argc >= 2 && strcmp(argv[1], "-p") == 0) {
+    print_mode = 1;
   }
 
-  if (argc >= 3 && strcmp(argv[1], "-") == 0) {
-    for (i = 2; i < argc; ++i) {
-      if (strcmp(argv[i], "EXIT") != 0) {
-        snprintf(out, out_size, "trap currently supports only EXIT");
-        return 1;
+  /* trap (no args) or trap -p (no signals): print all active traps. */
+  if (argc == 1 || (print_mode && argc == 2)) {
+    char buf[OOSH_MAX_OUTPUT];
+    buf[0] = '\0';
+    for (k = 0; s_trap_map[k].name != NULL; k++) {
+      OoshTrapKind kind = s_trap_map[k].kind;
+      if (kind == OOSH_TRAP_COUNT) {
+        continue;
+      }
+      if (shell->traps[kind].active && shell->traps[kind].command[0] != '\0') {
+        char line[OOSH_MAX_LINE + 64];
+        snprintf(line, sizeof(line), "trap -- '%s' %s\n",
+                 shell->traps[kind].command, s_trap_map[k].name);
+        if (strlen(buf) + strlen(line) < sizeof(buf) - 1) {
+          strcat(buf, line);
+        }
       }
     }
-    shell->traps[OOSH_TRAP_EXIT].active = 0;
-    shell->traps[OOSH_TRAP_EXIT].command[0] = '\0';
+    if (buf[0] == '\0') {
+      copy_string(out, out_size, "");
+    } else {
+      /* Remove trailing newline for cleaner output. */
+      size_t len = strlen(buf);
+      if (len > 0 && buf[len - 1] == '\n') {
+        buf[len - 1] = '\0';
+      }
+      copy_string(out, out_size, buf);
+    }
     return 0;
   }
 
+  /* trap -p signal ...: print specific traps. */
+  if (print_mode) {
+    char buf[OOSH_MAX_OUTPUT];
+    buf[0] = '\0';
+    for (i = 2; i < argc; i++) {
+      OoshTrapKind kind = trap_name_to_kind(argv[i]);
+      if (kind == OOSH_TRAP_COUNT) {
+        snprintf(out, out_size, "trap: invalid signal: %s", argv[i]);
+        return 1;
+      }
+      if (shell->traps[kind].active && shell->traps[kind].command[0] != '\0') {
+        char line[OOSH_MAX_LINE + 64];
+        snprintf(line, sizeof(line), "trap -- '%s' %s\n",
+                 shell->traps[kind].command, argv[i]);
+        if (strlen(buf) + strlen(line) < sizeof(buf) - 1) {
+          strcat(buf, line);
+        }
+      }
+    }
+    size_t len = strlen(buf);
+    if (len > 0 && buf[len - 1] == '\n') {
+      buf[len - 1] = '\0';
+    }
+    copy_string(out, out_size, buf);
+    return 0;
+  }
+
+  /* trap - signal ...: reset to default. */
+  if (argc >= 2 && strcmp(argv[1], "-") == 0) {
+    for (i = 2; i < argc; i++) {
+      OoshTrapKind kind = trap_name_to_kind(argv[i]);
+      if (kind == OOSH_TRAP_COUNT) {
+        snprintf(out, out_size, "trap: invalid signal: %s", argv[i]);
+        return 1;
+      }
+      shell->traps[kind].active = 0;
+      shell->traps[kind].command[0] = '\0';
+      install_trap_signal(kind, 0);
+    }
+    return 0;
+  }
+
+  /* trap '' signal ...: ignore signal. */
+  /* trap '<cmd>' signal ...: set trap. */
   if (argc < 3) {
-    snprintf(out, out_size, "usage: trap '<command>' EXIT | trap - EXIT | trap");
+    snprintf(out, out_size, "usage: trap <command> <signal> [signal...] | trap - <signal>... | trap [-p]");
     return 1;
   }
 
-  for (i = 2; i < argc; ++i) {
-    if (strcmp(argv[i], "EXIT") != 0) {
-      snprintf(out, out_size, "trap currently supports only EXIT");
+  for (i = 2; i < argc; i++) {
+    OoshTrapKind kind = trap_name_to_kind(argv[i]);
+    if (kind == OOSH_TRAP_COUNT) {
+      snprintf(out, out_size, "trap: invalid signal: %s", argv[i]);
       return 1;
     }
+    copy_string(shell->traps[kind].command, sizeof(shell->traps[kind].command), argv[1]);
+    shell->traps[kind].active = 1;
+    install_trap_signal(kind, 1);
   }
-
-  copy_string(shell->traps[OOSH_TRAP_EXIT].command, sizeof(shell->traps[OOSH_TRAP_EXIT].command), argv[1]);
-  shell->traps[OOSH_TRAP_EXIT].active = argv[1][0] != '\0';
   return 0;
 }
 
@@ -6630,6 +6864,744 @@ static int command_builtin(OoshShell *shell, int argc, char *argv[], char *out, 
   return 1;
 }
 
+/* =========================================================================
+   E1-S6-T3: read built-in
+   ========================================================================= */
+static int command_read(OoshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  int raw_mode = 0;
+  int nchars = -1;
+  const char *prompt_str = NULL;
+  int i;
+  int var_start;
+  char line[OOSH_MAX_LINE];
+  size_t line_len = 0;
+  int c;
+
+  (void) out;
+  (void) out_size;
+
+  if (shell == NULL) {
+    return 1;
+  }
+
+  /* Parse options. */
+  for (i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "-r") == 0) {
+      raw_mode = 1;
+    } else if (strcmp(argv[i], "-p") == 0 && i + 1 < argc) {
+      i++;
+      prompt_str = argv[i];
+    } else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
+      i++;
+      nchars = atoi(argv[i]);
+    } else if (strcmp(argv[i], "-t") == 0 && i + 1 < argc) {
+      /* timeout: not supported on all platforms, skip */
+      i++;
+    } else if (argv[i][0] == '-') {
+      snprintf(out, out_size, "read: unknown option: %s", argv[i]);
+      return 1;
+    } else {
+      break;
+    }
+  }
+  var_start = i;
+
+  if (var_start >= argc) {
+    snprintf(out, out_size, "read: missing variable name");
+    return 1;
+  }
+
+  if (prompt_str != NULL) {
+    fputs(prompt_str, stderr);
+    fflush(stderr);
+  }
+
+  /* Read characters from stdin. */
+  line[0] = '\0';
+  while (1) {
+    c = fgetc(stdin);
+    if (c == EOF || c == '\n') {
+      break;
+    }
+    if (nchars > 0 && (int) line_len >= nchars) {
+      break;
+    }
+    if (!raw_mode && c == '\\') {
+      int next = fgetc(stdin);
+      if (next == '\n') {
+        /* line continuation */
+        continue;
+      }
+      if (next != EOF) {
+        if (line_len + 1 < sizeof(line) - 1) {
+          line[line_len++] = (char) next;
+        }
+        continue;
+      }
+    }
+    if (line_len + 1 < sizeof(line) - 1) {
+      line[line_len++] = (char) c;
+    }
+  }
+  line[line_len] = '\0';
+
+  /* Split line on IFS and assign to variables. */
+  {
+    const char *ifs_val = oosh_shell_get_var(shell, "IFS");
+    const char *ifs = (ifs_val != NULL) ? ifs_val : " \t\n";
+    char *p = line;
+    int n_vars = argc - var_start;
+
+    for (i = var_start; i < argc; i++) {
+      char field[OOSH_MAX_VAR_VALUE];
+      int is_last = (i == argc - 1);
+
+      if (is_last) {
+        /* Last variable gets the remainder. */
+        copy_string(field, sizeof(field), p);
+      } else {
+        /* Split on IFS. */
+        size_t span = strcspn(p, ifs);
+        if (span >= sizeof(field)) {
+          span = sizeof(field) - 1;
+        }
+        memcpy(field, p, span);
+        field[span] = '\0';
+        p += span;
+        /* Skip IFS chars. */
+        p += strspn(p, ifs);
+      }
+      oosh_shell_set_var(shell, argv[i], field, 0);
+      (void) n_vars;
+    }
+  }
+
+  if (out != NULL && out_size > 0) {
+    out[0] = '\0';
+  }
+  return (c == EOF && line_len == 0) ? 1 : 0;
+}
+
+/* =========================================================================
+   E1-S6-T4: printf built-in
+   ========================================================================= */
+
+/* Process printf escape sequences in format string token. */
+static size_t printf_process_escape(const char *s, char *out, size_t out_size) {
+  size_t pos = 0;
+  while (*s != '\0') {
+    if (*s != '\\') {
+      if (pos < out_size - 1) {
+        out[pos++] = *s;
+      }
+      s++;
+      continue;
+    }
+    s++; /* skip backslash */
+    switch (*s) {
+      case 'a': if (pos < out_size - 1) out[pos++] = '\a'; s++; break;
+      case 'b': if (pos < out_size - 1) out[pos++] = '\b'; s++; break;
+      case 'f': if (pos < out_size - 1) out[pos++] = '\f'; s++; break;
+      case 'n': if (pos < out_size - 1) out[pos++] = '\n'; s++; break;
+      case 'r': if (pos < out_size - 1) out[pos++] = '\r'; s++; break;
+      case 't': if (pos < out_size - 1) out[pos++] = '\t'; s++; break;
+      case 'v': if (pos < out_size - 1) out[pos++] = '\v'; s++; break;
+      case '\\': if (pos < out_size - 1) out[pos++] = '\\'; s++; break;
+      case '\'': if (pos < out_size - 1) out[pos++] = '\''; s++; break;
+      case '"':  if (pos < out_size - 1) out[pos++] = '"';  s++; break;
+      case '0': {
+        /* Octal escape: \0NNN */
+        unsigned int val = 0;
+        int k = 0;
+        s++;
+        while (k < 3 && *s >= '0' && *s <= '7') {
+          val = val * 8 + (unsigned int)(*s - '0');
+          s++;
+          k++;
+        }
+        if (pos < out_size - 1) {
+          out[pos++] = (char) val;
+        }
+        break;
+      }
+      default:
+        if (pos < out_size - 1) out[pos++] = '\\';
+        if (pos < out_size - 1 && *s != '\0') out[pos++] = *s;
+        if (*s != '\0') s++;
+        break;
+    }
+  }
+  if (out_size > 0) {
+    out[pos] = '\0';
+  }
+  return pos;
+}
+
+static int command_printf(OoshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  const char *fmt;
+  int arg_idx;
+  char result[OOSH_MAX_OUTPUT];
+  size_t res_pos = 0;
+
+  (void) shell;
+
+  if (argc < 2) {
+    snprintf(out, out_size, "printf: missing format string");
+    return 1;
+  }
+
+  fmt = argv[1];
+  arg_idx = 2;
+  result[0] = '\0';
+
+  /* Walk format string. */
+  while (*fmt != '\0' && res_pos < sizeof(result) - 1) {
+    if (*fmt == '\\') {
+      char esc_buf[8];
+      char esc_in[4];
+      fmt++;
+      esc_in[0] = '\\';
+      esc_in[1] = *fmt ? *fmt : '\0';
+      esc_in[2] = '\0';
+      size_t wrote = printf_process_escape(esc_in, esc_buf, sizeof(esc_buf));
+      /* Handle octal specially */
+      if (*fmt == '0') {
+        char octal_str[8];
+        size_t oi = 0;
+        octal_str[oi++] = '\\';
+        octal_str[oi++] = *fmt;
+        fmt++;
+        while (oi < 4 && *fmt >= '0' && *fmt <= '7') {
+          octal_str[oi++] = *fmt++;
+        }
+        octal_str[oi] = '\0';
+        wrote = printf_process_escape(octal_str, esc_buf, sizeof(esc_buf));
+        for (size_t wi = 0; wi < wrote && res_pos < sizeof(result) - 1; wi++) {
+          result[res_pos++] = esc_buf[wi];
+        }
+      } else {
+        if (*fmt != '\0') {
+          fmt++;
+        }
+        for (size_t wi = 0; wi < wrote && res_pos < sizeof(result) - 1; wi++) {
+          result[res_pos++] = esc_buf[wi];
+        }
+      }
+      continue;
+    }
+
+    if (*fmt != '%') {
+      result[res_pos++] = *fmt++;
+      continue;
+    }
+
+    /* Format specifier. */
+    fmt++; /* skip '%' */
+    if (*fmt == '%') {
+      result[res_pos++] = '%';
+      fmt++;
+      continue;
+    }
+
+    /* Collect flags/width/precision into a mini-format. */
+    char spec[64];
+    size_t si = 0;
+    spec[si++] = '%';
+    /* Flags */
+    while (*fmt == '-' || *fmt == '+' || *fmt == ' ' || *fmt == '0' || *fmt == '#') {
+      if (si < sizeof(spec) - 3) spec[si++] = *fmt;
+      fmt++;
+    }
+    /* Width */
+    while (*fmt >= '0' && *fmt <= '9') {
+      if (si < sizeof(spec) - 3) spec[si++] = *fmt;
+      fmt++;
+    }
+    /* Precision */
+    if (*fmt == '.') {
+      if (si < sizeof(spec) - 3) spec[si++] = *fmt;
+      fmt++;
+      while (*fmt >= '0' && *fmt <= '9') {
+        if (si < sizeof(spec) - 3) spec[si++] = *fmt;
+        fmt++;
+      }
+    }
+
+    char conv = *fmt;
+    if (conv != '\0') {
+      fmt++;
+    }
+    spec[si++] = conv;
+    spec[si] = '\0';
+
+    const char *arg_str = (arg_idx < argc) ? argv[arg_idx++] : "";
+
+    char piece[OOSH_MAX_OUTPUT / 4];
+    switch (conv) {
+      case 's':
+        snprintf(piece, sizeof(piece), spec, arg_str);
+        break;
+      case 'b': {
+        /* %b: like %s but process escape sequences in the argument. */
+        char esc[OOSH_MAX_OUTPUT / 4];
+        printf_process_escape(arg_str, esc, sizeof(esc));
+        /* Replace spec's 'b' with 's'. */
+        spec[si - 1] = 's';
+        snprintf(piece, sizeof(piece), spec, esc);
+        break;
+      }
+      case 'd': case 'i':
+        snprintf(piece, sizeof(piece), spec, (int) strtol(arg_str, NULL, 0));
+        break;
+      case 'u':
+        snprintf(piece, sizeof(piece), spec, (unsigned int) strtoul(arg_str, NULL, 0));
+        break;
+      case 'o':
+        snprintf(piece, sizeof(piece), spec, (unsigned int) strtoul(arg_str, NULL, 0));
+        break;
+      case 'x': case 'X':
+        snprintf(piece, sizeof(piece), spec, (unsigned int) strtoul(arg_str, NULL, 0));
+        break;
+      case 'f': case 'e': case 'E': case 'g': case 'G':
+        snprintf(piece, sizeof(piece), spec, strtod(arg_str, NULL));
+        break;
+      case 'c':
+        piece[0] = arg_str[0];
+        piece[1] = '\0';
+        break;
+      default:
+        piece[0] = conv;
+        piece[1] = '\0';
+        break;
+    }
+
+    size_t piece_len = strlen(piece);
+    if (res_pos + piece_len < sizeof(result) - 1) {
+      memcpy(result + res_pos, piece, piece_len);
+      res_pos += piece_len;
+    }
+  }
+  result[res_pos] = '\0';
+
+  /* Write to stdout directly (printf outputs to stdout, not via `out`). */
+  fputs(result, stdout);
+  fflush(stdout);
+
+  if (out != NULL && out_size > 0) {
+    out[0] = '\0';
+  }
+  return 0;
+}
+
+/* =========================================================================
+   E1-S6-T6: getopts built-in
+   ========================================================================= */
+static int command_getopts(OoshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  const char *optstring;
+  const char *varname;
+  const char *optind_str;
+  int optind_val;
+  int args_start;
+  int nargs;
+  const char *arg;
+  char ch;
+  char optarg_buf[OOSH_MAX_VAR_VALUE];
+  char optind_new[32];
+
+  if (argc < 3) {
+    snprintf(out, out_size, "getopts: usage: getopts optstring name [args]");
+    return 1;
+  }
+
+  optstring = argv[1];
+  varname   = argv[2];
+  args_start = 3; /* use argv[3..] or positional params if not provided */
+
+  /* Get current OPTIND (default 1). */
+  optind_str = oosh_shell_get_var(shell, "OPTIND");
+  optind_val = (optind_str != NULL && optind_str[0] != '\0') ? atoi(optind_str) : 1;
+  if (optind_val < 1) {
+    optind_val = 1;
+  }
+
+  /* Build the argument list to scan. */
+  if (argc > args_start) {
+    nargs = argc - args_start;
+  } else {
+    /* Use positional parameters. */
+    nargs = shell->positional_count;
+    args_start = -1; /* signal: use positional */
+  }
+
+  /* Find argument at OPTIND. */
+  {
+    int arg_index = optind_val; /* 1-based */
+    if (arg_index > nargs) {
+      /* No more options. */
+      oosh_shell_set_var(shell, varname, "?", 0);
+      if (out != NULL && out_size > 0) out[0] = '\0';
+      return 1;
+    }
+
+    arg = (args_start >= 0) ? argv[args_start + arg_index - 1]
+                             : shell->positional_params[arg_index - 1];
+  }
+
+  /* Check if we're past options. */
+  if (arg[0] != '-' || arg[1] == '\0' || strcmp(arg, "--") == 0) {
+    oosh_shell_set_var(shell, varname, "?", 0);
+    if (out != NULL && out_size > 0) out[0] = '\0';
+    return 1;
+  }
+
+  ch = arg[1];
+
+  /* Look for ch in optstring. */
+  {
+    const char *p = optstring;
+    int silent = (p[0] == ':');
+    if (silent) p++;
+
+    const char *found = strchr(p, (int) ch);
+    if (found == NULL) {
+      /* Unknown option. */
+      char ch_str[2] = { ch, '\0' };
+      oosh_shell_set_var(shell, varname, silent ? "?" : "?", 0);
+      if (!silent) {
+        snprintf(out, out_size, "getopts: illegal option -- %c", ch);
+      } else {
+        oosh_shell_set_var(shell, "OPTARG", ch_str, 0);
+        if (out != NULL && out_size > 0) out[0] = '\0';
+      }
+      /* Advance OPTIND. */
+      snprintf(optind_new, sizeof(optind_new), "%d", optind_val + 1);
+      oosh_shell_set_var(shell, "OPTIND", optind_new, 0);
+      return 0;
+    }
+
+    /* Does option take an argument? */
+    if (*(found + 1) == ':') {
+      /* Need an argument. */
+      if (arg[2] != '\0') {
+        /* Argument is concatenated. */
+        copy_string(optarg_buf, sizeof(optarg_buf), arg + 2);
+        snprintf(optind_new, sizeof(optind_new), "%d", optind_val + 1);
+      } else {
+        /* Argument is next item. */
+        int next_idx = optind_val + 1;
+        const char *next_arg;
+        if (next_idx > nargs) {
+          if (silent) {
+            oosh_shell_set_var(shell, varname, ":", 0);
+          } else {
+            oosh_shell_set_var(shell, varname, "?", 0);
+            snprintf(out, out_size, "getopts: option requires an argument -- %c", ch);
+          }
+          snprintf(optind_new, sizeof(optind_new), "%d", next_idx);
+          oosh_shell_set_var(shell, "OPTIND", optind_new, 0);
+          return 0;
+        }
+        next_arg = (args_start >= 0) ? argv[args_start + next_idx - 1]
+                                     : shell->positional_params[next_idx - 1];
+        copy_string(optarg_buf, sizeof(optarg_buf), next_arg);
+        snprintf(optind_new, sizeof(optind_new), "%d", next_idx + 1);
+      }
+      oosh_shell_set_var(shell, "OPTARG", optarg_buf, 0);
+    } else {
+      /* No argument. */
+      oosh_shell_set_var(shell, "OPTARG", "", 0);
+      snprintf(optind_new, sizeof(optind_new), "%d", optind_val + 1);
+    }
+  }
+
+  {
+    char ch_str[2] = { ch, '\0' };
+    oosh_shell_set_var(shell, varname, ch_str, 0);
+  }
+  oosh_shell_set_var(shell, "OPTIND", optind_new, 0);
+
+  if (out != NULL && out_size > 0) {
+    out[0] = '\0';
+  }
+  return 0;
+}
+
+/* =========================================================================
+   E1-S6-T7: test / [ built-in
+   ========================================================================= */
+
+/* Forward declaration. */
+static int test_eval(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size);
+
+static int test_primary(int argc, char **argv, char *err, size_t err_size) {
+  (void) err;
+  (void) err_size;
+
+  if (argc == 0) {
+    return 1; /* false */
+  }
+
+  if (argc == 1) {
+    /* Non-empty string → true. */
+    return (argv[0][0] != '\0') ? 0 : 1;
+  }
+
+  if (argc >= 2 && strcmp(argv[0], "!") == 0) {
+    int rest_argc = argc - 1;
+    char **rest_argv = argv + 1;
+    return test_eval(&rest_argc, &rest_argv, err, err_size) == 0 ? 1 : 0;
+  }
+
+  if (argc == 2) {
+    const char *op  = argv[0];
+    const char *arg = argv[1];
+
+    /* Unary file tests. */
+#ifndef _WIN32
+    if (strcmp(op, "-e") == 0) {
+      struct stat st;
+      return stat(arg, &st) == 0 ? 0 : 1;
+    }
+    if (strcmp(op, "-f") == 0) {
+      struct stat st;
+      return (stat(arg, &st) == 0 && S_ISREG(st.st_mode)) ? 0 : 1;
+    }
+    if (strcmp(op, "-d") == 0) {
+      struct stat st;
+      return (stat(arg, &st) == 0 && S_ISDIR(st.st_mode)) ? 0 : 1;
+    }
+    if (strcmp(op, "-L") == 0 || strcmp(op, "-h") == 0) {
+      struct stat st;
+      return (lstat(arg, &st) == 0 && S_ISLNK(st.st_mode)) ? 0 : 1;
+    }
+    if (strcmp(op, "-r") == 0) {
+      return access(arg, R_OK) == 0 ? 0 : 1;
+    }
+    if (strcmp(op, "-w") == 0) {
+      return access(arg, W_OK) == 0 ? 0 : 1;
+    }
+    if (strcmp(op, "-x") == 0) {
+      return access(arg, X_OK) == 0 ? 0 : 1;
+    }
+    if (strcmp(op, "-s") == 0) {
+      struct stat st;
+      return (stat(arg, &st) == 0 && st.st_size > 0) ? 0 : 1;
+    }
+    if (strcmp(op, "-b") == 0) {
+      struct stat st;
+      return (stat(arg, &st) == 0 && S_ISBLK(st.st_mode)) ? 0 : 1;
+    }
+    if (strcmp(op, "-c") == 0) {
+      struct stat st;
+      return (stat(arg, &st) == 0 && S_ISCHR(st.st_mode)) ? 0 : 1;
+    }
+    if (strcmp(op, "-p") == 0) {
+      struct stat st;
+      return (stat(arg, &st) == 0 && S_ISFIFO(st.st_mode)) ? 0 : 1;
+    }
+    if (strcmp(op, "-S") == 0) {
+      struct stat st;
+      return (stat(arg, &st) == 0 && S_ISSOCK(st.st_mode)) ? 0 : 1;
+    }
+    if (strcmp(op, "-t") == 0) {
+      return isatty(atoi(arg)) ? 0 : 1;
+    }
+#else
+    if (strcmp(op, "-e") == 0 || strcmp(op, "-f") == 0 || strcmp(op, "-d") == 0) {
+      FILE *f = fopen(arg, "r");
+      if (f != NULL) { fclose(f); return 0; }
+      return 1;
+    }
+    if (strcmp(op, "-r") == 0 || strcmp(op, "-w") == 0 || strcmp(op, "-x") == 0) {
+      FILE *f = fopen(arg, "r");
+      if (f != NULL) { fclose(f); return 0; }
+      return 1;
+    }
+    if (strcmp(op, "-t") == 0) {
+      return 1;
+    }
+#endif
+    /* Unary string tests. */
+    if (strcmp(op, "-n") == 0) {
+      return (arg[0] != '\0') ? 0 : 1;
+    }
+    if (strcmp(op, "-z") == 0) {
+      return (arg[0] == '\0') ? 0 : 1;
+    }
+  }
+
+  if (argc == 3) {
+    const char *lhs = argv[0];
+    const char *op  = argv[1];
+    const char *rhs = argv[2];
+
+    /* String comparisons. */
+    if (strcmp(op, "=") == 0 || strcmp(op, "==") == 0) {
+      return strcmp(lhs, rhs) == 0 ? 0 : 1;
+    }
+    if (strcmp(op, "!=") == 0) {
+      return strcmp(lhs, rhs) != 0 ? 0 : 1;
+    }
+    if (strcmp(op, "<") == 0) {
+      return strcmp(lhs, rhs) < 0 ? 0 : 1;
+    }
+    if (strcmp(op, ">") == 0) {
+      return strcmp(lhs, rhs) > 0 ? 0 : 1;
+    }
+
+    /* Numeric comparisons. */
+    if (strcmp(op, "-eq") == 0) {
+      return strtol(lhs, NULL, 10) == strtol(rhs, NULL, 10) ? 0 : 1;
+    }
+    if (strcmp(op, "-ne") == 0) {
+      return strtol(lhs, NULL, 10) != strtol(rhs, NULL, 10) ? 0 : 1;
+    }
+    if (strcmp(op, "-lt") == 0) {
+      return strtol(lhs, NULL, 10) <  strtol(rhs, NULL, 10) ? 0 : 1;
+    }
+    if (strcmp(op, "-le") == 0) {
+      return strtol(lhs, NULL, 10) <= strtol(rhs, NULL, 10) ? 0 : 1;
+    }
+    if (strcmp(op, "-gt") == 0) {
+      return strtol(lhs, NULL, 10) >  strtol(rhs, NULL, 10) ? 0 : 1;
+    }
+    if (strcmp(op, "-ge") == 0) {
+      return strtol(lhs, NULL, 10) >= strtol(rhs, NULL, 10) ? 0 : 1;
+    }
+
+#ifndef _WIN32
+    /* File comparisons. */
+    if (strcmp(op, "-nt") == 0) {
+      struct stat s1, s2;
+      if (stat(lhs, &s1) != 0 || stat(rhs, &s2) != 0) return 1;
+      return s1.st_mtime > s2.st_mtime ? 0 : 1;
+    }
+    if (strcmp(op, "-ot") == 0) {
+      struct stat s1, s2;
+      if (stat(lhs, &s1) != 0 || stat(rhs, &s2) != 0) return 1;
+      return s1.st_mtime < s2.st_mtime ? 0 : 1;
+    }
+    if (strcmp(op, "-ef") == 0) {
+      struct stat s1, s2;
+      if (stat(lhs, &s1) != 0 || stat(rhs, &s2) != 0) return 1;
+      return (s1.st_dev == s2.st_dev && s1.st_ino == s2.st_ino) ? 0 : 1;
+    }
+#endif
+  }
+
+  return 1; /* default: false */
+}
+
+/* Simple recursive descent evaluator for test expressions. */
+static int test_eval_or(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size);
+static int test_eval_and(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size);
+static int test_eval_not(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size);
+
+static int test_eval(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
+  return test_eval_or(argc_ptr, argv_ptr, err, err_size);
+}
+
+static int test_eval_or(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
+  int result = test_eval_and(argc_ptr, argv_ptr, err, err_size);
+  while (*argc_ptr >= 1 && strcmp((*argv_ptr)[0], "-o") == 0) {
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    int right = test_eval_and(argc_ptr, argv_ptr, err, err_size);
+    result = (result == 0 || right == 0) ? 0 : 1;
+  }
+  return result;
+}
+
+static int test_eval_and(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
+  int result = test_eval_not(argc_ptr, argv_ptr, err, err_size);
+  while (*argc_ptr >= 1 && strcmp((*argv_ptr)[0], "-a") == 0) {
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    int right = test_eval_not(argc_ptr, argv_ptr, err, err_size);
+    result = (result == 0 && right == 0) ? 0 : 1;
+  }
+  return result;
+}
+
+static int test_eval_not(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
+  if (*argc_ptr >= 1 && strcmp((*argv_ptr)[0], "!") == 0) {
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    int val = test_eval_not(argc_ptr, argv_ptr, err, err_size);
+    return val == 0 ? 1 : 0;
+  }
+  /* Collect args for primary until we hit -a, -o, or run out. */
+  char *prim_argv[16];
+  int prim_argc = 0;
+  while (*argc_ptr > 0 &&
+         strcmp((*argv_ptr)[0], "-a") != 0 &&
+         strcmp((*argv_ptr)[0], "-o") != 0 &&
+         prim_argc < 15) {
+    /* Look-ahead: stop before a binary operator at position 2 (e.g. a -eq b). */
+    if (prim_argc == 1 && *argc_ptr >= 3) {
+      const char *maybe_op = (*argv_ptr)[1];
+      if (strcmp(maybe_op, "-eq") == 0 || strcmp(maybe_op, "-ne") == 0 ||
+          strcmp(maybe_op, "-lt") == 0 || strcmp(maybe_op, "-le") == 0 ||
+          strcmp(maybe_op, "-gt") == 0 || strcmp(maybe_op, "-ge") == 0 ||
+          strcmp(maybe_op, "=")   == 0 || strcmp(maybe_op, "!=")  == 0 ||
+          strcmp(maybe_op, "<")   == 0 || strcmp(maybe_op, ">")   == 0 ||
+          strcmp(maybe_op, "-nt") == 0 || strcmp(maybe_op, "-ot") == 0 ||
+          strcmp(maybe_op, "-ef") == 0) {
+        /* Consume 2 more args (op + rhs). */
+        prim_argv[prim_argc++] = (*argv_ptr)[0];
+        prim_argv[prim_argc++] = (*argv_ptr)[1];
+        prim_argv[prim_argc++] = (*argv_ptr)[2];
+        *argc_ptr -= 3;
+        *argv_ptr += 3;
+        break;
+      }
+    }
+    prim_argv[prim_argc++] = (*argv_ptr)[0];
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+  }
+  return test_primary(prim_argc, prim_argv, err, err_size);
+}
+
+static int command_test(OoshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  int eval_argc;
+  char **eval_argv;
+  int result;
+  char err[256];
+
+  (void) shell;
+  if (out != NULL && out_size > 0) {
+    out[0] = '\0';
+  }
+
+  /* argv[0] = "test", args start at 1. */
+  eval_argc = argc - 1;
+  eval_argv = argv + 1;
+  err[0] = '\0';
+
+  if (eval_argc == 0) {
+    return 1; /* false */
+  }
+
+  result = test_eval(&eval_argc, &eval_argv, err, sizeof(err));
+  if (err[0] != '\0' && out != NULL && out_size > 0) {
+    copy_string(out, out_size, err);
+  }
+  return result;
+}
+
+static int command_lbracket(OoshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  /* [ expr ] — must end with ]. */
+  if (argc < 2 || strcmp(argv[argc - 1], "]") != 0) {
+    if (out != NULL && out_size > 0) {
+      snprintf(out, out_size, "[: missing closing ]");
+    }
+    return 2;
+  }
+  /* Call command_test with argc-1 (strip ]). */
+  return command_test(shell, argc - 1, argv, out, out_size);
+}
+
 static int register_builtin_commands(OoshShell *shell) {
   /* --- PURE: read-only, never modifies shell state ----------------------- */
   if (register_builtin(shell, "help",      "show commands and expression syntax",       command_help,    OOSH_BUILTIN_PURE) != 0 ||
@@ -6669,7 +7641,16 @@ static int register_builtin_commands(OoshShell *shell) {
       register_builtin(shell, "return",   "exit the current shell function",                command_return,   OOSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "bg",       "resume a stopped background job",                command_bg,       OOSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "fg",       "resume or wait for a background job in the foreground", command_fg, OOSH_BUILTIN_MUTANT) != 0 ||
-      register_builtin(shell, "wait",     "wait for background jobs to complete",           command_wait,     OOSH_BUILTIN_MUTANT) != 0) {
+      register_builtin(shell, "wait",     "wait for background jobs to complete",           command_wait,     OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "read",     "read a line from stdin into variables",          command_read,     OOSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "getopts",  "parse option flags from positional arguments",   command_getopts,  OOSH_BUILTIN_MUTANT) != 0) {
+    return 1;
+  }
+
+  /* --- PURE: new POSIX commands (no shell state modification) ------------ */
+  if (register_builtin(shell, "printf",   "format and print arguments",                    command_printf,   OOSH_BUILTIN_PURE)   != 0 ||
+      register_builtin(shell, "test",     "evaluate a conditional expression",             command_test,     OOSH_BUILTIN_PURE)   != 0 ||
+      register_builtin(shell, "[",        "evaluate a conditional expression",             command_lbracket, OOSH_BUILTIN_PURE)   != 0) {
     return 1;
   }
 
@@ -7154,6 +8135,28 @@ int oosh_shell_execute_line(OoshShell *shell, const char *line, char *out, size_
 
   status = oosh_execute_ast(shell, &ast, out, out_size);
   shell->last_status = status;
+
+  /* E1-S6-T1: fire any pending async signal traps. */
+  fire_pending_traps(shell, out, out_size);
+
+  /* E1-S6-T2: ERR trap and errexit — fire only when not in a condition. */
+  if (status != 0 && shell->in_condition == 0 && !shell->running_exit_trap) {
+    if (shell->traps[OOSH_TRAP_ERR].active && shell->traps[OOSH_TRAP_ERR].command[0] != '\0') {
+      char err_out[OOSH_MAX_OUTPUT];
+      err_out[0] = '\0';
+      /* Temporarily disable ERR trap to avoid recursion. */
+      shell->traps[OOSH_TRAP_ERR].active = 0;
+      oosh_shell_execute_line(shell, shell->traps[OOSH_TRAP_ERR].command, err_out, sizeof(err_out));
+      shell->traps[OOSH_TRAP_ERR].active = 1;
+      if (err_out[0] != '\0') {
+        oosh_shell_write_output(err_out);
+      }
+    }
+    if (shell->opt_errexit) {
+      shell->running = 0;
+    }
+  }
+
   return status;
 }
 

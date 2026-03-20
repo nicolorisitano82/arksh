@@ -270,9 +270,48 @@ static int execute_command_substitution(OoshShell *shell, const char *command, c
   char saved_cwd[OOSH_MAX_PATH];
   int have_saved_cwd = 0;
   int status;
+  const char *p;
 
   if (shell == NULL || command == NULL || out == NULL || out_size == 0 || error == NULL || error_size == 0) {
     return 1;
+  }
+
+  /* E1-S6-T8: $(< file) — read file contents directly without spawning a subshell. */
+  p = command;
+  while (*p == ' ' || *p == '\t') { p++; }
+  if (*p == '<') {
+    p++;
+    while (*p == ' ' || *p == '\t') { p++; }
+    if (*p != '\0') {
+      char path[OOSH_MAX_PATH];
+      size_t path_len = 0;
+      while (*p != '\0' && *p != ' ' && *p != '\t' && *p != '\n') {
+        if (path_len + 1 < sizeof(path)) {
+          path[path_len++] = *p;
+        }
+        p++;
+      }
+      path[path_len] = '\0';
+      if (*p == '\0' || (*p != '<' && path_len > 0)) {
+        FILE *f = fopen(path, "r");
+        if (f == NULL) {
+          snprintf(error, error_size, "$(< %s): cannot open file", path);
+          return 1;
+        }
+        size_t total = 0;
+        int c;
+        while ((c = fgetc(f)) != EOF && total < out_size - 1) {
+          out[total++] = (char) c;
+        }
+        out[total] = '\0';
+        fclose(f);
+        /* Trim trailing newlines, as all command substitutions do. */
+        while (total > 0 && (out[total - 1] == '\n' || out[total - 1] == '\r')) {
+          out[--total] = '\0';
+        }
+        return 0;
+      }
+    }
   }
 
   if (clone_subshell(shell, &subshell, error, error_size) != 0) {
@@ -302,6 +341,116 @@ static int execute_command_substitution(OoshShell *shell, const char *command, c
 
   copy_string(out, out_size, command_output);
   return 0;
+}
+
+/* ---- Glob prefix matcher (for ${var/pat/repl}) ---- */
+
+/* Try to match glob pat at the beginning of str (not necessarily the whole
+   string).  Returns the number of characters consumed from str on success,
+   or -1 if the pattern does not match at this position.  '*' is greedy. */
+static int glob_match_prefix(const char *pat, const char *str) {
+  if (pat == NULL || str == NULL) {
+    return -1;
+  }
+  if (*pat == '\0') {
+    return 0; /* empty pattern matches 0 chars */
+  }
+  if (*pat == '*') {
+    /* Greedy: try to consume as many characters as possible first. */
+    size_t max_len = strlen(str);
+    long long k;
+    for (k = (long long) max_len; k >= 0; --k) {
+      int rest = glob_match_prefix(pat + 1, str + k);
+      if (rest >= 0) {
+        return (int) k + rest;
+      }
+    }
+    return -1;
+  }
+  if (*pat == '?') {
+    if (*str == '\0') {
+      return -1;
+    }
+    int rest = glob_match_prefix(pat + 1, str + 1);
+    if (rest < 0) {
+      return -1;
+    }
+    return 1 + rest;
+  }
+  if (*pat == '\\' && *(pat + 1) != '\0') {
+    pat++;
+  }
+  if (*pat != *str) {
+    return -1;
+  }
+  {
+    int rest = glob_match_prefix(pat + 1, str + 1);
+    if (rest < 0) {
+      return -1;
+    }
+    return 1 + rest;
+  }
+}
+
+/* Apply pattern substitution: ${var/pat/repl} (global=0) or ${var//pat/repl}
+   (global=1).  Puts result in out. */
+static void apply_pattern_subst(const char *val, const char *pat, const char *repl,
+                                int global, char *out, size_t out_size) {
+  size_t out_pos = 0;
+  size_t i = 0;
+  size_t val_len;
+  size_t repl_len;
+
+  if (out_size == 0) {
+    return;
+  }
+  if (val == NULL || pat == NULL) {
+    copy_string(out, out_size, val != NULL ? val : "");
+    return;
+  }
+  if (repl == NULL) {
+    repl = "";
+  }
+
+  val_len  = strlen(val);
+  repl_len = strlen(repl);
+
+  while (i <= val_len) {
+    int match_len = (i < val_len || pat[0] == '\0') ? glob_match_prefix(pat, val + i) : -1;
+    if (match_len >= 0) {
+      /* Append replacement. */
+      size_t to_copy = repl_len;
+      if (out_pos + to_copy >= out_size) {
+        to_copy = out_size - 1 - out_pos;
+      }
+      memcpy(out + out_pos, repl, to_copy);
+      out_pos += to_copy;
+
+      if (match_len == 0 && i < val_len) {
+        /* Zero-width match: also copy the current char to avoid infinite loop. */
+        if (out_pos < out_size - 1) {
+          out[out_pos++] = val[i];
+        }
+        i++;
+      } else {
+        i += (size_t) match_len;
+      }
+
+      if (!global) {
+        /* Copy the rest verbatim. */
+        while (i < val_len && out_pos < out_size - 1) {
+          out[out_pos++] = val[i++];
+        }
+        break;
+      }
+    } else {
+      if (i < val_len && out_pos < out_size - 1) {
+        out[out_pos++] = val[i];
+      }
+      i++;
+    }
+  }
+  out[out_pos] = '\0';
 }
 
 /* Forward declaration needed by lookup_var_value. */
@@ -654,6 +803,10 @@ static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, ch
       i++;
       op = '#';
       if (raw[i] == '#') { op2 = '#'; i++; }
+    } else if (raw[i] == '/') {
+      i++;
+      op = '/';
+      if (raw[i] == '/') { op2 = '/'; i++; }
     }
 
     /* Read operand until '}'. */
@@ -683,6 +836,12 @@ static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, ch
 
     /* No operator: simple lookup. */
     if (op == '\0') {
+      /* E1-S6-T2: nounset (-u): error on unset variable. */
+      if (shell != NULL && shell->opt_nounset && !is_set &&
+          var_name[0] != '@' && var_name[0] != '*' && var_name[0] != '#') {
+        snprintf(error, error_size, "%s: unbound variable", var_name);
+        return 1;
+      }
       copy_string(out, out_size, val_buf);
       return 0;
     }
@@ -736,6 +895,28 @@ static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, ch
           /* ${var#pat} or ${var##pat}: prefix trim. */
           apply_prefix_trim(val_buf, operand, op2 == '#', out, out_size);
           return 0;
+
+        case '/': {
+          /* E1-S6-T5: ${var/pat/repl} or ${var//pat/repl}: pattern substitution. */
+          /* Split operand on first '/' to get pattern and replacement. */
+          const char *slash = strchr(operand, '/');
+          char pat[OOSH_MAX_OUTPUT];
+          const char *repl;
+          if (slash != NULL) {
+            size_t pat_len = (size_t)(slash - operand);
+            if (pat_len >= sizeof(pat)) {
+              pat_len = sizeof(pat) - 1;
+            }
+            memcpy(pat, operand, pat_len);
+            pat[pat_len] = '\0';
+            repl = slash + 1;
+          } else {
+            copy_string(pat, sizeof(pat), operand);
+            repl = "";
+          }
+          apply_pattern_subst(val_buf, pat, repl, op2 == '/', out, out_size);
+          return 0;
+        }
 
         default:
           copy_string(out, out_size, val_buf);

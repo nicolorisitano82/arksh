@@ -158,8 +158,25 @@ typedef enum {
 } OoshControlSignalKind;
 
 typedef enum {
-  OOSH_TRAP_EXIT = 0,
-  OOSH_TRAP_COUNT
+  OOSH_TRAP_EXIT  = 0,  /* pseudo: EXIT */
+  OOSH_TRAP_ERR   = 1,  /* pseudo: ERR  */
+  OOSH_TRAP_HUP   = 2,
+  OOSH_TRAP_INT   = 3,
+  OOSH_TRAP_QUIT  = 4,
+  OOSH_TRAP_ILL   = 5,
+  OOSH_TRAP_ABRT  = 6,
+  OOSH_TRAP_FPE   = 7,
+  OOSH_TRAP_SEGV  = 8,
+  OOSH_TRAP_PIPE  = 9,
+  OOSH_TRAP_ALRM  = 10,
+  OOSH_TRAP_TERM  = 11,
+  OOSH_TRAP_USR1  = 12,
+  OOSH_TRAP_USR2  = 13,
+  OOSH_TRAP_CHLD  = 14,
+  OOSH_TRAP_TSTP  = 15,
+  OOSH_TRAP_TTIN  = 16,
+  OOSH_TRAP_TTOU  = 17,
+  OOSH_TRAP_COUNT = 18
 } OoshTrapKind;
 
 typedef struct {
@@ -248,6 +265,12 @@ typedef struct OoshShell {
   int function_depth;
   OoshTrapEntry traps[OOSH_TRAP_COUNT];
   int running_exit_trap;
+  /* E1-S6-T2: set -e/-u/-x/-o options */
+  int opt_errexit;   /* -e: exit on command failure */
+  int opt_nounset;   /* -u: error on unset variable */
+  int opt_xtrace;    /* -x: print commands before execution */
+  int opt_pipefail;  /* -o pipefail: pipeline fails if any stage fails */
+  int in_condition;  /* true while evaluating if/while/until condition */
   char positional_params[OOSH_MAX_POSITIONAL_PARAMS][OOSH_MAX_VAR_VALUE];
   int positional_count;
   long long last_bg_pid;

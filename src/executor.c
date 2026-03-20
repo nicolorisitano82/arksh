@@ -4622,6 +4622,17 @@ static int execute_simple_command(OoshShell *shell, const OoshSimpleCommandNode 
     return 0;
   }
 
+  /* E1-S6-T2: xtrace — print expanded command to stderr before execution. */
+  if (shell->opt_xtrace) {
+    int ti;
+    fprintf(stderr, "+");
+    for (ti = 0; ti < expanded_argc; ti++) {
+      fprintf(stderr, " %s", expanded_argv[ti]);
+    }
+    fprintf(stderr, "\n");
+    fflush(stderr);
+  }
+
   function_def = oosh_shell_find_function(shell, expanded_argv[0]);
   command_def = find_registered_command(shell, expanded_argv[0]);
   build_command_argv(expanded_argv, expanded_argc, argv);
@@ -5666,9 +5677,12 @@ static int execute_if_command(OoshShell *shell, const OoshIfCommandNode *command
 
   out[0] = '\0';
   segment_output[0] = '\0';
+  shell->in_condition++;
   if (evaluate_condition_status(shell, command->condition, &condition_status, segment_output, sizeof(segment_output)) != 0) {
+    shell->in_condition--;
     return 1;
   }
+  shell->in_condition--;
   if (append_output_segment(out, out_size, segment_output) != 0) {
     snprintf(out, out_size, "combined command output too large");
     return 1;
@@ -5719,9 +5733,13 @@ static int execute_while_command(OoshShell *shell, const OoshWhileCommandNode *c
     int condition_status;
 
     segment_output[0] = '\0';
+    shell->in_condition++;
     if (evaluate_condition_status(shell, command->condition, &condition_status, segment_output, sizeof(segment_output)) != 0) {
+      shell->in_condition--;
+      shell->loop_depth--;
       return 1;
     }
+    shell->in_condition--;
     if (append_output_segment(out, out_size, segment_output) != 0) {
       snprintf(out, out_size, "combined command output too large");
       return 1;
@@ -5785,9 +5803,13 @@ static int execute_until_command(OoshShell *shell, const OoshUntilCommandNode *c
     int condition_status;
 
     segment_output[0] = '\0';
+    shell->in_condition++;
     if (evaluate_condition_status(shell, command->condition, &condition_status, segment_output, sizeof(segment_output)) != 0) {
+      shell->in_condition--;
+      shell->loop_depth--;
       return 1;
     }
+    shell->in_condition--;
     if (append_output_segment(out, out_size, segment_output) != 0) {
       snprintf(out, out_size, "combined command output too large");
       return 1;

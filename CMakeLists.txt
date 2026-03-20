@@ -828,6 +828,64 @@ if(BUILD_TESTING)
   set_tests_properties(oosh_max_numbers     PROPERTIES PASS_REGULAR_EXPRESSION "5")
   set_tests_properties(oosh_sum_property    PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
 
+  # E1-S6: POSIX compatibility tests
+  add_test(NAME oosh_trap_posix_all
+    COMMAND oosh -c "trap 'echo caught' TERM; trap -p"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME oosh_trap_err
+    COMMAND oosh -c "trap 'echo err' ERR; /usr/bin/false; echo after"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME oosh_set_errexit
+    COMMAND oosh -c "set -e; /usr/bin/false; echo after"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME oosh_set_nounset
+    COMMAND oosh -c "set -u; echo \${UNSET_VAR_12345:-ok}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME oosh_printf_basic
+    COMMAND oosh -c "printf '%s %d' hello 42"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME oosh_param_subst_single
+    COMMAND oosh -c "set x hello; echo \${x/ell/ELL}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME oosh_param_subst_global
+    COMMAND oosh -c "set x aabbcc; echo \${x//b/X}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME oosh_test_builtin_string
+    COMMAND oosh -c "test -n hello && echo yes"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME oosh_test_bracket_numeric
+    COMMAND oosh -c "if [ 5 -gt 3 ]; then echo yes; fi"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME oosh_cmd_subst_file
+    COMMAND oosh -c "echo hello > /tmp/oosh_cs_test.txt; set contents \$(< /tmp/oosh_cs_test.txt); echo \$contents"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  set_tests_properties(
+    oosh_trap_posix_all oosh_trap_err oosh_set_errexit oosh_set_nounset
+    oosh_printf_basic oosh_param_subst_single oosh_param_subst_global
+    oosh_test_builtin_string oosh_test_bracket_numeric oosh_cmd_subst_file
+    PROPERTIES TIMEOUT 10
+  )
+  set_tests_properties(oosh_trap_posix_all    PROPERTIES PASS_REGULAR_EXPRESSION "TERM")
+  set_tests_properties(oosh_trap_err          PROPERTIES PASS_REGULAR_EXPRESSION "err")
+  set_tests_properties(oosh_set_errexit       PROPERTIES WILL_FAIL TRUE)
+  set_tests_properties(oosh_set_nounset       PROPERTIES PASS_REGULAR_EXPRESSION "ok")
+  set_tests_properties(oosh_printf_basic      PROPERTIES PASS_REGULAR_EXPRESSION "hello 42")
+  set_tests_properties(oosh_param_subst_single PROPERTIES PASS_REGULAR_EXPRESSION "hELLo")
+  set_tests_properties(oosh_param_subst_global PROPERTIES PASS_REGULAR_EXPRESSION "aaXXcc")
+  set_tests_properties(oosh_test_builtin_string PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(oosh_test_bracket_numeric PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(oosh_cmd_subst_file    PROPERTIES PASS_REGULAR_EXPRESSION "hello")
+
   # E8-S1-T1: lexer unit tests
   add_test(NAME oosh_unit_lexer COMMAND oosh_unit_lexer)
   set_tests_properties(oosh_unit_lexer PROPERTIES
