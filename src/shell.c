@@ -6020,6 +6020,7 @@ static int command_set(ArkshShell *shell, int argc, char **argv, char *out, size
   int i;
   char name[ARKSH_MAX_VAR_NAME];
   char value[ARKSH_MAX_VAR_VALUE];
+  int saw_double_dash = 0;
 
   if (argc == 1) {
     return format_var_list(shell, 0, out, out_size);
@@ -6036,8 +6037,9 @@ static int command_set(ArkshShell *shell, int argc, char **argv, char *out, size
       break; /* not a flag, fall through to legacy var-assign logic */
     }
     if (strcmp(arg, "--") == 0) {
+      saw_double_dash = 1;
       i++;
-      break; /* end of options */
+      break; /* end of options: remaining args are positional params */
     }
 
     enable = (arg[0] == '-') ? 1 : 0;
@@ -6085,6 +6087,25 @@ static int command_set(ArkshShell *shell, int argc, char **argv, char *out, size
     continue;
   end_flags:
     break;
+  }
+
+  /* E1-S7-T6: set -- [args...] sets positional parameters $1 $2 ... */
+  if (saw_double_dash) {
+    int j;
+    int new_count = argc - i;
+
+    if (new_count > ARKSH_MAX_POSITIONAL_PARAMS) {
+      snprintf(out, out_size, "set: too many positional parameters");
+      return 1;
+    }
+    for (j = 0; j < new_count; j++) {
+      copy_string(shell->positional_params[j], sizeof(shell->positional_params[j]), argv[i + j]);
+    }
+    for (j = new_count; j < shell->positional_count; j++) {
+      shell->positional_params[j][0] = '\0';
+    }
+    shell->positional_count = new_count;
+    return 0;
   }
 
   /* If all args were flags, done. */
@@ -6968,6 +6989,210 @@ static int command_continue(ArkshShell *shell, int argc, char **argv, char *out,
   return handle_loop_control_line(shell, line, "continue", ARKSH_CONTROL_SIGNAL_CONTINUE, out, out_size);
 }
 
+/* =========================================================================
+   E1-S7-T6: shift [n] — shift positional parameters left by n (default 1)
+   ========================================================================= */
+static int command_shift(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  int n = 1;
+  int i;
+
+  if (shell == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  out[0] = '\0';
+
+  if (argc >= 2) {
+    char *endptr = NULL;
+    long val = strtol(argv[1], &endptr, 10);
+
+    if (endptr == argv[1] || *endptr != '\0' || val < 0) {
+      snprintf(out, out_size, "shift: invalid count: %s", argv[1]);
+      return 1;
+    }
+    n = (int) val;
+  }
+
+  if (n > shell->positional_count) {
+    snprintf(out, out_size, "shift: cannot shift: count exceeds number of positional parameters");
+    return 1;
+  }
+
+  for (i = 0; i + n < shell->positional_count; i++) {
+    copy_string(shell->positional_params[i], sizeof(shell->positional_params[i]), shell->positional_params[i + n]);
+  }
+  for (i = shell->positional_count - n; i < shell->positional_count; i++) {
+    shell->positional_params[i][0] = '\0';
+  }
+  shell->positional_count -= n;
+  return 0;
+}
+
+/* =========================================================================
+   E1-S7-T7: local [var[=value] ...] — declare function-local variables
+   ========================================================================= */
+static int command_local(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  int i;
+  char var_name[ARKSH_MAX_VAR_NAME];
+  char var_value[ARKSH_MAX_VAR_VALUE];
+
+  if (shell == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  out[0] = '\0';
+
+  if (argc == 1) {
+    return 0; /* nothing to do */
+  }
+
+  for (i = 1; i < argc; i++) {
+    /* Accept both `local NAME` and `local NAME=VALUE` */
+    if (split_assignment(argv[i], var_name, sizeof(var_name), var_value, sizeof(var_value)) == 0) {
+      /* NAME=VALUE form */
+      if (!is_valid_identifier(var_name)) {
+        snprintf(out, out_size, "local: invalid variable name: %s", var_name);
+        return 1;
+      }
+      if (arksh_shell_set_var(shell, var_name, var_value, 0) != 0) {
+        snprintf(out, out_size, "local: cannot set variable: %s", var_name);
+        return 1;
+      }
+    } else {
+      /* NAME-only form: declare as empty if not already set */
+      copy_string(var_name, sizeof(var_name), argv[i]);
+      if (!is_valid_identifier(var_name)) {
+        snprintf(out, out_size, "local: invalid variable name: %s", var_name);
+        return 1;
+      }
+      if (arksh_shell_get_var(shell, var_name) == NULL) {
+        if (arksh_shell_set_var(shell, var_name, "", 0) != 0) {
+          snprintf(out, out_size, "local: cannot declare variable: %s", var_name);
+          return 1;
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+/* =========================================================================
+   E1-S7-T8b: readonly [var[=value] ...] — mark variables as read-only
+   ========================================================================= */
+static int command_readonly(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  int i;
+  char var_name[ARKSH_MAX_VAR_NAME];
+  char var_value[ARKSH_MAX_VAR_VALUE];
+
+  if (shell == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  out[0] = '\0';
+
+  for (i = 1; i < argc; i++) {
+    if (split_assignment(argv[i], var_name, sizeof(var_name), var_value, sizeof(var_value)) == 0) {
+      if (!is_valid_identifier(var_name)) {
+        snprintf(out, out_size, "readonly: invalid variable name: %s", var_name);
+        return 1;
+      }
+      if (arksh_shell_set_var(shell, var_name, var_value, 0) != 0) {
+        snprintf(out, out_size, "readonly: cannot set variable: %s", var_name);
+        return 1;
+      }
+    } else {
+      copy_string(var_name, sizeof(var_name), argv[i]);
+      if (!is_valid_identifier(var_name)) {
+        snprintf(out, out_size, "readonly: invalid variable name: %s", var_name);
+        return 1;
+      }
+    }
+    /* Note: arksh does not yet have a read-only flag per variable;
+       we set the value but do not enforce the restriction. */
+  }
+  return 0;
+}
+
+static size_t printf_process_escape(const char *s, char *out, size_t out_size);
+
+/* =========================================================================
+   E1-S7-T8c: echo [-n] [-e] [args...] — print arguments
+   ========================================================================= */
+static int command_echo(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  int newline = 1;
+  int interpret_escapes = 0;
+  int first_arg = 1;
+  int i;
+  char result[ARKSH_MAX_OUTPUT];
+  size_t pos = 0;
+
+  (void) shell;
+
+  if (out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  /* Parse flags */
+  while (first_arg < argc) {
+    const char *a = argv[first_arg];
+
+    if (a[0] != '-' || a[1] == '\0') {
+      break;
+    }
+    {
+      const char *f = a + 1;
+      int valid = 1;
+
+      while (*f != '\0') {
+        if (*f == 'n') {
+          newline = 0;
+        } else if (*f == 'e') {
+          interpret_escapes = 1;
+        } else if (*f == 'E') {
+          interpret_escapes = 0;
+        } else {
+          valid = 0;
+          break;
+        }
+        f++;
+      }
+      if (!valid) {
+        break;
+      }
+    }
+    first_arg++;
+  }
+
+  result[0] = '\0';
+  for (i = first_arg; i < argc; i++) {
+    if (i > first_arg) {
+      if (pos < sizeof(result) - 1) {
+        result[pos++] = ' ';
+      }
+    }
+    if (interpret_escapes) {
+      pos += printf_process_escape(argv[i], result + pos, sizeof(result) - pos);
+    } else {
+      size_t len = strlen(argv[i]);
+
+      if (pos + len >= sizeof(result)) {
+        len = sizeof(result) - pos - 1;
+      }
+      memcpy(result + pos, argv[i], len);
+      pos += len;
+    }
+  }
+  if (newline && pos < sizeof(result) - 1) {
+    result[pos++] = '\n';
+  }
+  result[pos] = '\0';
+
+  /* Write to out buffer; the shell framework (write_buffer / print_output_if_any)
+     handles printing to stdout, and the |> bridge captures via out_size. */
+  copy_string(out, out_size, result);
+  return 0;
+}
+
 static int command_return(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
   char line[ARKSH_MAX_LINE];
   int index;
@@ -7791,7 +8016,11 @@ static int register_builtin_commands(ArkshShell *shell) {
       register_builtin(shell, "fg",       "resume or wait for a background job in the foreground", command_fg, ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "wait",     "wait for background jobs to complete",           command_wait,     ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "read",     "read a line from stdin into variables",          command_read,     ARKSH_BUILTIN_MUTANT) != 0 ||
-      register_builtin(shell, "getopts",  "parse option flags from positional arguments",   command_getopts,  ARKSH_BUILTIN_MUTANT) != 0) {
+      register_builtin(shell, "getopts",  "parse option flags from positional arguments",   command_getopts,  ARKSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "shift",    "shift positional parameters left by n",          command_shift,    ARKSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "local",    "declare function-local variables",               command_local,    ARKSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "readonly", "mark variables as read-only",                    command_readonly, ARKSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "echo",     "print arguments to standard output",             command_echo,     ARKSH_BUILTIN_MUTANT) != 0) {
     return 1;
   }
 

@@ -886,6 +886,43 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_test_bracket_numeric PROPERTIES PASS_REGULAR_EXPRESSION "yes")
   set_tests_properties(arksh_cmd_subst_file    PROPERTIES PASS_REGULAR_EXPRESSION "hello")
 
+  # E1-S7: POSIX script syntax compatibility
+  add_test(NAME arksh_posix_assign_single
+    COMMAND arksh -c "X=hello; echo \$X"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_posix_assign_multi
+    COMMAND arksh -c "A=foo B=bar; echo \$A \$B"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_posix_assign_expand
+    COMMAND arksh -c "BASE=hel; X=\${BASE}lo; echo \$X"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_posix_assign_env_prefix
+    COMMAND arksh -c "GREETING=hi env"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_posix_fn_basic
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/posix-basic.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_posix_fn_positional
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/posix-positional.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  set_tests_properties(
+    arksh_posix_assign_single arksh_posix_assign_multi arksh_posix_assign_expand
+    arksh_posix_assign_env_prefix arksh_posix_fn_basic arksh_posix_fn_positional
+    PROPERTIES TIMEOUT 10
+  )
+  set_tests_properties(arksh_posix_assign_single    PROPERTIES PASS_REGULAR_EXPRESSION "hello")
+  set_tests_properties(arksh_posix_assign_multi     PROPERTIES PASS_REGULAR_EXPRESSION "foo bar")
+  set_tests_properties(arksh_posix_assign_expand    PROPERTIES PASS_REGULAR_EXPRESSION "hello")
+  set_tests_properties(arksh_posix_assign_env_prefix PROPERTIES PASS_REGULAR_EXPRESSION "GREETING=hi")
+  set_tests_properties(arksh_posix_fn_basic         PROPERTIES PASS_REGULAR_EXPRESSION "hello")
+  set_tests_properties(arksh_posix_fn_positional    PROPERTIES PASS_REGULAR_EXPRESSION "foo bar")
+
   # E8-S1-T1: lexer unit tests
   add_test(NAME arksh_unit_lexer COMMAND arksh_unit_lexer)
   set_tests_properties(arksh_unit_lexer PROPERTIES

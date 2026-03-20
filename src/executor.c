@@ -1676,6 +1676,21 @@ static int bind_function_parameters(
     return 1;
   }
 
+  /* E1-S7-T4: param_count == -1 means POSIX-style function (no named params,
+     accepts any number of positional arguments). */
+  if (function_def->param_count == -1) {
+    int posix_argc = command->argc - 1;
+    if (posix_argc > ARKSH_MAX_POSITIONAL_PARAMS) {
+      snprintf(out, out_size, "function %s: too many arguments", function_def->name);
+      return 1;
+    }
+    shell->positional_count = posix_argc;
+    for (i = 0; i < posix_argc; ++i) {
+      copy_string(shell->positional_params[i], sizeof(shell->positional_params[i]), command->argv[i + 1]);
+    }
+    return 0;
+  }
+
   if (command->argc - 1 != function_def->param_count) {
     snprintf(
       out,
@@ -3136,7 +3151,7 @@ static int apply_grep_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
   write_index = 0;
   for (i = 0; i < value->list.count; ++i) {
     item_text[0] = '\0';
-    if (arksh_value_render(&value->list.items[i], item_text, sizeof(item_text)) != 0) {
+    if (arksh_value_item_render(&value->list.items[i], item_text, sizeof(item_text)) != 0) {
       continue;
     }
     if (strstr(item_text, pattern) != NULL) {
@@ -4603,6 +4618,23 @@ static int execute_shell_function(
   return status;
 }
 
+/* E1-S7-T1/T2: split a POSIX assignment token NAME=value.
+   Returns 1 and fills name_buf / *value_out on success, 0 otherwise. */
+static int split_posix_assignment(const char *s, char *name_buf, size_t name_buf_size, const char **value_out) {
+  size_t i;
+  if (s == NULL || name_buf == NULL || value_out == NULL) return 0;
+  if (!isalpha((unsigned char)s[0]) && s[0] != '_') return 0;
+  for (i = 1; s[i] != '\0' && s[i] != '='; i++) {
+    if (!isalnum((unsigned char)s[i]) && s[i] != '_') return 0;
+  }
+  if (s[i] != '=') return 0;
+  if (name_buf_size <= i) return 0;
+  memcpy(name_buf, s, i);
+  name_buf[i] = '\0';
+  *value_out = s + i + 1;
+  return 1;
+}
+
 static int execute_simple_command(ArkshShell *shell, const ArkshSimpleCommandNode *command, char *out, size_t out_size) {
   char expanded_argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
   char *argv[ARKSH_MAX_ARGS];
@@ -4620,6 +4652,105 @@ static int execute_simple_command(ArkshShell *shell, const ArkshSimpleCommandNod
 
   if (expanded_argc == 0) {
     return 0;
+  }
+
+  /* E1-S7-T1: POSIX standalone assignment — VAR=value [VAR2=value2 ...]
+     If every argument is a NAME=value token, set variables and return. */
+  {
+    int ai, all_assignments = 1;
+    for (ai = 0; ai < expanded_argc; ai++) {
+      char name[ARKSH_MAX_TOKEN];
+      const char *value;
+      if (!split_posix_assignment(expanded_argv[ai], name, sizeof(name), &value)) {
+        all_assignments = 0;
+        break;
+      }
+    }
+    if (all_assignments) {
+      for (ai = 0; ai < expanded_argc; ai++) {
+        char name[ARKSH_MAX_TOKEN];
+        const char *value;
+        split_posix_assignment(expanded_argv[ai], name, sizeof(name), &value);
+        if (arksh_shell_set_var(shell, name, value, 0) != 0) {
+          snprintf(out, out_size, "assignment: cannot set '%s'", name);
+          return 1;
+        }
+      }
+      return 0;
+    }
+  }
+
+  /* E1-S7-T2: VAR=val cmd — leading assignments become env vars for the
+     child process; they are NOT set in the current shell environment. */
+  {
+    int prefix_count = 0, ai;
+    for (ai = 0; ai < expanded_argc; ai++) {
+      char name[ARKSH_MAX_TOKEN];
+      const char *value;
+      if (!split_posix_assignment(expanded_argv[ai], name, sizeof(name), &value)) break;
+      prefix_count++;
+    }
+    if (prefix_count > 0 && prefix_count < expanded_argc) {
+      /* Rebuild argv without the assignment prefix, temporarily export vars. */
+      char saved_values[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
+      int saved_existed[ARKSH_MAX_ARGS];
+      char names[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
+      int result, ri;
+
+      for (ai = 0; ai < prefix_count; ai++) {
+        const char *value;
+        const char *existing;
+        split_posix_assignment(expanded_argv[ai], names[ai], sizeof(names[ai]), &value);
+        existing = arksh_shell_get_var(shell, names[ai]);
+        if (existing != NULL) {
+          saved_existed[ai] = 1;
+          copy_string(saved_values[ai], sizeof(saved_values[ai]), existing);
+        } else {
+          saved_existed[ai] = 0;
+          saved_values[ai][0] = '\0';
+        }
+        arksh_shell_set_var(shell, names[ai], value, 1);
+      }
+
+      /* Execute the command portion */
+      {
+        char sub_expanded[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
+        char *sub_argv[ARKSH_MAX_ARGS];
+        int sub_argc = expanded_argc - prefix_count;
+        for (ri = 0; ri < sub_argc; ri++) {
+          copy_string(sub_expanded[ri], sizeof(sub_expanded[ri]), expanded_argv[prefix_count + ri]);
+        }
+        build_command_argv(sub_expanded, sub_argc, sub_argv);
+
+        function_def = arksh_shell_find_function(shell, sub_argv[0]);
+        command_def = find_registered_command(shell, sub_argv[0]);
+
+        if (function_def != NULL) {
+          ArkshSimpleCommandNode expanded_command;
+          memset(&expanded_command, 0, sizeof(expanded_command));
+          expanded_command.argc = sub_argc;
+          for (ri = 0; ri < sub_argc; ri++) {
+            copy_string(expanded_command.argv[ri], sizeof(expanded_command.argv[ri]), sub_expanded[ri]);
+            copy_string(expanded_command.raw_argv[ri], sizeof(expanded_command.raw_argv[ri]), sub_expanded[ri]);
+          }
+          result = execute_shell_function(shell, function_def, &expanded_command, out, out_size);
+        } else if (command_def != NULL) {
+          result = command_def->fn(shell, sub_argc, sub_argv, out, out_size);
+        } else {
+          result = arksh_execute_external_command(shell, sub_argc, sub_argv, out, out_size);
+        }
+      }
+
+      /* Restore previous values (un-export or restore) */
+      for (ai = 0; ai < prefix_count; ai++) {
+        if (saved_existed[ai]) {
+          arksh_shell_set_var(shell, names[ai], saved_values[ai], 0);
+        } else {
+          arksh_shell_unset_var(shell, names[ai]);
+        }
+      }
+      return result;
+    }
   }
 
   /* E1-S6-T2: xtrace — print expanded command to stderr before execution. */
@@ -5470,11 +5601,39 @@ static int evaluate_condition_status(ArkshShell *shell, const char *text, int *o
 }
 
 static int evaluate_switch_operand(ArkshShell *shell, const char *text, ArkshValue *out_value, char *out, size_t out_size) {
+  char expanded[ARKSH_MAX_OUTPUT];
+  const char *p;
+  int has_paren_before_space = 0;
+
   if (shell == NULL || text == NULL || out_value == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
-  return evaluate_expression_atom(shell, text, out_value, out, out_size);
+  /* E1-S7-T5: determine whether the case expression is an arksh resolver call
+     (e.g. text("directory"), list(...)) or a plain shell word (e.g. "hello",
+     "$var").  Resolver calls have '(' before any whitespace; everything else
+     is expanded as a POSIX shell word so that bare identifiers like "hello"
+     remain the literal string "hello" rather than being resolved as variable
+     bindings (ARKSH_VALUE_SOURCE_BINDING). */
+  for (p = text; *p != '\0' && !isspace((unsigned char) *p); p++) {
+    if (*p == '(') {
+      has_paren_before_space = 1;
+      break;
+    }
+  }
+
+  if (has_paren_before_space) {
+    return evaluate_expression_atom(shell, text, out_value, out, out_size);
+  }
+
+  /* Plain shell word: expand $var, $((arith)), $(cmd), ~, but no IFS
+     splitting or glob expansion (per POSIX §2.13). */
+  if (expand_single_word(shell, text, ARKSH_EXPAND_MODE_COMMAND_NAME, expanded, sizeof(expanded), out, out_size) != 0) {
+    return evaluate_expression_atom(shell, text, out_value, out, out_size);
+  }
+
+  arksh_value_set_string(out_value, expanded);
+  return 0;
 }
 
 static int case_char_class_matches(const char *pattern, size_t *index, char text_char) {

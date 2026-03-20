@@ -3042,18 +3042,31 @@ static int parse_case_command_tokens(const char *line, const ArkshTokenStream *s
       pattern_start_index++;
     }
 
-    for (i = pattern_start_index; i < stream->count; ++i) {
-      const ArkshToken *token = &stream->tokens[i];
+    /* E1-S7-T5: search for the closing ')' using local depth tracking so that
+       the optional opening '(' of a POSIX pattern like '(hello)' does not make
+       the pattern content appear nested to position_is_inside_nested_structure,
+       which counts from the start of the full line. */
+    {
+      int inner_depth = 0;
 
-      if (position_is_inside_nested_structure(line, token->position)) {
-        continue;
-      }
-      if (token->kind == ARKSH_TOKEN_RPAREN) {
-        pattern_end_index = i;
-        break;
-      }
-      if (token_is_word_value(stream, i, "esac")) {
-        break;
+      for (i = pattern_start_index; i < stream->count; ++i) {
+        const ArkshToken *token = &stream->tokens[i];
+
+        if (token->kind == ARKSH_TOKEN_LPAREN) {
+          inner_depth++;
+          continue;
+        }
+        if (token->kind == ARKSH_TOKEN_RPAREN) {
+          if (inner_depth > 0) {
+            inner_depth--;
+            continue;
+          }
+          pattern_end_index = i;
+          break;
+        }
+        if (token_is_word_value(stream, i, "esac")) {
+          break;
+        }
       }
     }
 
@@ -3379,6 +3392,85 @@ static int parse_switch_command_tokens(const char *line, const ArkshTokenStream 
   if (stream->tokens[section_index + 1].kind != ARKSH_TOKEN_EOF) {
     snprintf(error, error_size, "unexpected token after endswitch");
     return 1;
+  }
+
+  return 0;
+}
+
+/* E1-S7-T4: Parse POSIX function syntax: name() { body }
+   Fills out_function with name and body. param_count is 0 (POSIX has no
+   named params in header — positional params $1/$2/... are used at runtime). */
+static int parse_posix_function_command_tokens(
+  const char *line,
+  const ArkshTokenStream *stream,
+  ArkshFunctionCommandNode *out_function,
+  char *error,
+  size_t error_size
+) {
+  size_t brace_start, brace_end, pos;
+  const char *brace_ptr;
+
+  if (line == NULL || stream == NULL || out_function == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+
+  /* Must be: WORD LPAREN RPAREN ... { body } EOF */
+  if (stream->tokens[0].kind != ARKSH_TOKEN_WORD ||
+      !is_identifier_text(stream->tokens[0].text) ||
+      stream->tokens[1].kind != ARKSH_TOKEN_LPAREN ||
+      stream->tokens[2].kind != ARKSH_TOKEN_RPAREN ||
+      stream->tokens[3].kind == ARKSH_TOKEN_EOF) {
+    return 1;
+  }
+
+  /* POSIX forbids certain reserved words as function names */
+  if (keyword_is_compound_open(stream->tokens[0].text) ||
+      keyword_is_compound_close(stream->tokens[0].text)) {
+    return 1;
+  }
+
+  /* Find '{' in the line after the ')' token */
+  pos = stream->tokens[2].position + strlen(stream->tokens[2].raw);
+  while (line[pos] != '\0' && line[pos] != '{') {
+    pos++;
+  }
+  if (line[pos] != '{') {
+    snprintf(error, error_size, "POSIX function '%s': expected '{' after '()'", stream->tokens[0].text);
+    return 1;
+  }
+
+  brace_start = pos;
+  brace_ptr = line + brace_start;
+  if (find_matching_delimiter(brace_ptr, '{', '}', &brace_end) != 0) {
+    snprintf(error, error_size, "POSIX function '%s': unterminated '{' — missing '}'", stream->tokens[0].text);
+    return 1;
+  }
+
+  memset(out_function, 0, sizeof(*out_function));
+  copy_string(out_function->name, sizeof(out_function->name), stream->tokens[0].text);
+  copy_string(out_function->source, sizeof(out_function->source), line);
+  /* param_count = -1 marks this as a POSIX-style function (positional args,
+     no named params, no arity check at call site). */
+  out_function->param_count = -1;
+
+  /* Body is everything between '{' and '}' */
+  trim_compound_segment(brace_ptr, 1, brace_end, out_function->body, sizeof(out_function->body));
+
+  if (out_function->body[0] == '\0') {
+    snprintf(error, error_size, "POSIX function '%s': body cannot be empty", stream->tokens[0].text);
+    return 1;
+  }
+
+  /* Ensure nothing follows the closing '}' except optional ';' and EOF */
+  {
+    size_t tail = brace_start + brace_end + 1;
+    while (line[tail] != '\0' && (line[tail] == ';' || isspace((unsigned char)line[tail]))) {
+      tail++;
+    }
+    if (line[tail] != '\0') {
+      snprintf(error, error_size, "unexpected token after POSIX function definition");
+      return 1;
+    }
   }
 
   return 0;
@@ -3817,6 +3909,29 @@ int arksh_parse_line(const char *line, ArkshAst *out_ast, char *error, size_t er
       strcmp(error, "default branch does not accept a match expression") == 0 ||
       strcmp(error, "default branch must be the last branch in switch") == 0) {
     return 1;
+  }
+
+  /* E1-S7-T4: POSIX function syntax name() { body } — try before arksh syntax.
+     Only propagate as fatal if a '{' was actually found (definite function def
+     attempt): unterminated brace or trailing tokens after '}'. */
+  {
+    char posix_fn_error[ARKSH_MAX_LINE];
+    posix_fn_error[0] = '\0';
+    if (parse_posix_function_command_tokens(trimmed, &stream, &out_ast->as.function_command, posix_fn_error, sizeof(posix_fn_error)) == 0) {
+      out_ast->kind = ARKSH_AST_FUNCTION_COMMAND;
+      return 0;
+    }
+    if (posix_fn_error[0] != '\0' &&
+        (strncmp(posix_fn_error, "POSIX function", 14) == 0 &&
+         strstr(posix_fn_error, "expected '{'") == NULL)) {
+      /* Fatal: '{' was found but body/structure is invalid */
+      copy_string(error, error_size, posix_fn_error);
+      return 1;
+    }
+    if (strcmp(posix_fn_error, "unexpected token after POSIX function definition") == 0) {
+      copy_string(error, error_size, posix_fn_error);
+      return 1;
+    }
   }
 
   if (parse_function_command_tokens(trimmed, &stream, &out_ast->as.function_command, error, error_size) == 0) {

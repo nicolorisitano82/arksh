@@ -1763,17 +1763,35 @@ static int expand_raw_token(
         continue;
       }
       if (c == '\\') {
+        char next;
+
         if (raw[i + 1] == '\0') {
           snprintf(error, error_size, "dangling escape inside double quotes");
           return 1;
         }
-        c = raw[i + 1];
-        if (append_char(expanded, expanded_size, &expanded_len, c, error, error_size, "expanded token") != 0 ||
-            append_pattern_char(pattern, pattern_size, &pattern_len, c, 0, has_glob, error, error_size) != 0) {
-          return 1;
+        next = raw[i + 1];
+        /* E1-S7-T8a: POSIX §2.2.3 — inside double quotes, backslash only
+           escapes $, `, ", \, and a literal newline.  For all other chars
+           the backslash is retained so that "\n" stays as the two-character
+           sequence \n and printf can process it. */
+        if (next == '$' || next == '`' || next == '"' || next == '\\' || next == '\n') {
+          c = next;
+          if (append_char(expanded, expanded_size, &expanded_len, c, error, error_size, "expanded token") != 0 ||
+              append_pattern_char(pattern, pattern_size, &pattern_len, c, 0, has_glob, error, error_size) != 0) {
+            return 1;
+          }
+          i += 2;
+        } else {
+          /* Keep both backslash and next character. */
+          if (append_char(expanded, expanded_size, &expanded_len, '\\', error, error_size, "expanded token") != 0 ||
+              append_pattern_char(pattern, pattern_size, &pattern_len, '\\', 0, has_glob, error, error_size) != 0 ||
+              append_char(expanded, expanded_size, &expanded_len, next, error, error_size, "expanded token") != 0 ||
+              append_pattern_char(pattern, pattern_size, &pattern_len, next, 0, has_glob, error, error_size) != 0) {
+            return 1;
+          }
+          i += 2;
         }
         saw_prefix_fragment = 1;
-        i += 2;
         continue;
       }
       if (c == '$') {

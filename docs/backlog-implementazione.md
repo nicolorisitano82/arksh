@@ -148,20 +148,20 @@ sugli script reali.
 
 ### E1-S7. Compatibilità POSIX — sintassi di base degli script
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
 Gap emersi dal test sistematico di script POSIX reali su arksh. Ogni task è indipendente
 e può essere implementato isolatamente. L'ordine riflette l'impatto: i primi tre coprono
 la stragrande maggioranza degli script esistenti.
 
-- `[ ]` `E1-S7-T1` `(posix-script)` `VAR=value` — assegnazione shell in stile POSIX: riconoscere `NOME=valore` in posizione di comando (token che inizia con `[A-Za-z_][A-Za-z0-9_]*=`) come assegnazione della variabile `NOME`; supportare assegnazioni multiple consecutive (`A=1 B=2`); supportare assegnazione vuota (`X=`); il valore deve essere espanso (`X=$HOME`); modifiche in `lexer.c` (nuovo token `ARKSH_TOKEN_ASSIGNMENT`) e `executor.c` (rilevamento in `execute_simple_command`)
-- `[ ]` `E1-S7-T2` `(posix-script)` `VAR=val cmd` — env-prefix inline: una o più assegnazioni `VAR=val` immediatamente prima di un comando esterno passano le variabili all'ambiente del processo figlio senza modificare l'ambiente della shell corrente (`execve` con env aumentato); se il comando è un built-in, le variabili vengono impostate temporaneamente per la durata del built-in; prerequisito: E1-S7-T1 (riconoscimento token `ASSIGNMENT`)
-- `[ ]` `E1-S7-T3` `(posix-script)` `$((...))` — arithmetic expansion: `$((expr))` valuta `expr` come espressione intera POSIX e sostituisce il risultato; supportare operatori `+ - * / % ** & | ^ ~ << >> ! < <= > >= == != && ||` e variabili (`$x` oppure nome nudo); implementato in `expand.c` come nuovo caso in `resolve_variable` / `execute_command_substitution`; `(( expr ))` come statement con exit code 0/1 in base al risultato (bash extension utile)
-- `[ ]` `E1-S7-T4` `(posix-script)` `f() { ... }` — sintassi funzione POSIX: `nome() { lista_comandi; }` deve essere equivalente alla sintassi arksh `function nome() do ... endfunction`; il parser deve riconoscere `WORD ( ) {` come dichiarazione di funzione e costruire lo stesso nodo AST `ARKSH_FUNCTION_DEF`; supportare anche `nome() (...)` per funzione in subshell
-- `[ ]` `E1-S7-T5` `(posix-script)` `case` — fix del pattern matching: il pattern `word)` (senza spazio prima di `)`) deve matchare correttamente; verificare che `;;` e `;&` (fall-through) funzionino; supportare pattern multipli `a|b)` per la stessa branch; aggiungere test di regressione con i casi standard: stringa esatta, glob `*`, alternanza `a|b`
-- `[ ]` `E1-S7-T6` `(posix-script)` `shift` e `set --` — `shift [n]` scorre i parametri posizionali di `n` posizioni (default 1): `$2 → $1`, `$3 → $2`, ecc.; `set -- arg...` imposta i parametri posizionali `$1 $2 ...` svuotando i precedenti; `set --` senza argomenti li svuota; necessario per `while getopts`/`while [ $# -gt 0 ]`
-- `[ ]` `E1-S7-T7` `(posix-script)` `local` — keyword per variabili locali a funzione: `local var` o `local var=valore` crea la variabile nello scope della funzione corrente e la rimuove all'uscita; implementato come nuovo built-in `ARKSH_BUILTIN_MUTANT` che marca la variabile come locale nel frame corrente; le funzioni già supportano uno scope separato, si tratta di esporre il controllo esplicito
-- `[ ]` `E1-S7-T8` `(posix-script)` fix minori: (a) `printf` — fix dell'escape `\n`/`\t`/`\r` nel formato quando la stringa arriva dal parser shell (il `\n` a due caratteri non viene convertito in newline); (b) `readonly var[=val]` — nuovo built-in che marca una variabile come sola lettura e genera errore se si tenta di riscriverla; (c) `echo -e` — flag per abilitare la interpretazione degli escape nelle stringhe
+- `[x]` `E1-S7-T1` `(posix-script)` `VAR=value` — assegnazione shell in stile POSIX: riconoscere `NOME=valore` in posizione di comando come assegnazione; supporto assegnazioni multiple consecutive (`A=1 B=2`), assegnazione vuota (`X=`), valore espanso (`X=$HOME`); rilevamento in `execute_simple_command` con `split_posix_assignment` senza modifiche al lexer
+- `[x]` `E1-S7-T2` `(posix-script)` `VAR=val cmd` — env-prefix inline: assegnazioni prefisso passate come variabili esportate temporaneamente al comando, ripristinate dopo l'esecuzione; funziona per built-in, funzioni e comandi esterni
+- `[ ]` `E1-S7-T3` `(posix-script)` `$((...))` — arithmetic expansion: funziona nell'object pipeline; non ancora supportata come espansione di argomenti shell standard (`echo $((3+4))`)
+- `[x]` `E1-S7-T4` `(posix-script)` `f() { ... }` — sintassi funzione POSIX: `parse_posix_function_command_tokens` nel parser; `param_count = -1` come sentinella POSIX (nessun controllo arity, argomenti come `$1`/`$2`/…); accetta qualsiasi numero di argomenti posizionali
+- `[x]` `E1-S7-T5` `(posix-script)` `case` — fix del pattern matching: `word)` senza spazio funziona; `(word)` funziona; `evaluate_switch_operand` usa `expand_single_word(COMMAND_NAME)` per bare words invece di `evaluate_expression_atom`
+- `[x]` `E1-S7-T6` `(posix-script)` `shift` e `set --` — `shift [n]` e `set -- arg...` implementati in `shell.c`; `$#` aggiornato
+- `[x]` `E1-S7-T7` `(posix-script)` `local` — built-in `local` implementato; dichiara variabile nel frame funzione corrente
+- `[x]` `E1-S7-T8` `(posix-script)` fix minori: (a) `printf` — fix POSIX §2.2.3: backslash dentro doppi apici espanso solo per `$`, `` ` ``, `"`, `\`, newline letterale; (b) `readonly` — built-in implementato; (c) `echo -e/-n/-E` — built-in implementato con escape processing
 
 ---
 
@@ -665,25 +665,16 @@ Stato story: `[ ]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E2 `[x]`, E3 `[x]`, E4 `[x]`
-**In corso:** E1 (S1–S6 `[x]`, S7 aperta), E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S3 `[x]`, S4–S6 aperte), E8 (S1-T1/T2 `[x]`, S3-T1 `[x]`)
-**Aperte:** E1-S7 (posix-script), E5-S6 (tab-advance), E6 (S4–S6), E7 (JSON), E8 (resto), E9 (release)
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`
+**In corso:** E5 (S1–S5 `[x]`, S6 aperta), E6 (S1–S3 `[x]`, S4–S6 aperte), E8 (S1-T1/T2 `[x]`, S3-T1 `[x]`)
+**Aperte:** E5-S6 (tab-advance), E6 (S4–S6), E7 (JSON), E8 (resto), E9 (release)
 
 ---
 
-### Percorso H — sintassi POSIX di base (E1-S7, alta priorità)
+### Percorso H — sintassi POSIX di base (E1-S7, completata)
 
-I primi tre task coprono la maggioranza degli script shell reali. Sono indipendenti
-tra loro ma T2 richiede T1 come prerequisito.
-
-1. `E1-S7-T1` — `VAR=value` assignment POSIX (lexer + executor)
-2. `E1-S7-T3` — `$((...))` arithmetic expansion (expand.c)
-3. `E1-S7-T4` — `f() { ... }` sintassi funzione POSIX (parser.c)
-4. `E1-S7-T5` — fix `case` pattern matching
-5. `E1-S7-T6` — `shift` + `set --` positional params
-6. `E1-S7-T2` — `VAR=val cmd` env-prefix inline (richiede T1)
-7. `E1-S7-T7` — `local` nelle funzioni
-8. `E1-S7-T8` — fix `printf \n`, `readonly`, `echo -e`
+Tutti i task di E1-S7 sono stati implementati. Rimane aperto T3 (`$((...))` come
+espansione di argomento shell) che richiede modifiche a `expand.c`.
 
 ### Percorso A — qualità e CI (E8, raccomandato — sblocca E9)
 

@@ -69,7 +69,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 | Syntax highlighting in REPL            | No (plugin esterno) | Parziale (zsh-syntax-highlighting) | Si (built-in) | Si | No | Si (built-in) |
 | Autosuggestion da history              | No     | Parziale (zsh-autosuggestions) | Si (built-in) | Si | No | Si (built-in) |
 | Tab completion contestuale             | Si     | Si (avanzata) | Si (avanzata) | Si | Minimale | Si (contestuale) |
-| Completion per tipo (fn, alias, var, stage) | Parziale | Parziale | Parziale | Si | No | Si (con indicatori `(fn)`, `(@)`, `(let)`) |
+| Completion per tipo (fn, alias, var, stage) | Parziale | Parziale | Parziale | Si | No | Si (con indicatori `(fn)`, `(@)`, `(let)`; stage da metadati registrati) |
 | Completion dopo `->` (metodi oggetto)  | No     | No     | No     | No      | No     | Si |
 | Navigazione history (frecce)           | Si     | Si     | Si     | Si      | Minimale | Si |
 | Editing in-line (Ctrl-A, Ctrl-E)       | Si (readline) | Si | Si | Si | No | Si |
@@ -83,11 +83,13 @@ La dimensione più importante per capire il posizionamento di arksh.
 
 | Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
-| Sintassi compatibile POSIX             | Largamente | Largamente | No  | No     | Si (stretto) | No |
+| Sintassi compatibile POSIX             | Largamente | Largamente | No  | No     | Si (stretto) | Alta (E1-S7) |
+| `VAR=value` standalone assignment      | Si     | Si     | Si     | Si      | Si     | Si (E1-S7-T1) |
+| `VAR=val cmd` env-prefix               | Si     | Si     | Si     | Si      | Si     | Si (E1-S7-T2) |
 | `if` / `while` / `for`                 | Si     | Si     | Si     | Si      | Si     | Si     |
-| `case ... esac` (pattern matching)     | Si     | Si     | `switch` | `match` | Si | Si + `switch/case` proprio |
-| Funzioni definibili                    | Si     | Si     | Si     | Si      | Si     | Si (con parametri named) |
-| Scope locale per variabili             | Parziale (`local`) | Si (`local`) | Si | Si | Parziale | Si (per funzioni e block) |
+| `case ... esac` (pattern matching)     | Si     | Si     | `switch` | `match` | Si | Si + `switch/case` proprio (E1-S7-T5) |
+| Funzioni definibili                    | Si     | Si     | Si     | Si      | Si     | Si (named params + POSIX `f() {}`, E1-S7-T4) |
+| Scope locale per variabili             | Parziale (`local`) | Si (`local`) | Si | Si | Parziale | Si (`local` built-in, E1-S7-T7) |
 | Funzioni come valori                   | No     | No     | No     | Si      | No     | Parziale (block sono valori) |
 | Override di built-in con funzioni      | Si     | Si     | Si     | Si      | Si     | Si + `builtin` per escape |
 | `trap` / segnali                       | Si (completo) | Si | Parziale | Parziale | Si | Si (POSIX completo + `ERR`, `trap -p`) |
@@ -126,9 +128,10 @@ La dimensione più importante per capire il posizionamento di arksh.
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
 | Plugin / moduli di terze parti         | No (solo script) | Si (zplug, zinit, ecc.) | Si (fisher, oh-my-fish) | Si (moduli) | No | Si (ABI C stabile) |
 | Aggiungere comandi da plugin           | Script | Script | Script | Script/plugin | No | Si (libreria dinamica) |
-| Aggiungere tipi / resolver da plugin   | No     | No     | No     | Parziale | No | Si (typed-map con `register_type_descriptor`, API v3) |
-| Aggiungere stage pipeline da plugin    | No     | No     | No     | Parziale | No | Si |
+| Aggiungere tipi / resolver da plugin   | No     | No     | No     | Parziale | No | Si (typed-map con `register_type_descriptor`, API v4) |
+| Aggiungere stage pipeline da plugin    | No     | No     | No     | Parziale | No | Si (con descrizione; visibili in `help stages`) |
 | Aggiungere proprietà/metodi oggetto    | No     | No     | No     | No      | No     | Si (su tipi built-in e su tipi custom del plugin) |
+| Introspezione metadati a runtime       | No     | No     | No     | Parziale | No     | Si (`help commands|resolvers|stages|types`, `help <name>`) |
 | Framework di configurazione community  | Oh My Bash | Oh My Zsh, Prezto | Oh My Fish | Parziale | No | No (early stage) |
 | Caricamento RC all'avvio               | `~/.bashrc` / `~/.bash_profile` | `~/.zshrc` | `~/.config/fish/config.fish` | `~/.config/nushell/config.nu` | `~/.profile` | `~/.arkshrc` / `ARKSH_RC` |
 
@@ -188,5 +191,6 @@ Nushell è la shell che si avvicina di più al posizionamento di arksh. Le diffe
 | Ereditarietà / OOP                  | No                                       | Si (classi con ereditarietà multipla)          |
 | `group_by`, `sum`, `min`, `max`     | Si (built-in)                            | Si (built-in)                                  |
 | Namespace di sistema                | Parziale (`$env`, `$nu`)                 | Si (`fs()`, `user()`, `sys()`, `time()`)       |
+| Introspezione comandi / stage       | `man`, `--help` per comando              | Si (`help commands|resolvers|stages|types`, `help <name>`) |
 | Sintassi pipeline oggetti           | `\|` (stessa della shell)                | `\|>` (distinta dalla shell `\|`)              |
 | Disponibilità su Windows            | Si (nativo)                              | Si (nativo, stesso codice C)                   |
