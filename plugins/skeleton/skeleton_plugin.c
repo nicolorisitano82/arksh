@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "oosh/plugin.h"
+#include "arksh/plugin.h"
 
 /*
- * Plugin template per oosh.
+ * Plugin template per arksh.
  *
  * Obiettivo:
  * - mostrare la struttura minima di un plugin
@@ -19,7 +19,7 @@
  * - logica interna dei callback
  */
 
-static int skeleton_info_command(OoshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+static int skeleton_info_command(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
   const char *topic = "overview";
 
   (void) shell;
@@ -39,10 +39,10 @@ static int skeleton_info_command(OoshShell *shell, int argc, char **argv, char *
 }
 
 static int skeleton_namespace_resolver(
-  OoshShell *shell,
+  ArkshShell *shell,
   int argc,
-  const OoshValue *args,
-  OoshValue *out_value,
+  const ArkshValue *args,
+  ArkshValue *out_value,
   char *error,
   size_t error_size
 ) {
@@ -62,19 +62,19 @@ static int skeleton_namespace_resolver(
    * - esporre uno stato typed del tuo dominio
    * - restituire mappe o liste annidate
    */
-  oosh_value_set_string(out_value, "TODO: implementa un resolver typed per il tuo dominio");
+  arksh_value_set_string(out_value, "TODO: implementa un resolver typed per il tuo dominio");
   return 0;
 }
 
 static int skeleton_pipeline_stage(
-  OoshShell *shell,
-  OoshValue *value,
+  ArkshShell *shell,
+  ArkshValue *value,
   const char *raw_args,
   char *error,
   size_t error_size
 ) {
-  char rendered[OOSH_MAX_OUTPUT];
-  char wrapped[OOSH_MAX_OUTPUT];
+  char rendered[ARKSH_MAX_OUTPUT];
+  char wrapped[ARKSH_MAX_OUTPUT];
 
   (void) shell;
 
@@ -82,7 +82,7 @@ static int skeleton_pipeline_stage(
     return 1;
   }
 
-  if (oosh_value_render(value, rendered, sizeof(rendered)) != 0) {
+  if (arksh_value_render(value, rendered, sizeof(rendered)) != 0) {
     snprintf(error, error_size, "unable to render value for skeleton_stage");
     return 1;
   }
@@ -94,18 +94,18 @@ static int skeleton_pipeline_stage(
     raw_args != NULL && raw_args[0] != '\0' ? raw_args : "stage",
     rendered
   );
-  oosh_value_set_string(value, wrapped);
+  arksh_value_set_string(value, wrapped);
   return 0;
 }
 
 static int skeleton_object_badge(
-  OoshShell *shell,
-  const OoshValue *receiver,
-  OoshValue *out_value,
+  ArkshShell *shell,
+  const ArkshValue *receiver,
+  ArkshValue *out_value,
   char *error,
   size_t error_size
 ) {
-  char rendered[OOSH_MAX_OUTPUT];
+  char rendered[ARKSH_MAX_OUTPUT];
 
   (void) shell;
 
@@ -113,7 +113,7 @@ static int skeleton_object_badge(
     return 1;
   }
 
-  if (oosh_value_render(receiver, rendered, sizeof(rendered)) != 0) {
+  if (arksh_value_render(receiver, rendered, sizeof(rendered)) != 0) {
     snprintf(error, error_size, "unable to render receiver for skeleton_badge");
     return 1;
   }
@@ -125,20 +125,20 @@ static int skeleton_object_badge(
    * - trasformare il valore in un oggetto o valore piu ricco
    */
   snprintf(out_value->text, sizeof(out_value->text), "skeleton:%s", rendered);
-  out_value->kind = OOSH_VALUE_STRING;
+  out_value->kind = ARKSH_VALUE_STRING;
   return 0;
 }
 
 static int skeleton_object_action(
-  OoshShell *shell,
-  const OoshValue *receiver,
+  ArkshShell *shell,
+  const ArkshValue *receiver,
   int argc,
-  const OoshValue *args,
-  OoshValue *out_value,
+  const ArkshValue *args,
+  ArkshValue *out_value,
   char *error,
   size_t error_size
 ) {
-  char receiver_text[OOSH_MAX_OUTPUT];
+  char receiver_text[ARKSH_MAX_OUTPUT];
   char action_text[128] = "default-action";
 
   (void) shell;
@@ -147,12 +147,12 @@ static int skeleton_object_action(
     return 1;
   }
 
-  if (oosh_value_render(receiver, receiver_text, sizeof(receiver_text)) != 0) {
+  if (arksh_value_render(receiver, receiver_text, sizeof(receiver_text)) != 0) {
     snprintf(error, error_size, "unable to render receiver for skeleton_action");
     return 1;
   }
 
-  if (argc >= 1 && oosh_value_render(&args[0], action_text, sizeof(action_text)) != 0) {
+  if (argc >= 1 && arksh_value_render(&args[0], action_text, sizeof(action_text)) != 0) {
     snprintf(error, error_size, "unable to render skeleton_action argument");
     return 1;
   }
@@ -164,16 +164,16 @@ static int skeleton_object_action(
    * - restituire stringa, numero, bool, lista o oggetto
    */
   snprintf(out_value->text, sizeof(out_value->text), "stub:%s:%s", action_text, receiver_text);
-  out_value->kind = OOSH_VALUE_STRING;
+  out_value->kind = ARKSH_VALUE_STRING;
   return 0;
 }
 
-OOSH_PLUGIN_EXPORT int oosh_plugin_init(OoshShell *shell, const OoshPluginHost *host, OoshPluginInfo *out_info) {
+ARKSH_PLUGIN_EXPORT int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHost *host, ArkshPluginInfo *out_info) {
   if (shell == NULL || host == NULL || out_info == NULL) {
     return 1;
   }
 
-  if (host->api_version != OOSH_PLUGIN_API_VERSION ||
+  if (host->api_version != ARKSH_PLUGIN_API_VERSION ||
       host->register_command == NULL ||
       host->register_property_extension == NULL ||
       host->register_method_extension == NULL ||

@@ -1,8 +1,8 @@
-# Roadmap per rendere `oosh` una shell completa e utilizzabile
+# Roadmap per rendere `arksh` una shell completa e utilizzabile
 
 ## Obiettivo
 
-Portare `oosh` da MVP object-aware a shell quotidianamente usabile su Linux, macOS e Windows, con:
+Portare `arksh` da MVP object-aware a shell quotidianamente usabile su Linux, macOS e Windows, con:
 
 - comportamento prevedibile
 - buona ergonomia interattiva
@@ -29,7 +29,7 @@ Per questo progetto, una shell puo dirsi completa e utilizzabile quando soddisfa
 
 ## Stato attuale sintetico
 
-Oggi `oosh` ha gia una base solida:
+Oggi `arksh` ha gia una base solida:
 
 - lexer, parser AST-based ed executor separati
 - shell pipeline e redirection di base
@@ -45,7 +45,7 @@ Questa base e buona, ma non ancora sufficiente per una shell "di produzione".
 
 ## Gap principali
 
-Le aree che oggi impediscono a `oosh` di essere una shell completa sono queste:
+Le aree che oggi impediscono a `arksh` di essere una shell completa sono queste:
 
 ### 1. Linguaggio shell incompleto
 
@@ -119,7 +119,7 @@ Una shell usabile davvero richiede anche:
 
 Il principio architetturale da mantenere e questo:
 
-> `oosh` deve restare una shell classica completa, sopra cui il modello object-aware agisce come estensione coerente, non come linguaggio separato.
+> `arksh` deve restare una shell classica completa, sopra cui il modello object-aware agisce come estensione coerente, non come linguaggio separato.
 
 In pratica:
 
@@ -149,11 +149,11 @@ Questa e la priorita assoluta.
 
 #### Moduli da toccare
 
-- [src/lexer.c](/Users/nicolo/Desktop/oosh/src/lexer.c)
-- [src/parser.c](/Users/nicolo/Desktop/oosh/src/parser.c)
-- [include/oosh/ast.h](/Users/nicolo/Desktop/oosh/include/oosh/ast.h)
-- [src/executor.c](/Users/nicolo/Desktop/oosh/src/executor.c)
-- [src/shell.c](/Users/nicolo/Desktop/oosh/src/shell.c)
+- [src/lexer.c](/Users/nicolo/Desktop/arksh/src/lexer.c)
+- [src/parser.c](/Users/nicolo/Desktop/arksh/src/parser.c)
+- [include/arksh/ast.h](/Users/nicolo/Desktop/arksh/include/arksh/ast.h)
+- [src/executor.c](/Users/nicolo/Desktop/arksh/src/executor.c)
+- [src/shell.c](/Users/nicolo/Desktop/arksh/src/shell.c)
 
 #### Criteri di completamento
 
@@ -176,9 +176,9 @@ Questa e la seconda priorita, perche influenza tutto.
 
 #### Moduli da toccare
 
-- [src/expand.c](/Users/nicolo/Desktop/oosh/src/expand.c)
-- [src/executor.c](/Users/nicolo/Desktop/oosh/src/executor.c)
-- [src/shell.c](/Users/nicolo/Desktop/oosh/src/shell.c)
+- [src/expand.c](/Users/nicolo/Desktop/arksh/src/expand.c)
+- [src/executor.c](/Users/nicolo/Desktop/arksh/src/executor.c)
+- [src/shell.c](/Users/nicolo/Desktop/arksh/src/shell.c)
 
 #### Criteri di completamento
 
@@ -197,9 +197,9 @@ Questo e uno dei gap pratici piu evidenti.
 
 #### Moduli da toccare
 
-- [src/executor.c](/Users/nicolo/Desktop/oosh/src/executor.c)
-- [src/platform.c](/Users/nicolo/Desktop/oosh/src/platform.c)
-- [src/shell.c](/Users/nicolo/Desktop/oosh/src/shell.c)
+- [src/executor.c](/Users/nicolo/Desktop/arksh/src/executor.c)
+- [src/platform.c](/Users/nicolo/Desktop/arksh/src/platform.c)
+- [src/shell.c](/Users/nicolo/Desktop/arksh/src/shell.c)
 
 #### Criteri di completamento
 
@@ -218,9 +218,9 @@ Questo e uno dei gap pratici piu evidenti.
 
 #### Moduli da toccare
 
-- [src/platform.c](/Users/nicolo/Desktop/oosh/src/platform.c)
-- [src/shell.c](/Users/nicolo/Desktop/oosh/src/shell.c)
-- [src/executor.c](/Users/nicolo/Desktop/oosh/src/executor.c)
+- [src/platform.c](/Users/nicolo/Desktop/arksh/src/platform.c)
+- [src/shell.c](/Users/nicolo/Desktop/arksh/src/shell.c)
+- [src/executor.c](/Users/nicolo/Desktop/arksh/src/executor.c)
 
 #### Criteri di completamento
 
@@ -242,9 +242,9 @@ Questo e uno dei gap pratici piu evidenti.
 
 #### Moduli da toccare
 
-- [src/line_editor.c](/Users/nicolo/Desktop/oosh/src/line_editor.c)
-- [src/shell.c](/Users/nicolo/Desktop/oosh/src/shell.c)
-- [src/prompt.c](/Users/nicolo/Desktop/oosh/src/prompt.c)
+- [src/line_editor.c](/Users/nicolo/Desktop/arksh/src/line_editor.c)
+- [src/shell.c](/Users/nicolo/Desktop/arksh/src/shell.c)
+- [src/prompt.c](/Users/nicolo/Desktop/arksh/src/prompt.c)
 
 #### Criteri di completamento
 
@@ -253,7 +253,7 @@ Questo e uno dei gap pratici piu evidenti.
 
 ### Fase 6. Rafforzare il modello object-aware
 
-Questa e la fase che trasforma `oosh` da shell "simile alle altre" a shell distintiva.
+Questa e la fase che trasforma `arksh` da shell "simile alle altre" a shell distintiva.
 
 #### Da implementare
 
@@ -265,11 +265,11 @@ Questa e la fase che trasforma `oosh` da shell "simile alle altre" a shell disti
 
 #### Moduli da toccare
 
-- [src/object.c](/Users/nicolo/Desktop/oosh/src/object.c)
-- [src/executor.c](/Users/nicolo/Desktop/oosh/src/executor.c)
-- [src/plugin.c](/Users/nicolo/Desktop/oosh/src/plugin.c)
-- [include/oosh/plugin.h](/Users/nicolo/Desktop/oosh/include/oosh/plugin.h)
-- [src/shell.c](/Users/nicolo/Desktop/oosh/src/shell.c)
+- [src/object.c](/Users/nicolo/Desktop/arksh/src/object.c)
+- [src/executor.c](/Users/nicolo/Desktop/arksh/src/executor.c)
+- [src/plugin.c](/Users/nicolo/Desktop/arksh/src/plugin.c)
+- [include/arksh/plugin.h](/Users/nicolo/Desktop/arksh/include/arksh/plugin.h)
+- [src/shell.c](/Users/nicolo/Desktop/arksh/src/shell.c)
 
 #### Criteri di completamento
 
@@ -290,8 +290,8 @@ Oggi il supporto JSON e gia utile, ma per uso serio deve crescere ancora.
 
 #### Moduli da toccare
 
-- [src/object.c](/Users/nicolo/Desktop/oosh/src/object.c)
-- [src/executor.c](/Users/nicolo/Desktop/oosh/src/executor.c)
+- [src/object.c](/Users/nicolo/Desktop/arksh/src/object.c)
+- [src/executor.c](/Users/nicolo/Desktop/arksh/src/executor.c)
 
 #### Criteri di completamento
 
@@ -314,7 +314,7 @@ Questa fase deve procedere in parallelo, ma va formalizzata.
 
 #### Moduli da toccare
 
-- [CMakeLists.txt](/Users/nicolo/Desktop/oosh/CMakeLists.txt)
+- [CMakeLists.txt](/Users/nicolo/Desktop/arksh/CMakeLists.txt)
 - cartella `tests/`
 - workflow CI da aggiungere
 
@@ -336,13 +336,13 @@ Questa fase deve procedere in parallelo, ma va formalizzata.
 
 #### Moduli da toccare
 
-- [CMakeLists.txt](/Users/nicolo/Desktop/oosh/CMakeLists.txt)
+- [CMakeLists.txt](/Users/nicolo/Desktop/arksh/CMakeLists.txt)
 - struttura di packaging da aggiungere
 - documentazione in `README` e `docs`
 
 #### Criteri di completamento
 
-- l'utente puo installare, aggiornare e rimuovere `oosh` senza build manuale
+- l'utente puo installare, aggiornare e rimuovere `arksh` senza build manuale
 
 ## Decisioni architetturali da prendere subito
 
@@ -408,7 +408,7 @@ Se bisogna scegliere un ordine operativo concreto, questo e il piu sensato:
 
 ## Definizione di "versione 1.0"
 
-`oosh` puo puntare a una `1.0` quando soddisfa tutti questi punti:
+`arksh` puo puntare a una `1.0` quando soddisfa tutti questi punti:
 
 - shell interattiva stabile per uso quotidiano
 - scripting shell affidabile su casi non banali
@@ -423,6 +423,6 @@ Se bisogna scegliere un ordine operativo concreto, questo e il piu sensato:
 
 Il criterio giusto non e "ha tante feature", ma questo:
 
-> un utente puo aprire `oosh`, usarla per lavorare per ore, eseguire script veri, estenderla con plugin, e non sentirla fragile o incompleta.
+> un utente puo aprire `arksh`, usarla per lavorare per ore, eseguire script veri, estenderla con plugin, e non sentirla fragile o incompleta.
 
 Se una feature sembra brillante ma non aiuta questo obiettivo, va rimandata.

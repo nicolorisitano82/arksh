@@ -1,4 +1,4 @@
-# Skeleton Plugin per oosh
+# Skeleton Plugin per arksh
 
 Questa cartella contiene un plugin-template pensato per essere copiato e adattato.
 
@@ -9,7 +9,7 @@ Questa cartella contiene un plugin-template pensato per essere copiato e adattat
 - registrazione di un metodo custom
 - registrazione di un value resolver
 - registrazione di uno stage di pipeline
-- struttura minima di `oosh_plugin_init(...)`
+- struttura minima di `arksh_plugin_init(...)`
 
 ## File principale
 
@@ -20,19 +20,19 @@ Questa cartella contiene un plugin-template pensato per essere copiato e adattat
 macOS:
 
 ```bash
-cc -std=c11 -Wall -Wextra -pedantic -Iinclude -dynamiclib -undefined dynamic_lookup plugins/skeleton/skeleton_plugin.c -o build/oosh_skeleton_plugin.dylib
+cc -std=c11 -Wall -Wextra -pedantic -Iinclude -dynamiclib -undefined dynamic_lookup plugins/skeleton/skeleton_plugin.c -o build/arksh_skeleton_plugin.dylib
 ```
 
 Linux:
 
 ```bash
-cc -std=c11 -Wall -Wextra -pedantic -Iinclude -shared -fPIC plugins/skeleton/skeleton_plugin.c -o build/oosh_skeleton_plugin.so
+cc -std=c11 -Wall -Wextra -pedantic -Iinclude -shared -fPIC plugins/skeleton/skeleton_plugin.c -o build/arksh_skeleton_plugin.so
 ```
 
 Windows:
 
 ```bash
-cc -std=c11 -Wall -Wextra -pedantic -Iinclude -shared plugins/skeleton/skeleton_plugin.c -o build/oosh_skeleton_plugin.dll
+cc -std=c11 -Wall -Wextra -pedantic -Iinclude -shared plugins/skeleton/skeleton_plugin.c -o build/arksh_skeleton_plugin.dll
 ```
 
 ## Uso previsto
@@ -53,7 +53,7 @@ cc -std=c11 -Wall -Wextra -pedantic -Iinclude -shared plugins/skeleton/skeleton_
 ## Esempi di utilizzo
 
 ```text
-plugin load build/oosh_skeleton_plugin.dylib
+plugin load build/arksh_skeleton_plugin.dylib
 skeleton-info
 skeleton-info roadmap
 skeleton_namespace()

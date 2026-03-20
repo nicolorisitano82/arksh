@@ -1,14 +1,14 @@
-# Confronto tra oosh e le principali shell Unix
+# Confronto tra arksh e le principali shell Unix
 
-Questo documento confronta `oosh` con le shell Unix più diffuse lungo le dimensioni che ne definiscono il posizionamento: modello dei dati, ergonomia interattiva, scripting e portabilità.
+Questo documento confronta `arksh` con le shell Unix più diffuse lungo le dimensioni che ne definiscono il posizionamento: modello dei dati, ergonomia interattiva, scripting e portabilità.
 
-Le shell analizzate sono: **bash**, **zsh**, **fish**, **nushell**, **dash** e **oosh**.
+Le shell analizzate sono: **bash**, **zsh**, **fish**, **nushell**, **dash** e **arksh**.
 
 ---
 
 ## 1. Scheda di identità
 
-| Caratteristica         | bash 5.x          | zsh 5.x            | fish 3.x           | nushell 0.9x       | dash 0.5.x         | oosh               |
+| Caratteristica         | bash 5.x          | zsh 5.x            | fish 3.x           | nushell 0.9x       | dash 0.5.x         | arksh               |
 |------------------------|-------------------|--------------------|--------------------|--------------------|--------------------|--------------------|
 | Anno di prima release  | 1989              | 1990               | 2005               | 2019               | 1997               | 2026               |
 | Linguaggio principale  | C                 | C                  | C++                | Rust               | C                  | C (C11)            |
@@ -21,9 +21,9 @@ Le shell analizzate sono: **bash**, **zsh**, **fish**, **nushell**, **dash** e *
 
 ## 2. Modello dei dati
 
-La dimensione più importante per capire il posizionamento di oosh.
+La dimensione più importante per capire il posizionamento di arksh.
 
-| Caratteristica                    | bash   | zsh    | fish   | nushell | dash   | oosh   |
+| Caratteristica                    | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |-----------------------------------|--------|--------|--------|---------|--------|--------|
 | Tipo di dato nativo               | Stringa| Stringa| Stringa| Strutturato | Stringa | Object-aware |
 | Interi nativi                     | Si (aritmetica `$((...))`) | Si | No (solo stringhe) | Si | No | Parziale (`number`) |
@@ -45,7 +45,7 @@ La dimensione più importante per capire il posizionamento di oosh.
 
 ## 3. Pipeline
 
-| Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | oosh   |
+| Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
 | Pipeline testuale (`\|`)               | Si     | Si     | Si     | Si      | Si     | Si     |
 | Pipeline di oggetti strutturati        | No     | No     | No     | Si (tabelle) | No | Si (`\|>`) |
@@ -64,7 +64,7 @@ La dimensione più importante per capire il posizionamento di oosh.
 
 ## 4. Ergonomia interattiva
 
-| Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | oosh   |
+| Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
 | Syntax highlighting in REPL            | No (plugin esterno) | Parziale (zsh-syntax-highlighting) | Si (built-in) | Si | No | Si (built-in) |
 | Autosuggestion da history              | No     | Parziale (zsh-autosuggestions) | Si (built-in) | Si | No | Si (built-in) |
@@ -81,7 +81,7 @@ La dimensione più importante per capire il posizionamento di oosh.
 
 ## 5. Scripting
 
-| Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | oosh   |
+| Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
 | Sintassi compatibile POSIX             | Largamente | Largamente | No  | No     | Si (stretto) | No |
 | `if` / `while` / `for`                 | Si     | Si     | Si     | Si      | Si     | Si     |
@@ -102,7 +102,7 @@ La dimensione più importante per capire il posizionamento di oosh.
 
 ## 6. Job control e processi
 
-| Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | oosh   |
+| Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
 | Background job (`&`)                   | Si     | Si     | Si     | Si      | Si     | Si     |
 | `jobs`, `fg`, `bg`                     | Si     | Si     | Si     | Si      | Parziale | Si |
@@ -117,7 +117,7 @@ La dimensione più importante per capire il posizionamento di oosh.
 
 ## 7. Estensibilità e plugin
 
-| Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | oosh   |
+| Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
 | Plugin / moduli di terze parti         | No (solo script) | Si (zplug, zinit, ecc.) | Si (fisher, oh-my-fish) | Si (moduli) | No | Si (ABI C stabile) |
 | Aggiungere comandi da plugin           | Script | Script | Script | Script/plugin | No | Si (libreria dinamica) |
@@ -125,13 +125,13 @@ La dimensione più importante per capire il posizionamento di oosh.
 | Aggiungere stage pipeline da plugin    | No     | No     | No     | Parziale | No | Si |
 | Aggiungere proprietà/metodi oggetto    | No     | No     | No     | No      | No     | Si (su tipi built-in e su tipi custom del plugin) |
 | Framework di configurazione community  | Oh My Bash | Oh My Zsh, Prezto | Oh My Fish | Parziale | No | No (early stage) |
-| Caricamento RC all'avvio               | `~/.bashrc` / `~/.bash_profile` | `~/.zshrc` | `~/.config/fish/config.fish` | `~/.config/nushell/config.nu` | `~/.profile` | `~/.ooshrc` / `OOSH_RC` |
+| Caricamento RC all'avvio               | `~/.bashrc` / `~/.bash_profile` | `~/.zshrc` | `~/.config/fish/config.fish` | `~/.config/nushell/config.nu` | `~/.profile` | `~/.arkshrc` / `ARKSH_RC` |
 
 ---
 
 ## 8. Portabilità e deployment
 
-| Caratteristica                 | bash   | zsh    | fish   | nushell | dash   | oosh   |
+| Caratteristica                 | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |--------------------------------|--------|--------|--------|---------|--------|--------|
 | Disponibile su Linux           | Si     | Si     | Si     | Si      | Si     | Si     |
 | Disponibile su macOS           | Si     | Si (default da 10.15) | Si | Si | Si | Si |
@@ -148,28 +148,28 @@ La dimensione più importante per capire il posizionamento di oosh.
 
 ```
 Asse 1: POSIX / compatibilità classica    ←——————————————————→ Modello dati innovativo
-         dash ——— bash ——— zsh        fish        nushell ——— oosh
+         dash ——— bash ——— zsh        fish        nushell ——— arksh
 
 Asse 2: Scripting puro                    ←——————————————————→ Ergonomia interattiva
-         dash ——— bash        zsh ——— fish ——— nushell ——— oosh
+         dash ——— bash        zsh ——— fish ——— nushell ——— arksh
 ```
 
-| Shell   | Punto di forza principale                          | Limite principale rispetto a oosh              |
+| Shell   | Punto di forza principale                          | Limite principale rispetto a arksh              |
 |---------|----------------------------------------------------|------------------------------------------------|
 | bash    | Universale, POSIX, script ovunque                  | Nessun tipo nativo oltre la stringa            |
 | zsh     | Ergonomia interattiva matura, POSIX compatibile    | Nessun object model, no JSON nativo            |
 | fish    | UX out-of-the-box eccellente, highlighting nativo  | Rompe POSIX, nessun tipo strutturato           |
 | nushell | Dati strutturati, pipeline tipizzate               | Rottura totale con shell classica, no classi   |
 | dash    | Velocità, POSIX stretto, shell di sistema          | Nessuna funzione interattiva                   |
-| oosh    | Object model + pipeline tipizzate + UX interattiva | Ancora in sviluppo, ecosistema piccolo         |
+| arksh    | Object model + pipeline tipizzate + UX interattiva | Ancora in sviluppo, ecosistema piccolo         |
 
 ---
 
 ## 10. Confronto con nushell (il concorrente più simile)
 
-Nushell è la shell che si avvicina di più al posizionamento di oosh. Le differenze principali:
+Nushell è la shell che si avvicina di più al posizionamento di arksh. Le differenze principali:
 
-| Dimensione                          | nushell                                  | oosh                                           |
+| Dimensione                          | nushell                                  | arksh                                           |
 |-------------------------------------|------------------------------------------|------------------------------------------------|
 | Modello dati                        | Tabelle e record strutturati             | Oggetti filesystem + tipi scalari + classi     |
 | Sintassi                            | Propria (rompe completamente con POSIX)  | Shell-compatibile su `;`, `&&`, `\|`, redirection |

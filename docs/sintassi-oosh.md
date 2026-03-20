@@ -1,4 +1,4 @@
-# Sintassi proposta per oosh
+# Sintassi proposta per arksh
 
 Questo documento separa due livelli:
 
@@ -10,10 +10,10 @@ Questo documento separa due livelli:
 ### 1.1 Comandi espliciti
 
 ```text
-set PROJECT oosh
+set PROJECT arksh
 export PROJECT_ROOT "$PWD"
 alias ll="ls -1"
-source examples/ooshrc
+source examples/arkshrc
 let files = . -> children()
 let is_file = [:it | it -> type == "file"]
 let get_name = [:it | it -> name]
@@ -44,8 +44,8 @@ get README.md size
 call . children
 call README.md read_text 128
 prompt show
-prompt load examples/oosh.conf
-plugin load build/oosh_sample_plugin.so
+prompt load examples/arksh.conf
+plugin load build/arksh_sample_plugin.so
 plugin list
 ```
 
@@ -101,16 +101,16 @@ ls > out.txt
 printf hello >> out.txt
 ls missing 2> err.txt
 ls missing 2>&1 | wc -l
-./oosh_test_count_lines <<EOF
+./arksh_test_count_lines <<EOF
 one
 two
 EOF
-./oosh_test_echo_stdin <<-EOF
+./arksh_test_echo_stdin <<-EOF
 	one
 	two
 EOF
-./oosh_test_emit_args hello 3> fd3.out 1>&3
-./oosh_test_count_lines 3< fdin.txt 0<&3
+./arksh_test_emit_args hello 3> fd3.out 1>&3
+./arksh_test_count_lines 3< fdin.txt 0<&3
 ```
 
 ### 1.4.1 Liste di comandi e background supportati
@@ -199,7 +199,7 @@ Regole pratiche:
 
 - `condizione ? vero : falso` restituisce un valore e funziona dentro `let`, block, argomenti metodo e top-level value expression
 - le condizioni di `if`, `while` e `until` provano prima a valutare una value expression e ne usano la truthiness
-- se la condizione non e una value expression valida, `oosh` la esegue come comando shell classico e usa il suo exit status
+- se la condizione non e una value expression valida, `arksh` la esegue come comando shell classico e usa il suo exit status
 - `break [count]` interrompe il loop corrente o uno piu esterno
 - `continue [count]` passa all'iterazione successiva del loop corrente o di uno piu esterno
 - la sorgente di `for` puo essere una lista/value expression oppure una sequenza di shell words
@@ -248,14 +248,14 @@ Note pratiche:
 
 ### 1.6 Startup file supportato
 
-All'avvio `oosh` tenta di eseguire:
+All'avvio `arksh` tenta di eseguire:
 
 ```text
-$OOSH_RC
-~/.ooshrc
+$ARKSH_RC
+~/.arkshrc
 ```
 
-Se `OOSH_RC` e impostata, ha precedenza sul file home.
+Se `ARKSH_RC` e impostata, ha precedenza sul file home.
 
 ### 1.7 Convenzioni interattive supportate
 
@@ -576,8 +576,8 @@ Motivazione:
 Se in futuro si vuole supportare plugin dichiarativi oltre a quelli binari:
 
 ```text
-plugin "git" from "~/.oosh/plugins/git-plugin.so"
-plugin "docker" from "/usr/local/lib/oosh/docker-plugin.so"
+plugin "git" from "~/.arksh/plugins/git-plugin.so"
+plugin "docker" from "/usr/local/lib/arksh/docker-plugin.so"
 ```
 
 ## 9. Regole di compatibilita consigliate

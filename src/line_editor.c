@@ -12,57 +12,57 @@
 #include <unistd.h>
 #endif
 
-#include "oosh/line_editor.h"
-#include "oosh/platform.h"
-#include "oosh/shell.h"
+#include "arksh/line_editor.h"
+#include "arksh/platform.h"
+#include "arksh/shell.h"
 
-#define OOSH_MAX_COMPLETION_MATCHES 64
+#define ARKSH_MAX_COMPLETION_MATCHES 64
 
 enum {
-  OOSH_KEY_BACKSPACE = 1000,
-  OOSH_KEY_DELETE,
-  OOSH_KEY_LEFT,
-  OOSH_KEY_RIGHT,
-  OOSH_KEY_UP,
-  OOSH_KEY_DOWN,
-  OOSH_KEY_TAB,
-  OOSH_KEY_ENTER,
-  OOSH_KEY_CTRL_A,
-  OOSH_KEY_CTRL_C,
-  OOSH_KEY_CTRL_D,
-  OOSH_KEY_CTRL_E,
-  OOSH_KEY_CTRL_G,
-  OOSH_KEY_CTRL_R,
-  OOSH_KEY_ESC,
-  OOSH_KEY_WORD_LEFT,
-  OOSH_KEY_WORD_RIGHT,
-  OOSH_KEY_CTRL_K,           /* kill to end of line   (^K, 0x0b) */
-  OOSH_KEY_CTRL_U,           /* kill to start of line (^U, 0x15) */
-  OOSH_KEY_CTRL_W,           /* kill word backward    (^W, 0x17) */
-  OOSH_KEY_CTRL_Y,           /* yank from kill buffer (^Y, 0x19) */
-  OOSH_KEY_CTRL_UNDERSCORE   /* undo                  (^_, 0x1f) */
+  ARKSH_KEY_BACKSPACE = 1000,
+  ARKSH_KEY_DELETE,
+  ARKSH_KEY_LEFT,
+  ARKSH_KEY_RIGHT,
+  ARKSH_KEY_UP,
+  ARKSH_KEY_DOWN,
+  ARKSH_KEY_TAB,
+  ARKSH_KEY_ENTER,
+  ARKSH_KEY_CTRL_A,
+  ARKSH_KEY_CTRL_C,
+  ARKSH_KEY_CTRL_D,
+  ARKSH_KEY_CTRL_E,
+  ARKSH_KEY_CTRL_G,
+  ARKSH_KEY_CTRL_R,
+  ARKSH_KEY_ESC,
+  ARKSH_KEY_WORD_LEFT,
+  ARKSH_KEY_WORD_RIGHT,
+  ARKSH_KEY_CTRL_K,           /* kill to end of line   (^K, 0x0b) */
+  ARKSH_KEY_CTRL_U,           /* kill to start of line (^U, 0x15) */
+  ARKSH_KEY_CTRL_W,           /* kill word backward    (^W, 0x17) */
+  ARKSH_KEY_CTRL_Y,           /* yank from kill buffer (^Y, 0x19) */
+  ARKSH_KEY_CTRL_UNDERSCORE   /* undo                  (^_, 0x1f) */
 };
 
 typedef enum {
-  OOSH_CMATCH_CMD     = 0, /* registered built-in */
-  OOSH_CMATCH_FN      = 1, /* shell function */
-  OOSH_CMATCH_ALIAS   = 2, /* alias */
-  OOSH_CMATCH_PATHCMD = 3, /* external command in $PATH */
-  OOSH_CMATCH_FILE    = 4, /* file */
-  OOSH_CMATCH_DIR     = 5, /* directory */
-  OOSH_CMATCH_VAR     = 6, /* shell variable */
-  OOSH_CMATCH_BINDING = 7, /* typed binding (let) */
-  OOSH_CMATCH_STAGE   = 8  /* pipeline stage */
-} OoshCompletionKind;
+  ARKSH_CMATCH_CMD     = 0, /* registered built-in */
+  ARKSH_CMATCH_FN      = 1, /* shell function */
+  ARKSH_CMATCH_ALIAS   = 2, /* alias */
+  ARKSH_CMATCH_PATHCMD = 3, /* external command in $PATH */
+  ARKSH_CMATCH_FILE    = 4, /* file */
+  ARKSH_CMATCH_DIR     = 5, /* directory */
+  ARKSH_CMATCH_VAR     = 6, /* shell variable */
+  ARKSH_CMATCH_BINDING = 7, /* typed binding (let) */
+  ARKSH_CMATCH_STAGE   = 8  /* pipeline stage */
+} ArkshCompletionKind;
 
 typedef struct {
-  char items[OOSH_MAX_COMPLETION_MATCHES][OOSH_MAX_PATH];
-  int  kinds[OOSH_MAX_COMPLETION_MATCHES];
+  char items[ARKSH_MAX_COMPLETION_MATCHES][ARKSH_MAX_PATH];
+  int  kinds[ARKSH_MAX_COMPLETION_MATCHES];
   int  count;
-} OoshCompletionMatches;
+} ArkshCompletionMatches;
 
 /* Kill ring: single-slot buffer shared across calls within one session. */
-static char s_kill_buf[OOSH_MAX_LINE];
+static char s_kill_buf[ARKSH_MAX_LINE];
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {
   if (dest_size == 0) {
@@ -83,7 +83,7 @@ static int starts_with(const char *text, const char *prefix) {
   return strncmp(text, prefix, prefix_len) == 0;
 }
 
-static int append_match_kind(OoshCompletionMatches *matches, const char *value, OoshCompletionKind kind) {
+static int append_match_kind(ArkshCompletionMatches *matches, const char *value, ArkshCompletionKind kind) {
   int i;
 
   if (matches == NULL || value == NULL || value[0] == '\0') {
@@ -96,7 +96,7 @@ static int append_match_kind(OoshCompletionMatches *matches, const char *value, 
     }
   }
 
-  if (matches->count >= OOSH_MAX_COMPLETION_MATCHES) {
+  if (matches->count >= ARKSH_MAX_COMPLETION_MATCHES) {
     return 1;
   }
 
@@ -106,8 +106,8 @@ static int append_match_kind(OoshCompletionMatches *matches, const char *value, 
   return 0;
 }
 
-static int append_match(OoshCompletionMatches *matches, const char *value) {
-  return append_match_kind(matches, value, OOSH_CMATCH_CMD);
+static int append_match(ArkshCompletionMatches *matches, const char *value) {
+  return append_match_kind(matches, value, ARKSH_CMATCH_CMD);
 }
 
 static int is_token_delimiter(char c) {
@@ -360,7 +360,7 @@ static void highlight_line(const char *buf, size_t len, char *out, size_t out_si
 /* Find the most-recent history entry that starts with buffer[0..len).
    Writes the suffix (the part after the prefix) into out.
    Returns 1 if a suggestion was found, 0 otherwise. */
-static int find_autosuggestion(OoshShell *shell, const char *buffer, size_t len,
+static int find_autosuggestion(ArkshShell *shell, const char *buffer, size_t len,
                                char *out, size_t out_size) {
   size_t i;
 
@@ -385,22 +385,22 @@ static int find_autosuggestion(OoshShell *shell, const char *buffer, size_t len,
    autosuggestion ghost text.  Pass shell=NULL to render plain text
    (used inside search mode). */
 static void redraw_line(const char *prompt, const char *buffer, size_t length,
-                        size_t cursor, OoshShell *shell) {
+                        size_t cursor, ArkshShell *shell) {
   size_t move_left;
   size_t suggestion_len = 0;
 
   fputs("\r", stdout);
   fputs(prompt, stdout);
 
-  if (shell != NULL && oosh_line_editor_is_interactive()) {
+  if (shell != NULL && arksh_line_editor_is_interactive()) {
     /* T1: syntax-highlighted buffer */
-    char hl_buf[OOSH_MAX_LINE * 10];
+    char hl_buf[ARKSH_MAX_LINE * 10];
     highlight_line(buffer, length, hl_buf, sizeof(hl_buf));
     fputs(hl_buf, stdout);
 
     /* T2: autosuggestion ghost text — only when cursor is at end of line */
     if (cursor == length) {
-      char suggestion[OOSH_MAX_LINE];
+      char suggestion[ARKSH_MAX_LINE];
       if (find_autosuggestion(shell, buffer, length, suggestion, sizeof(suggestion))) {
         suggestion_len = strlen(suggestion);
         fputs(HL_GRAY_CODE, stdout);
@@ -422,9 +422,9 @@ static void redraw_line(const char *prompt, const char *buffer, size_t length,
   fflush(stdout);
 }
 
-static void print_completion_matches(const OoshCompletionMatches *matches) {
+static void print_completion_matches(const ArkshCompletionMatches *matches) {
   /* Short suffix shown after each match when multiple options are listed.
-     Empty string means no indicator. Order must match OoshCompletionKind. */
+     Empty string means no indicator. Order must match ArkshCompletionKind. */
   static const char *kind_suffix[] = {
     "",       /* CMD     — built-in, obvious from context */
     "(fn)",   /* FN      — user-defined shell function */
@@ -457,7 +457,7 @@ static void print_completion_matches(const OoshCompletionMatches *matches) {
   fputc('\n', stdout);
 }
 
-static size_t shared_prefix_length(const OoshCompletionMatches *matches) {
+static size_t shared_prefix_length(const ArkshCompletionMatches *matches) {
   size_t length = 0;
   int i;
 
@@ -501,7 +501,7 @@ static int replace_range(char *buffer, size_t buffer_size, size_t *length, size_
   return 0;
 }
 
-static void expand_home_prefix(const OoshShell *shell, const char *raw, char *out, size_t out_size) {
+static void expand_home_prefix(const ArkshShell *shell, const char *raw, char *out, size_t out_size) {
   const char *home;
 
   if (raw == NULL || out == NULL || out_size == 0) {
@@ -509,7 +509,7 @@ static void expand_home_prefix(const OoshShell *shell, const char *raw, char *ou
   }
 
   if (raw[0] == '~' && (raw[1] == '\0' || raw[1] == '/' || raw[1] == '\\')) {
-    home = oosh_shell_get_var(shell, "HOME");
+    home = arksh_shell_get_var(shell, "HOME");
     if (home != NULL && home[0] != '\0') {
       snprintf(out, out_size, "%s%s", home, raw + 1);
       return;
@@ -520,7 +520,7 @@ static void expand_home_prefix(const OoshShell *shell, const char *raw, char *ou
 }
 
 static void split_path_prefix(
-  const OoshShell *shell,
+  const ArkshShell *shell,
   const char *prefix,
   char *raw_dir_prefix,
   size_t raw_dir_prefix_size,
@@ -532,7 +532,7 @@ static void split_path_prefix(
   const char *slash = strrchr(prefix, '/');
   const char *backslash = strrchr(prefix, '\\');
   const char *separator = slash;
-  char expanded_dir[OOSH_MAX_PATH];
+  char expanded_dir[ARKSH_MAX_PATH];
 
   if (backslash != NULL && (separator == NULL || backslash > separator)) {
     separator = backslash;
@@ -561,33 +561,33 @@ static void split_path_prefix(
   }
 
   expand_home_prefix(shell, raw_dir_prefix, expanded_dir, sizeof(expanded_dir));
-  if (oosh_platform_resolve_path(shell->cwd, expanded_dir, lookup_dir, lookup_dir_size) != 0) {
+  if (arksh_platform_resolve_path(shell->cwd, expanded_dir, lookup_dir, lookup_dir_size) != 0) {
     lookup_dir[0] = '\0';
   }
 }
 
 static void append_path_match(
-  OoshCompletionMatches *matches,
+  ArkshCompletionMatches *matches,
   const char *raw_dir_prefix,
   const char *name,
   int is_directory
 ) {
-  char value[OOSH_MAX_PATH];
+  char value[ARKSH_MAX_PATH];
 
   if (raw_dir_prefix[0] == '\0') {
-    snprintf(value, sizeof(value), "%s%s", name, is_directory ? oosh_platform_path_separator() : "");
+    snprintf(value, sizeof(value), "%s%s", name, is_directory ? arksh_platform_path_separator() : "");
   } else {
-    snprintf(value, sizeof(value), "%s%s%s", raw_dir_prefix, name, is_directory ? oosh_platform_path_separator() : "");
+    snprintf(value, sizeof(value), "%s%s%s", raw_dir_prefix, name, is_directory ? arksh_platform_path_separator() : "");
   }
 
-  append_match_kind(matches, value, is_directory ? OOSH_CMATCH_DIR : OOSH_CMATCH_FILE);
+  append_match_kind(matches, value, is_directory ? ARKSH_CMATCH_DIR : ARKSH_CMATCH_FILE);
 }
 
-static void collect_file_matches(OoshShell *shell, const char *prefix, OoshCompletionMatches *matches) {
-  char raw_dir_prefix[OOSH_MAX_PATH];
-  char lookup_dir[OOSH_MAX_PATH];
-  char base_prefix[OOSH_MAX_NAME];
-  char names[OOSH_MAX_COMPLETION_MATCHES][OOSH_MAX_PATH];
+static void collect_file_matches(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches) {
+  char raw_dir_prefix[ARKSH_MAX_PATH];
+  char lookup_dir[ARKSH_MAX_PATH];
+  char base_prefix[ARKSH_MAX_NAME];
+  char names[ARKSH_MAX_COMPLETION_MATCHES][ARKSH_MAX_PATH];
   size_t count = 0;
   size_t i;
 
@@ -596,20 +596,20 @@ static void collect_file_matches(OoshShell *shell, const char *prefix, OoshCompl
   }
 
   split_path_prefix(shell, prefix, raw_dir_prefix, sizeof(raw_dir_prefix), lookup_dir, sizeof(lookup_dir), base_prefix, sizeof(base_prefix));
-  if (lookup_dir[0] == '\0' || oosh_platform_list_children_names(lookup_dir, names, OOSH_MAX_COMPLETION_MATCHES, &count) != 0) {
+  if (lookup_dir[0] == '\0' || arksh_platform_list_children_names(lookup_dir, names, ARKSH_MAX_COMPLETION_MATCHES, &count) != 0) {
     return;
   }
 
   for (i = 0; i < count; ++i) {
-    OoshPlatformFileInfo info;
-    char candidate_path[OOSH_MAX_PATH];
+    ArkshPlatformFileInfo info;
+    char candidate_path[ARKSH_MAX_PATH];
 
     if (!starts_with(names[i], base_prefix)) {
       continue;
     }
 
-    if (oosh_platform_resolve_path(lookup_dir, names[i], candidate_path, sizeof(candidate_path)) != 0 ||
-        oosh_platform_stat(candidate_path, &info) != 0) {
+    if (arksh_platform_resolve_path(lookup_dir, names[i], candidate_path, sizeof(candidate_path)) != 0 ||
+        arksh_platform_stat(candidate_path, &info) != 0) {
       continue;
     }
 
@@ -617,7 +617,7 @@ static void collect_file_matches(OoshShell *shell, const char *prefix, OoshCompl
   }
 }
 
-static void collect_registered_command_matches(OoshShell *shell, const char *prefix, OoshCompletionMatches *matches) {
+static void collect_registered_command_matches(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches) {
   size_t i;
 
   if (shell == NULL || prefix == NULL || matches == NULL) {
@@ -626,24 +626,24 @@ static void collect_registered_command_matches(OoshShell *shell, const char *pre
 
   for (i = 0; i < shell->command_count; ++i) {
     if (starts_with(shell->commands[i].name, prefix)) {
-      append_match_kind(matches, shell->commands[i].name, OOSH_CMATCH_CMD);
+      append_match_kind(matches, shell->commands[i].name, ARKSH_CMATCH_CMD);
     }
   }
 
   for (i = 0; i < shell->alias_count; ++i) {
     if (starts_with(shell->aliases[i].name, prefix)) {
-      append_match_kind(matches, shell->aliases[i].name, OOSH_CMATCH_ALIAS);
+      append_match_kind(matches, shell->aliases[i].name, ARKSH_CMATCH_ALIAS);
     }
   }
 
   for (i = 0; i < shell->function_count; ++i) {
     if (starts_with(shell->functions[i].name, prefix)) {
-      append_match_kind(matches, shell->functions[i].name, OOSH_CMATCH_FN);
+      append_match_kind(matches, shell->functions[i].name, ARKSH_CMATCH_FN);
     }
   }
 }
 
-static void collect_path_command_matches(OoshShell *shell, const char *prefix, OoshCompletionMatches *matches) {
+static void collect_path_command_matches(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches) {
   const char *path_env;
   const char *cursor;
   char separator =
@@ -657,16 +657,16 @@ static void collect_path_command_matches(OoshShell *shell, const char *prefix, O
     return;
   }
 
-  path_env = oosh_shell_get_var(shell, "PATH");
+  path_env = arksh_shell_get_var(shell, "PATH");
   if (path_env == NULL || path_env[0] == '\0') {
     return;
   }
 
   cursor = path_env;
   while (*cursor != '\0') {
-    char segment[OOSH_MAX_PATH];
-    char resolved[OOSH_MAX_PATH];
-    char names[OOSH_MAX_COMPLETION_MATCHES][OOSH_MAX_PATH];
+    char segment[ARKSH_MAX_PATH];
+    char resolved[ARKSH_MAX_PATH];
+    char names[ARKSH_MAX_COMPLETION_MATCHES][ARKSH_MAX_PATH];
     size_t segment_len = 0;
     size_t count = 0;
     size_t i;
@@ -683,23 +683,23 @@ static void collect_path_command_matches(OoshShell *shell, const char *prefix, O
       copy_string(segment, sizeof(segment), ".");
     }
 
-    if (oosh_platform_resolve_path(shell->cwd, segment, resolved, sizeof(resolved)) == 0 &&
-        oosh_platform_list_children_names(resolved, names, OOSH_MAX_COMPLETION_MATCHES, &count) == 0) {
+    if (arksh_platform_resolve_path(shell->cwd, segment, resolved, sizeof(resolved)) == 0 &&
+        arksh_platform_list_children_names(resolved, names, ARKSH_MAX_COMPLETION_MATCHES, &count) == 0) {
       for (i = 0; i < count; ++i) {
-        OoshPlatformFileInfo info;
-        char candidate[OOSH_MAX_PATH];
+        ArkshPlatformFileInfo info;
+        char candidate[ARKSH_MAX_PATH];
 
         if (!starts_with(names[i], prefix)) {
           continue;
         }
 
-        if (oosh_platform_resolve_path(resolved, names[i], candidate, sizeof(candidate)) != 0 ||
-            oosh_platform_stat(candidate, &info) != 0 ||
+        if (arksh_platform_resolve_path(resolved, names[i], candidate, sizeof(candidate)) != 0 ||
+            arksh_platform_stat(candidate, &info) != 0 ||
             info.is_directory) {
           continue;
         }
 
-        append_match_kind(matches, names[i], OOSH_CMATCH_PATHCMD);
+        append_match_kind(matches, names[i], ARKSH_CMATCH_PATHCMD);
       }
     }
 
@@ -710,8 +710,8 @@ static void collect_path_command_matches(OoshShell *shell, const char *prefix, O
 }
 
 /* T3: shell variables — activated when prefix starts with '$'. */
-static void collect_env_var_matches(OoshShell *shell, const char *name_prefix, OoshCompletionMatches *matches) {
-  char candidate[OOSH_MAX_PATH];
+static void collect_env_var_matches(ArkshShell *shell, const char *name_prefix, ArkshCompletionMatches *matches) {
+  char candidate[ARKSH_MAX_PATH];
   size_t i;
 
   if (shell == NULL || name_prefix == NULL || matches == NULL) {
@@ -721,13 +721,13 @@ static void collect_env_var_matches(OoshShell *shell, const char *name_prefix, O
   for (i = 0; i < shell->var_count; ++i) {
     if (starts_with(shell->vars[i].name, name_prefix)) {
       snprintf(candidate, sizeof(candidate), "$%s", shell->vars[i].name);
-      append_match_kind(matches, candidate, OOSH_CMATCH_VAR);
+      append_match_kind(matches, candidate, ARKSH_CMATCH_VAR);
     }
   }
 }
 
 /* T4: typed bindings created with `let` — activated in non-command context. */
-static void collect_binding_matches(OoshShell *shell, const char *prefix, OoshCompletionMatches *matches) {
+static void collect_binding_matches(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches) {
   size_t i;
 
   if (shell == NULL || prefix == NULL || matches == NULL) {
@@ -736,7 +736,7 @@ static void collect_binding_matches(OoshShell *shell, const char *prefix, OoshCo
 
   for (i = 0; i < shell->binding_count; ++i) {
     if (starts_with(shell->bindings[i].name, prefix)) {
-      append_match_kind(matches, shell->bindings[i].name, OOSH_CMATCH_BINDING);
+      append_match_kind(matches, shell->bindings[i].name, ARKSH_CMATCH_BINDING);
     }
   }
 }
@@ -761,7 +761,7 @@ static const char *s_builtin_stages[] = {
 };
 
 /* T5: pipeline stage completion — activated after '|>'. */
-static void collect_stage_matches(OoshShell *shell, const char *prefix, OoshCompletionMatches *matches) {
+static void collect_stage_matches(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches) {
   const char **s;
   size_t i;
 
@@ -771,18 +771,18 @@ static void collect_stage_matches(OoshShell *shell, const char *prefix, OoshComp
 
   for (s = s_builtin_stages; *s != NULL; ++s) {
     if (starts_with(*s, prefix)) {
-      append_match_kind(matches, *s, OOSH_CMATCH_STAGE);
+      append_match_kind(matches, *s, ARKSH_CMATCH_STAGE);
     }
   }
 
   for (i = 0; i < shell->pipeline_stage_count; ++i) {
     if (starts_with(shell->pipeline_stages[i].name, prefix)) {
-      append_match_kind(matches, shell->pipeline_stages[i].name, OOSH_CMATCH_STAGE);
+      append_match_kind(matches, shell->pipeline_stages[i].name, ARKSH_CMATCH_STAGE);
     }
   }
 }
 
-static void collect_completion_matches(OoshShell *shell, const char *prefix, int command_position, int stage_position, OoshCompletionMatches *matches) {
+static void collect_completion_matches(ArkshShell *shell, const char *prefix, int command_position, int stage_position, ArkshCompletionMatches *matches) {
   if (matches == NULL) {
     return;
   }
@@ -816,14 +816,14 @@ static void collect_completion_matches(OoshShell *shell, const char *prefix, int
 }
 
 static void collect_member_completion_matches(
-  OoshShell *shell,
+  ArkshShell *shell,
   const char *buffer,
   size_t receiver_start,
   size_t receiver_end,
   const char *prefix,
-  OoshCompletionMatches *matches
+  ArkshCompletionMatches *matches
 ) {
-  char receiver_text[OOSH_MAX_LINE];
+  char receiver_text[ARKSH_MAX_LINE];
   size_t receiver_len;
   size_t count = 0;
 
@@ -840,7 +840,7 @@ static void collect_member_completion_matches(
   memcpy(receiver_text, buffer + receiver_start, receiver_len);
   receiver_text[receiver_len] = '\0';
 
-  if (oosh_shell_collect_member_completions(shell, receiver_text, prefix, matches->items, OOSH_MAX_COMPLETION_MATCHES, &count) != 0) {
+  if (arksh_shell_collect_member_completions(shell, receiver_text, prefix, matches->items, ARKSH_MAX_COMPLETION_MATCHES, &count) != 0) {
     return;
   }
 
@@ -848,7 +848,7 @@ static void collect_member_completion_matches(
 }
 
 static void handle_completion(
-  OoshShell *shell,
+  ArkshShell *shell,
   const char *prompt,
   char *buffer,
   size_t buffer_size,
@@ -858,8 +858,8 @@ static void handle_completion(
   size_t start;
   size_t receiver_start = 0;
   size_t receiver_end = 0;
-  char prefix[OOSH_MAX_PATH];
-  OoshCompletionMatches matches;
+  char prefix[ARKSH_MAX_PATH];
+  ArkshCompletionMatches matches;
   size_t prefix_len;
   int command_position;
   int stage_position;
@@ -895,7 +895,7 @@ static void handle_completion(
   }
 
   if (matches.count == 1) {
-    char replacement[OOSH_MAX_PATH];
+    char replacement[ARKSH_MAX_PATH];
 
     copy_string(replacement, sizeof(replacement), matches.items[0]);
     if (!member_context) {
@@ -921,7 +921,7 @@ static void handle_completion(
     size_t shared = shared_prefix_length(&matches);
 
     if (shared > prefix_len) {
-      char replacement[OOSH_MAX_PATH];
+      char replacement[ARKSH_MAX_PATH];
 
       if (shared >= sizeof(replacement)) {
         return;
@@ -946,7 +946,7 @@ static void apply_history_entry(char *buffer, size_t buffer_size, size_t *length
 }
 
 static void navigate_history(
-  OoshShell *shell,
+  ArkshShell *shell,
   int direction,
   char *buffer,
   size_t buffer_size,
@@ -1017,9 +1017,9 @@ typedef struct {
   HANDLE input_handle;
   DWORD original_mode;
   int active;
-} OoshTerminalState;
+} ArkshTerminalState;
 
-static int terminal_enter_raw(OoshTerminalState *state) {
+static int terminal_enter_raw(ArkshTerminalState *state) {
   DWORD mode;
 
   if (state == NULL) {
@@ -1042,7 +1042,7 @@ static int terminal_enter_raw(OoshTerminalState *state) {
   return 0;
 }
 
-static void terminal_leave_raw(OoshTerminalState *state) {
+static void terminal_leave_raw(ArkshTerminalState *state) {
   if (state != NULL && state->active) {
     SetConsoleMode(state->input_handle, state->original_mode);
     state->active = 0;
@@ -1053,65 +1053,65 @@ static int read_key(void) {
   int ch = _getch();
 
   if (ch == '\r') {
-    return OOSH_KEY_ENTER;
+    return ARKSH_KEY_ENTER;
   }
   if (ch == '\t') {
-    return OOSH_KEY_TAB;
+    return ARKSH_KEY_TAB;
   }
   if (ch == 8) {
-    return OOSH_KEY_BACKSPACE;
+    return ARKSH_KEY_BACKSPACE;
   }
   if (ch == 1) {
-    return OOSH_KEY_CTRL_A;
+    return ARKSH_KEY_CTRL_A;
   }
   if (ch == 3) {
-    return OOSH_KEY_CTRL_C;
+    return ARKSH_KEY_CTRL_C;
   }
   if (ch == 4) {
-    return OOSH_KEY_CTRL_D;
+    return ARKSH_KEY_CTRL_D;
   }
   if (ch == 5) {
-    return OOSH_KEY_CTRL_E;
+    return ARKSH_KEY_CTRL_E;
   }
   if (ch == 7) {
-    return OOSH_KEY_CTRL_G;
+    return ARKSH_KEY_CTRL_G;
   }
   if (ch == 11) {
-    return OOSH_KEY_CTRL_K;
+    return ARKSH_KEY_CTRL_K;
   }
   if (ch == 18) {
-    return OOSH_KEY_CTRL_R;
+    return ARKSH_KEY_CTRL_R;
   }
   if (ch == 21) {
-    return OOSH_KEY_CTRL_U;
+    return ARKSH_KEY_CTRL_U;
   }
   if (ch == 23) {
-    return OOSH_KEY_CTRL_W;
+    return ARKSH_KEY_CTRL_W;
   }
   if (ch == 25) {
-    return OOSH_KEY_CTRL_Y;
+    return ARKSH_KEY_CTRL_Y;
   }
   if (ch == 31) {
-    return OOSH_KEY_CTRL_UNDERSCORE;
+    return ARKSH_KEY_CTRL_UNDERSCORE;
   }
   if (ch == 0 || ch == 224) {
     int ext = _getch();
 
     switch (ext) {
       case 72:
-        return OOSH_KEY_UP;
+        return ARKSH_KEY_UP;
       case 75:
-        return OOSH_KEY_LEFT;
+        return ARKSH_KEY_LEFT;
       case 77:
-        return OOSH_KEY_RIGHT;
+        return ARKSH_KEY_RIGHT;
       case 80:
-        return OOSH_KEY_DOWN;
+        return ARKSH_KEY_DOWN;
       case 83:
-        return OOSH_KEY_DELETE;
+        return ARKSH_KEY_DELETE;
       case 115:
-        return OOSH_KEY_WORD_LEFT;
+        return ARKSH_KEY_WORD_LEFT;
       case 116:
-        return OOSH_KEY_WORD_RIGHT;
+        return ARKSH_KEY_WORD_RIGHT;
       default:
         return -1;
     }
@@ -1120,16 +1120,16 @@ static int read_key(void) {
   return ch;
 }
 
-int oosh_line_editor_is_interactive(void) {
+int arksh_line_editor_is_interactive(void) {
   return _isatty(_fileno(stdin)) && _isatty(_fileno(stdout));
 }
 #else
 typedef struct {
   struct termios original;
   int active;
-} OoshTerminalState;
+} ArkshTerminalState;
 
-static int terminal_enter_raw(OoshTerminalState *state) {
+static int terminal_enter_raw(ArkshTerminalState *state) {
   struct termios raw;
 
   if (state == NULL || tcgetattr(STDIN_FILENO, &state->original) != 0) {
@@ -1152,7 +1152,7 @@ static int terminal_enter_raw(OoshTerminalState *state) {
   return 0;
 }
 
-static void terminal_leave_raw(OoshTerminalState *state) {
+static void terminal_leave_raw(ArkshTerminalState *state) {
   if (state != NULL && state->active) {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &state->original);
     state->active = 0;
@@ -1167,46 +1167,46 @@ static int read_key(void) {
   }
 
   if (ch == '\r' || ch == '\n') {
-    return OOSH_KEY_ENTER;
+    return ARKSH_KEY_ENTER;
   }
   if (ch == '\t') {
-    return OOSH_KEY_TAB;
+    return ARKSH_KEY_TAB;
   }
   if (ch == 127 || ch == 8) {
-    return OOSH_KEY_BACKSPACE;
+    return ARKSH_KEY_BACKSPACE;
   }
   if (ch == 1) {
-    return OOSH_KEY_CTRL_A;
+    return ARKSH_KEY_CTRL_A;
   }
   if (ch == 3) {
-    return OOSH_KEY_CTRL_C;
+    return ARKSH_KEY_CTRL_C;
   }
   if (ch == 4) {
-    return OOSH_KEY_CTRL_D;
+    return ARKSH_KEY_CTRL_D;
   }
   if (ch == 5) {
-    return OOSH_KEY_CTRL_E;
+    return ARKSH_KEY_CTRL_E;
   }
   if (ch == 7) {
-    return OOSH_KEY_CTRL_G;
+    return ARKSH_KEY_CTRL_G;
   }
   if (ch == 11) {
-    return OOSH_KEY_CTRL_K;
+    return ARKSH_KEY_CTRL_K;
   }
   if (ch == 18) {
-    return OOSH_KEY_CTRL_R;
+    return ARKSH_KEY_CTRL_R;
   }
   if (ch == 21) {
-    return OOSH_KEY_CTRL_U;
+    return ARKSH_KEY_CTRL_U;
   }
   if (ch == 23) {
-    return OOSH_KEY_CTRL_W;
+    return ARKSH_KEY_CTRL_W;
   }
   if (ch == 25) {
-    return OOSH_KEY_CTRL_Y;
+    return ARKSH_KEY_CTRL_Y;
   }
   if (ch == 31) {
-    return OOSH_KEY_CTRL_UNDERSCORE;
+    return ARKSH_KEY_CTRL_UNDERSCORE;
   }
   if (ch == 27) {
     struct termios save;
@@ -1224,14 +1224,14 @@ static int read_key(void) {
     tcsetattr(STDIN_FILENO, TCSANOW, &save);
 
     if (n <= 0) {
-      return OOSH_KEY_ESC;
+      return ARKSH_KEY_ESC;
     }
 
     if (b0 == 'f' || b0 == 'F') {
-      return OOSH_KEY_WORD_RIGHT;
+      return ARKSH_KEY_WORD_RIGHT;
     }
     if (b0 == 'b' || b0 == 'B') {
-      return OOSH_KEY_WORD_LEFT;
+      return ARKSH_KEY_WORD_LEFT;
     }
 
     if (b0 == '[') {
@@ -1248,7 +1248,7 @@ static int read_key(void) {
           return -1;
         }
         if (b1 == '3' && b2 == '~') {
-          return OOSH_KEY_DELETE;
+          return ARKSH_KEY_DELETE;
         }
         /* Handle ESC [ 1 ; 5 C/D for Ctrl-arrows (xterm, VTE). */
         if (b1 == '1' && b2 == ';') {
@@ -1263,23 +1263,23 @@ static int read_key(void) {
           }
           if (b3 == '5') {
             if (b4 == 'C') {
-              return OOSH_KEY_WORD_RIGHT;
+              return ARKSH_KEY_WORD_RIGHT;
             }
             if (b4 == 'D') {
-              return OOSH_KEY_WORD_LEFT;
+              return ARKSH_KEY_WORD_LEFT;
             }
           }
         }
       } else {
         switch (b1) {
           case 'A':
-            return OOSH_KEY_UP;
+            return ARKSH_KEY_UP;
           case 'B':
-            return OOSH_KEY_DOWN;
+            return ARKSH_KEY_DOWN;
           case 'C':
-            return OOSH_KEY_RIGHT;
+            return ARKSH_KEY_RIGHT;
           case 'D':
-            return OOSH_KEY_LEFT;
+            return ARKSH_KEY_LEFT;
           default:
             break;
         }
@@ -1292,7 +1292,7 @@ static int read_key(void) {
   return ch;
 }
 
-int oosh_line_editor_is_interactive(void) {
+int arksh_line_editor_is_interactive(void) {
   return isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
 }
 #endif
@@ -1310,7 +1310,7 @@ static void redraw_search(const char *query, const char *match) {
   fflush(stdout);
 }
 
-static int find_history_match(OoshShell *shell, const char *query, size_t from, size_t *found_index) {
+static int find_history_match(ArkshShell *shell, const char *query, size_t from, size_t *found_index) {
   size_t i = from;
 
   if (shell == NULL || query == NULL || query[0] == '\0' || shell->history_count == 0) {
@@ -1329,14 +1329,14 @@ static int find_history_match(OoshShell *shell, const char *query, size_t from, 
 
 /* Returns: 1 = submit (Enter pressed with match loaded), 0 = continue editing, -1 = cancelled. */
 static int do_reverse_search(
-  OoshShell *shell,
+  ArkshShell *shell,
   char *buffer,
   size_t buffer_size,
   size_t *length,
   size_t *cursor,
   size_t *history_index
 ) {
-  char query[OOSH_MAX_LINE];
+  char query[ARKSH_MAX_LINE];
   size_t query_len = 0;
   size_t search_from;
   size_t match_idx;
@@ -1353,11 +1353,11 @@ static int do_reverse_search(
   for (;;) {
     key = read_key();
 
-    if (key == -1 || key == OOSH_KEY_CTRL_G || key == OOSH_KEY_ESC || key == OOSH_KEY_CTRL_C) {
+    if (key == -1 || key == ARKSH_KEY_CTRL_G || key == ARKSH_KEY_ESC || key == ARKSH_KEY_CTRL_C) {
       return -1;
     }
 
-    if (key == OOSH_KEY_ENTER) {
+    if (key == ARKSH_KEY_ENTER) {
       if (match_str != NULL) {
         copy_string(buffer, buffer_size, match_str);
         *length = strlen(buffer);
@@ -1367,7 +1367,7 @@ static int do_reverse_search(
       return 1;
     }
 
-    if (key == OOSH_KEY_CTRL_R) {
+    if (key == ARKSH_KEY_CTRL_R) {
       if (query_len > 0) {
         size_t found;
 
@@ -1387,7 +1387,7 @@ static int do_reverse_search(
       continue;
     }
 
-    if (key == OOSH_KEY_BACKSPACE) {
+    if (key == ARKSH_KEY_BACKSPACE) {
       if (query_len > 0) {
         size_t found;
 
@@ -1436,35 +1436,35 @@ static int do_reverse_search(
   }
 }
 
-OoshLineReadStatus oosh_line_editor_read_line(
-  OoshShell *shell,
+ArkshLineReadStatus arksh_line_editor_read_line(
+  ArkshShell *shell,
   const char *prompt,
   const char *prompt_continue,
-  OoshLineEditorNeedsMoreFn needs_more,
+  ArkshLineEditorNeedsMoreFn needs_more,
   char *out,
   size_t out_size
 ) {
-  OoshTerminalState terminal_state;
+  ArkshTerminalState terminal_state;
   /* Single-line editing buffer — reused for each continuation line. */
-  char line[OOSH_MAX_LINE];
+  char line[ARKSH_MAX_LINE];
   size_t length = 0;
   size_t cursor = 0;
   size_t history_index;
-  char history_scratch[OOSH_MAX_LINE];
+  char history_scratch[ARKSH_MAX_LINE];
   /* Multiline accumulation buffer. */
-  char multi[OOSH_MAX_OUTPUT];
+  char multi[ARKSH_MAX_OUTPUT];
   size_t multi_len = 0;
   /* Active prompt for the current editing line. */
   const char *active_prompt;
   int in_continuation = 0;
   /* Single-level undo snapshot (E5-S3-T3). */
-  char undo_line[OOSH_MAX_LINE];
+  char undo_line[ARKSH_MAX_LINE];
   size_t undo_length = 0;
   size_t undo_cursor = 0;
   int undo_valid = 0;
 
   if (shell == NULL || prompt == NULL || out == NULL || out_size == 0) {
-    return OOSH_LINE_READ_ERROR;
+    return ARKSH_LINE_READ_ERROR;
   }
 
   out[0] = '\0';
@@ -1475,7 +1475,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
   active_prompt = prompt;
 
   if (terminal_enter_raw(&terminal_state) != 0) {
-    return OOSH_LINE_READ_ERROR;
+    return ARKSH_LINE_READ_ERROR;
   }
 
   while (1) {
@@ -1483,10 +1483,10 @@ OoshLineReadStatus oosh_line_editor_read_line(
 
     if (key == -1) {
       terminal_leave_raw(&terminal_state);
-      return OOSH_LINE_READ_ERROR;
+      return ARKSH_LINE_READ_ERROR;
     }
 
-    if (key == OOSH_KEY_ENTER) {
+    if (key == ARKSH_KEY_ENTER) {
       /* Append current line into the multiline buffer. */
       size_t space = sizeof(multi) - multi_len - 1;
 
@@ -1522,45 +1522,45 @@ OoshLineReadStatus oosh_line_editor_read_line(
       terminal_leave_raw(&terminal_state);
       fputc('\n', stdout);
       copy_string(out, out_size, multi);
-      return OOSH_LINE_READ_OK;
+      return ARKSH_LINE_READ_OK;
     }
 
-    if (key == OOSH_KEY_CTRL_D) {
+    if (key == ARKSH_KEY_CTRL_D) {
       if (length == 0 && multi_len == 0) {
         terminal_leave_raw(&terminal_state);
         fputc('\n', stdout);
-        return OOSH_LINE_READ_EOF;
+        return ARKSH_LINE_READ_EOF;
       }
       /* In multiline mode: submit whatever we have. */
       if (multi_len > 0) {
         terminal_leave_raw(&terminal_state);
         fputc('\n', stdout);
         copy_string(out, out_size, multi);
-        return OOSH_LINE_READ_OK;
+        return ARKSH_LINE_READ_OK;
       }
       continue;
     }
 
-    if (key == OOSH_KEY_CTRL_C) {
+    if (key == ARKSH_KEY_CTRL_C) {
       terminal_leave_raw(&terminal_state);
       out[0] = '\0';
       fputs("^C\n", stdout);
-      return OOSH_LINE_READ_OK;
+      return ARKSH_LINE_READ_OK;
     }
 
-    if (key == OOSH_KEY_CTRL_A) {
+    if (key == ARKSH_KEY_CTRL_A) {
       cursor = 0;
       redraw_line(active_prompt, line, length, cursor, shell);
       continue;
     }
 
-    if (key == OOSH_KEY_CTRL_E) {
+    if (key == ARKSH_KEY_CTRL_E) {
       cursor = length;
       redraw_line(active_prompt, line, length, cursor, shell);
       continue;
     }
 
-    if (key == OOSH_KEY_LEFT) {
+    if (key == ARKSH_KEY_LEFT) {
       if (cursor > 0) {
         cursor--;
         redraw_line(active_prompt, line, length, cursor, shell);
@@ -1568,7 +1568,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
-    if (key == OOSH_KEY_RIGHT) {
+    if (key == ARKSH_KEY_RIGHT) {
       if (cursor < length) {
         cursor++;
         redraw_line(active_prompt, line, length, cursor, shell);
@@ -1576,19 +1576,19 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
-    if (key == OOSH_KEY_WORD_LEFT) {
+    if (key == ARKSH_KEY_WORD_LEFT) {
       cursor = word_backward(line, cursor);
       redraw_line(active_prompt, line, length, cursor, shell);
       continue;
     }
 
-    if (key == OOSH_KEY_WORD_RIGHT) {
+    if (key == ARKSH_KEY_WORD_RIGHT) {
       cursor = word_forward(line, length, cursor);
       redraw_line(active_prompt, line, length, cursor, shell);
       continue;
     }
 
-    if (key == OOSH_KEY_UP) {
+    if (key == ARKSH_KEY_UP) {
       /* History navigation only on the first line. */
       if (!in_continuation) {
         navigate_history(shell, -1, line, sizeof(line), &length, &cursor, &history_index, history_scratch, sizeof(history_scratch));
@@ -1597,7 +1597,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
-    if (key == OOSH_KEY_DOWN) {
+    if (key == ARKSH_KEY_DOWN) {
       if (!in_continuation) {
         navigate_history(shell, 1, line, sizeof(line), &length, &cursor, &history_index, history_scratch, sizeof(history_scratch));
         redraw_line(active_prompt, line, length, cursor, shell);
@@ -1605,7 +1605,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
-    if (key == OOSH_KEY_CTRL_R) {
+    if (key == ARKSH_KEY_CTRL_R) {
       if (!in_continuation) {
         int search_result = do_reverse_search(shell, line, sizeof(line), &length, &cursor, &history_index);
 
@@ -1639,7 +1639,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
             terminal_leave_raw(&terminal_state);
             fputc('\n', stdout);
             copy_string(out, out_size, multi);
-            return OOSH_LINE_READ_OK;
+            return ARKSH_LINE_READ_OK;
           }
         } else {
           /* Cancelled (< 0) or continue editing (== 0): redraw current line. */
@@ -1649,12 +1649,12 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
-    if (key == OOSH_KEY_TAB) {
+    if (key == ARKSH_KEY_TAB) {
       handle_completion(shell, active_prompt, line, sizeof(line), &length, &cursor);
       continue;
     }
 
-    if (key == OOSH_KEY_CTRL_K) {
+    if (key == ARKSH_KEY_CTRL_K) {
       /* Kill from cursor to end of line; save killed text in kill buffer. */
       if (cursor < length) {
         memcpy(undo_line, line, length + 1); undo_length = length; undo_cursor = cursor; undo_valid = 1;
@@ -1666,7 +1666,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
-    if (key == OOSH_KEY_CTRL_U) {
+    if (key == ARKSH_KEY_CTRL_U) {
       /* Kill from start of line to cursor; save killed text in kill buffer. */
       if (cursor > 0) {
         memcpy(undo_line, line, length + 1); undo_length = length; undo_cursor = cursor; undo_valid = 1;
@@ -1682,7 +1682,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
-    if (key == OOSH_KEY_CTRL_W) {
+    if (key == ARKSH_KEY_CTRL_W) {
       /* Kill word backward; save killed text in kill buffer. */
       if (cursor > 0) {
         size_t new_pos = word_backward(line, cursor);
@@ -1700,7 +1700,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
-    if (key == OOSH_KEY_CTRL_Y) {
+    if (key == ARKSH_KEY_CTRL_Y) {
       /* Yank: insert kill buffer text at cursor. */
       size_t yank_len = strlen(s_kill_buf);
       if (yank_len > 0 && length + yank_len < sizeof(line)) {
@@ -1714,7 +1714,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
-    if (key == OOSH_KEY_CTRL_UNDERSCORE) {
+    if (key == ARKSH_KEY_CTRL_UNDERSCORE) {
       /* Undo: restore line to state before last modifying key. */
       if (undo_valid) {
         memcpy(line, undo_line, undo_length + 1);
@@ -1726,7 +1726,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
-    if (key == OOSH_KEY_BACKSPACE) {
+    if (key == ARKSH_KEY_BACKSPACE) {
       if (cursor > 0) {
         memcpy(undo_line, line, length + 1); undo_length = length; undo_cursor = cursor; undo_valid = 1;
         memmove(line + cursor - 1, line + cursor, length - cursor + 1);
@@ -1737,7 +1737,7 @@ OoshLineReadStatus oosh_line_editor_read_line(
       continue;
     }
 
-    if (key == OOSH_KEY_DELETE) {
+    if (key == ARKSH_KEY_DELETE) {
       if (cursor < length) {
         memcpy(undo_line, line, length + 1); undo_length = length; undo_cursor = cursor; undo_valid = 1;
         memmove(line + cursor, line + cursor + 1, length - cursor);

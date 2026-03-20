@@ -1,4 +1,4 @@
-# oosh example 02
+# arksh example 02
 # Valori, block, binding tipizzati ed estensioni definite nel linguaggio.
 
 let files = . -> children()

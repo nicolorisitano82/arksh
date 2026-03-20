@@ -1,4 +1,4 @@
-# oosh example 11
+# arksh example 11
 # Override di comandi built-in tramite funzioni shell (E3-S5).
 #
 # Pattern: definire una funzione con lo stesso nome del built-in.

@@ -4,9 +4,9 @@
 #include <string.h>
 #include <time.h>
 
-#include "oosh/platform.h"
-#include "oosh/prompt.h"
-#include "oosh/shell.h"
+#include "arksh/platform.h"
+#include "arksh/prompt.h"
+#include "arksh/shell.h"
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {
   if (dest_size == 0) {
@@ -41,7 +41,7 @@ static void trim_in_place(char *text) {
   text[end - start] = '\0';
 }
 
-static void parse_segments(const char *value, char items[][OOSH_MAX_SEGMENT_NAME], size_t *count) {
+static void parse_segments(const char *value, char items[][ARKSH_MAX_SEGMENT_NAME], size_t *count) {
   char buffer[256];
   char *token;
   char *saveptr = NULL;
@@ -54,7 +54,7 @@ static void parse_segments(const char *value, char items[][OOSH_MAX_SEGMENT_NAME
   *count = 0;
 
   token = strtok_r(buffer, ",", &saveptr);
-  while (token != NULL && *count < OOSH_MAX_SEGMENTS) {
+  while (token != NULL && *count < ARKSH_MAX_SEGMENTS) {
     trim_in_place(token);
     copy_string(items[*count], sizeof(items[*count]), token);
     (*count)++;
@@ -62,7 +62,7 @@ static void parse_segments(const char *value, char items[][OOSH_MAX_SEGMENT_NAME
   }
 }
 
-static const char *lookup_color(const OoshPromptConfig *config, const char *segment) {
+static const char *lookup_color(const ArkshPromptConfig *config, const char *segment) {
   size_t i;
 
   for (i = 0; i < config->style_count; ++i) {
@@ -167,7 +167,7 @@ static void append_segment(char *out, size_t out_size, const char *separator, co
   (void) segment;
 }
 
-static void resolve_segment_value(const struct OoshShell *shell, const char *segment, char *out, size_t out_size) {
+static void resolve_segment_value(const struct ArkshShell *shell, const char *segment, char *out, size_t out_size) {
   char host[128];
   const char *user;
 
@@ -181,7 +181,7 @@ static void resolve_segment_value(const struct OoshShell *shell, const char *seg
   }
 
   if (strcmp(segment, "host") == 0) {
-    if (oosh_platform_gethostname(host, sizeof(host)) != 0) {
+    if (arksh_platform_gethostname(host, sizeof(host)) != 0) {
       copy_string(out, out_size, "unknown-host");
     } else {
       copy_string(out, out_size, host);
@@ -214,7 +214,7 @@ static void resolve_segment_value(const struct OoshShell *shell, const char *seg
   }
 
   if (strcmp(segment, "os") == 0) {
-    copy_string(out, out_size, oosh_platform_os_name());
+    copy_string(out, out_size, arksh_platform_os_name());
     return;
   }
 
@@ -252,7 +252,7 @@ static void resolve_segment_value(const struct OoshShell *shell, const char *seg
   copy_string(out, out_size, "");
 }
 
-void oosh_prompt_config_init(OoshPromptConfig *config) {
+void arksh_prompt_config_init(ArkshPromptConfig *config) {
   if (config == NULL) {
     return;
   }
@@ -271,7 +271,7 @@ void oosh_prompt_config_init(OoshPromptConfig *config) {
   copy_string(config->continuation, sizeof(config->continuation), "... ");
 }
 
-int oosh_prompt_config_load(OoshPromptConfig *config, const char *path) {
+int arksh_prompt_config_load(ArkshPromptConfig *config, const char *path) {
   FILE *fp;
   char line[512];
 
@@ -279,7 +279,7 @@ int oosh_prompt_config_load(OoshPromptConfig *config, const char *path) {
     return 1;
   }
 
-  oosh_prompt_config_init(config);
+  arksh_prompt_config_init(config);
 
   fp = fopen(path, "r");
   if (fp == NULL) {
@@ -318,13 +318,13 @@ int oosh_prompt_config_load(OoshPromptConfig *config, const char *path) {
     } else if (strcmp(key, "use_color") == 0) {
       config->use_color = atoi(value) != 0;
     } else if (strncmp(key, "color.", 6) == 0) {
-      if (config->style_count < OOSH_MAX_SEGMENTS * 2) {
+      if (config->style_count < ARKSH_MAX_SEGMENTS * 2) {
         copy_string(config->styles[config->style_count].segment, sizeof(config->styles[config->style_count].segment), key + 6);
         copy_string(config->styles[config->style_count].color, sizeof(config->styles[config->style_count].color), value);
         config->style_count++;
       }
     } else if (strcmp(key, "plugin") == 0) {
-      if (config->plugin_count < OOSH_MAX_PLUGIN_PATHS) {
+      if (config->plugin_count < ARKSH_MAX_PLUGIN_PATHS) {
         copy_string(config->plugins[config->plugin_count], sizeof(config->plugins[config->plugin_count]), value);
         config->plugin_count++;
       }
@@ -337,9 +337,9 @@ int oosh_prompt_config_load(OoshPromptConfig *config, const char *path) {
   return 0;
 }
 
-void oosh_prompt_render(const OoshPromptConfig *config, const struct OoshShell *shell, char *out, size_t out_size) {
-  char left[OOSH_MAX_OUTPUT];
-  char right[OOSH_MAX_OUTPUT];
+void arksh_prompt_render(const ArkshPromptConfig *config, const struct ArkshShell *shell, char *out, size_t out_size) {
+  char left[ARKSH_MAX_OUTPUT];
+  char right[ARKSH_MAX_OUTPUT];
   size_t i;
 
   if (config == NULL || shell == NULL || out == NULL || out_size == 0) {

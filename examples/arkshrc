@@ -1,5 +1,5 @@
-# Example startup file for oosh
-set PROJECT oosh
+# Example startup file for arksh
+set PROJECT arksh
 set LIMIT 32
 export PROJECT_ROOT "$PWD"
 alias ll="ls -1"

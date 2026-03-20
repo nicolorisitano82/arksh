@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "oosh/expand.h"
-#include "oosh/platform.h"
-#include "oosh/shell.h"
+#include "arksh/expand.h"
+#include "arksh/platform.h"
+#include "arksh/shell.h"
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {
   if (dest_size == 0) {
@@ -108,15 +108,15 @@ static int append_pattern_char(
   return append_pattern_text(pattern, pattern_size, pattern_len, text, allow_glob, has_glob, error, error_size);
 }
 
-static const char *lookup_home_directory(OoshShell *shell) {
-  const char *home = oosh_shell_get_var(shell, "HOME");
+static const char *lookup_home_directory(ArkshShell *shell) {
+  const char *home = arksh_shell_get_var(shell, "HOME");
 
   if (home != NULL && home[0] != '\0') {
     return home;
   }
 
 #ifdef _WIN32
-  home = oosh_shell_get_var(shell, "USERPROFILE");
+  home = arksh_shell_get_var(shell, "USERPROFILE");
   if (home != NULL && home[0] != '\0') {
     return home;
   }
@@ -139,8 +139,8 @@ static void trim_trailing_newlines(char *text) {
   }
 }
 
-static int clone_subshell(const OoshShell *shell, OoshShell **out_shell, char *error, size_t error_size) {
-  OoshShell *clone;
+static int clone_subshell(const ArkshShell *shell, ArkshShell **out_shell, char *error, size_t error_size) {
+  ArkshShell *clone;
   size_t i;
 
   if (shell == NULL || out_shell == NULL || error == NULL || error_size == 0) {
@@ -148,7 +148,7 @@ static int clone_subshell(const OoshShell *shell, OoshShell **out_shell, char *e
   }
 
   *out_shell = NULL;
-  clone = (OoshShell *) calloc(1, sizeof(*clone));
+  clone = (ArkshShell *) calloc(1, sizeof(*clone));
   if (clone == NULL) {
     snprintf(error, error_size, "unable to allocate command substitution shell");
     return 1;
@@ -157,11 +157,11 @@ static int clone_subshell(const OoshShell *shell, OoshShell **out_shell, char *e
   *clone = *shell;
   for (i = 0; i < clone->binding_count; ++i) {
     memset(&clone->bindings[i].value, 0, sizeof(clone->bindings[i].value));
-    if (oosh_value_copy(&clone->bindings[i].value, &shell->bindings[i].value) != 0) {
+    if (arksh_value_copy(&clone->bindings[i].value, &shell->bindings[i].value) != 0) {
       size_t rollback;
 
       for (rollback = 0; rollback < i; ++rollback) {
-        oosh_value_free(&clone->bindings[rollback].value);
+        arksh_value_free(&clone->bindings[rollback].value);
       }
       free(clone);
       snprintf(error, error_size, "unable to clone value binding for command substitution");
@@ -173,7 +173,7 @@ static int clone_subshell(const OoshShell *shell, OoshShell **out_shell, char *e
   return 0;
 }
 
-static void destroy_subshell(OoshShell *shell) {
+static void destroy_subshell(ArkshShell *shell) {
   size_t i;
 
   if (shell == NULL) {
@@ -181,17 +181,17 @@ static void destroy_subshell(OoshShell *shell) {
   }
 
   for (i = 0; i < shell->binding_count; ++i) {
-    oosh_value_free(&shell->bindings[i].value);
+    arksh_value_free(&shell->bindings[i].value);
   }
   for (i = 0; i < shell->job_count; ++i) {
-    oosh_platform_close_background_process(&shell->jobs[i].process);
+    arksh_platform_close_background_process(&shell->jobs[i].process);
   }
 
   free(shell);
 }
 
 static int parse_command_substitution(const char *raw, size_t *index, char *out, size_t out_size, char *error, size_t error_size) {
-  char command[OOSH_MAX_OUTPUT];
+  char command[ARKSH_MAX_OUTPUT];
   size_t command_len = 0;
   size_t i;
   int depth = 1;
@@ -264,10 +264,10 @@ static int parse_command_substitution(const char *raw, size_t *index, char *out,
   return 1;
 }
 
-static int execute_command_substitution(OoshShell *shell, const char *command, char *out, size_t out_size, char *error, size_t error_size) {
-  char command_output[OOSH_MAX_OUTPUT];
-  OoshShell *subshell = NULL;
-  char saved_cwd[OOSH_MAX_PATH];
+static int execute_command_substitution(ArkshShell *shell, const char *command, char *out, size_t out_size, char *error, size_t error_size) {
+  char command_output[ARKSH_MAX_OUTPUT];
+  ArkshShell *subshell = NULL;
+  char saved_cwd[ARKSH_MAX_PATH];
   int have_saved_cwd = 0;
   int status;
   const char *p;
@@ -283,7 +283,7 @@ static int execute_command_substitution(OoshShell *shell, const char *command, c
     p++;
     while (*p == ' ' || *p == '\t') { p++; }
     if (*p != '\0') {
-      char path[OOSH_MAX_PATH];
+      char path[ARKSH_MAX_PATH];
       size_t path_len = 0;
       while (*p != '\0' && *p != ' ' && *p != '\t' && *p != '\n') {
         if (path_len + 1 < sizeof(path)) {
@@ -318,16 +318,16 @@ static int execute_command_substitution(OoshShell *shell, const char *command, c
     return 1;
   }
 
-  if (oosh_platform_getcwd(saved_cwd, sizeof(saved_cwd)) == 0) {
+  if (arksh_platform_getcwd(saved_cwd, sizeof(saved_cwd)) == 0) {
     have_saved_cwd = 1;
   }
 
   command_output[0] = '\0';
-  status = oosh_shell_execute_line(subshell, command, command_output, sizeof(command_output));
+  status = arksh_shell_execute_line(subshell, command, command_output, sizeof(command_output));
   trim_trailing_newlines(command_output);
 
   if (have_saved_cwd) {
-    if (oosh_platform_chdir(saved_cwd) == 0) {
+    if (arksh_platform_chdir(saved_cwd) == 0) {
       copy_string(shell->cwd, sizeof(shell->cwd), saved_cwd);
     }
   }
@@ -454,7 +454,7 @@ static void apply_pattern_subst(const char *val, const char *pat, const char *re
 }
 
 /* Forward declaration needed by lookup_var_value. */
-static int resolve_special_name(OoshShell *shell, const char *name, char *out, size_t out_size);
+static int resolve_special_name(ArkshShell *shell, const char *name, char *out, size_t out_size);
 
 /* ---- Glob matcher (for parameter expansion patterns) ---- */
 
@@ -495,13 +495,13 @@ static int glob_match_full(const char *pat, const char *str) {
 /* Resolve a variable name to its string value.
    Tries special/positional names first, then shell vars.
    Returns 1 if the variable is "set" (even if empty), 0 if unset.  */
-static int lookup_var_value(OoshShell *shell, const char *name, char *out, size_t out_size) {
+static int lookup_var_value(ArkshShell *shell, const char *name, char *out, size_t out_size) {
   const char *v;
 
   if (resolve_special_name(shell, name, out, out_size)) {
     return 1; /* special vars are always "set" */
   }
-  v = oosh_shell_get_var(shell, name);
+  v = arksh_shell_get_var(shell, name);
   if (v == NULL) {
     out[0] = '\0';
     return 0; /* unset */
@@ -552,7 +552,7 @@ static void apply_prefix_trim(const char *val, const char *pat, int longest, cha
   size_t match_len = 0;
   int found = 0;
   size_t k;
-  char tmp[OOSH_MAX_OUTPUT];
+  char tmp[ARKSH_MAX_OUTPUT];
 
   if (longest) {
     /* Longest prefix: scan from end (largest k). */
@@ -592,7 +592,7 @@ static void apply_prefix_trim(const char *val, const char *pat, int longest, cha
   }
 }
 
-static void expand_positional_list(OoshShell *shell, char *out, size_t out_size) {
+static void expand_positional_list(ArkshShell *shell, char *out, size_t out_size) {
   int j;
   size_t out_len = 0;
 
@@ -615,7 +615,7 @@ static void expand_positional_list(OoshShell *shell, char *out, size_t out_size)
   }
 }
 
-static int resolve_special_name(OoshShell *shell, const char *name, char *out, size_t out_size) {
+static int resolve_special_name(ArkshShell *shell, const char *name, char *out, size_t out_size) {
   int all_digits = 1;
   size_t k;
   size_t name_len = strlen(name);
@@ -675,7 +675,7 @@ static int resolve_special_name(OoshShell *shell, const char *name, char *out, s
   return 0; /* Not a special name. */
 }
 
-static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, char *out, size_t out_size, char *error, size_t error_size) {
+static int resolve_variable(ArkshShell *shell, const char *raw, size_t *index, char *out, size_t out_size, char *error, size_t error_size) {
   char name[128];
   size_t name_len = 0;
   size_t i;
@@ -738,13 +738,13 @@ static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, ch
   if (raw[i] == '{') {
     char var_name[128];
     size_t var_name_len = 0;
-    char operand[OOSH_MAX_OUTPUT];
+    char operand[ARKSH_MAX_OUTPUT];
     size_t operand_len = 0;
     int length_mode = 0;
     int colon_prefix = 0;
     char op = '\0';
     char op2 = '\0';
-    char val_buf[OOSH_MAX_OUTPUT];
+    char val_buf[ARKSH_MAX_OUTPUT];
     int is_set;
 
     i++; /* skip '{' */
@@ -862,7 +862,7 @@ static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, ch
           /* ${var:=default}: if unset/empty, assign operand to var and use it. */
           if (trigger) {
             if (shell != NULL) {
-              oosh_shell_set_var(shell, var_name, operand, 0);
+              arksh_shell_set_var(shell, var_name, operand, 0);
             }
             copy_string(out, out_size, operand);
           } else {
@@ -900,7 +900,7 @@ static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, ch
           /* E1-S6-T5: ${var/pat/repl} or ${var//pat/repl}: pattern substitution. */
           /* Split operand on first '/' to get pattern and replacement. */
           const char *slash = strchr(operand, '/');
-          char pat[OOSH_MAX_OUTPUT];
+          char pat[ARKSH_MAX_OUTPUT];
           const char *repl;
           if (slash != NULL) {
             size_t pat_len = (size_t)(slash - operand);
@@ -939,7 +939,7 @@ static int resolve_variable(OoshShell *shell, const char *raw, size_t *index, ch
     *index = i - 1;
   }
 
-  value = oosh_shell_get_var(shell, name);
+  value = arksh_shell_get_var(shell, name);
   copy_string(out, out_size, value == NULL ? "" : value);
   return 0;
 }
@@ -958,7 +958,7 @@ static int parse_arith_expansion(
   char *error,
   size_t error_size
 ) {
-  char expr[OOSH_MAX_OUTPUT];
+  char expr[ARKSH_MAX_OUTPUT];
   size_t expr_len = 0;
   size_t i = *index + 3; /* skip '$', '(', '(' */
   int depth = 0;
@@ -1011,7 +1011,7 @@ typedef struct {
   const char *expr;
   size_t pos;
   size_t len;
-  OoshShell *shell;
+  ArkshShell *shell;
   int has_error;
   char error[256];
 } ArithCtx;
@@ -1078,7 +1078,7 @@ static long long arith_primary(ArithCtx *ctx) {
       return 0;
     }
 
-    var_val = oosh_shell_get_var(ctx->shell, name);
+    var_val = arksh_shell_get_var(ctx->shell, name);
     if (var_val == NULL || var_val[0] == '\0') {
       return 0;
     }
@@ -1463,7 +1463,7 @@ static long long arith_expr(ArithCtx *ctx) {
   return arith_ternary(ctx);
 }
 
-static int evaluate_arith(OoshShell *shell, const char *expr, long long *result, char *error, size_t error_size) {
+static int evaluate_arith(ArkshShell *shell, const char *expr, long long *result, char *error, size_t error_size) {
   ArithCtx ctx;
 
   if (expr == NULL || result == NULL || error == NULL || error_size == 0) {
@@ -1526,13 +1526,13 @@ static int apply_ifs_splitting(
   const unsigned char *split_flags,
   int saw_quote_open,
   const char *ifs,
-  char out_values[][OOSH_MAX_TOKEN],
+  char out_values[][ARKSH_MAX_TOKEN],
   int max_values,
   int *out_count,
   char *error,
   size_t error_size
 ) {
-  char field[OOSH_MAX_TOKEN];
+  char field[ARKSH_MAX_TOKEN];
   size_t field_len = 0;
   size_t i;
   int after_nonwhite_ifs = 0;
@@ -1619,9 +1619,9 @@ static int apply_ifs_splitting(
 }
 
 static int expand_raw_token(
-  OoshShell *shell,
+  ArkshShell *shell,
   const char *raw,
-  OoshExpandMode mode,
+  ArkshExpandMode mode,
   char *expanded,
   size_t expanded_size,
   unsigned char *split_flags,
@@ -1655,7 +1655,7 @@ static int expand_raw_token(
 
   while (raw[i] != '\0') {
     char c = raw[i];
-    int allow_glob = (mode == OOSH_EXPAND_MODE_COMMAND && quote == '\0');
+    int allow_glob = (mode == ARKSH_EXPAND_MODE_COMMAND && quote == '\0');
 
     if (quote == '\0') {
       if ((c == '\'' || c == '"')) {
@@ -1701,12 +1701,12 @@ static int expand_raw_token(
       }
 
       if (c == '$') {
-        char substitution[OOSH_MAX_OUTPUT];
+        char substitution[ARKSH_MAX_OUTPUT];
         size_t sub_start = expanded_len;
         int is_arith = 0;
 
         if (raw[i + 1] == '(' && raw[i + 2] == '(') {
-          char arith_str[OOSH_MAX_OUTPUT];
+          char arith_str[ARKSH_MAX_OUTPUT];
           long long arith_val;
           is_arith = 1;
           if (parse_arith_expansion(raw, &i, arith_str, sizeof(arith_str), error, error_size) != 0 ||
@@ -1715,7 +1715,7 @@ static int expand_raw_token(
           }
           snprintf(substitution, sizeof(substitution), "%lld", arith_val);
         } else if (raw[i + 1] == '(') {
-          char command[OOSH_MAX_OUTPUT];
+          char command[ARKSH_MAX_OUTPUT];
 
           if (parse_command_substitution(raw, &i, command, sizeof(command), error, error_size) != 0 ||
               execute_command_substitution(shell, command, substitution, sizeof(substitution), error, error_size) != 0) {
@@ -1777,10 +1777,10 @@ static int expand_raw_token(
         continue;
       }
       if (c == '$') {
-        char substitution[OOSH_MAX_OUTPUT];
+        char substitution[ARKSH_MAX_OUTPUT];
 
         if (raw[i + 1] == '(' && raw[i + 2] == '(') {
-          char arith_str[OOSH_MAX_OUTPUT];
+          char arith_str[ARKSH_MAX_OUTPUT];
           long long arith_val;
           if (parse_arith_expansion(raw, &i, arith_str, sizeof(arith_str), error, error_size) != 0 ||
               evaluate_arith(shell, arith_str, &arith_val, error, error_size) != 0) {
@@ -1788,7 +1788,7 @@ static int expand_raw_token(
           }
           snprintf(substitution, sizeof(substitution), "%lld", arith_val);
         } else if (raw[i + 1] == '(') {
-          char command[OOSH_MAX_OUTPUT];
+          char command[ARKSH_MAX_OUTPUT];
 
           if (parse_command_substitution(raw, &i, command, sizeof(command), error, error_size) != 0 ||
               execute_command_substitution(shell, command, substitution, sizeof(substitution), error, error_size) != 0) {
@@ -1826,19 +1826,19 @@ static int expand_raw_token(
   return 0;
 }
 
-int oosh_expand_word(
-  OoshShell *shell,
+int arksh_expand_word(
+  ArkshShell *shell,
   const char *raw,
-  OoshExpandMode mode,
-  char out_values[][OOSH_MAX_TOKEN],
+  ArkshExpandMode mode,
+  char out_values[][ARKSH_MAX_TOKEN],
   int max_values,
   int *out_count,
   char *error,
   size_t error_size
 ) {
-  char expanded[OOSH_MAX_TOKEN];
-  unsigned char split_flags[OOSH_MAX_TOKEN];
-  char pattern[OOSH_MAX_TOKEN * 2];
+  char expanded[ARKSH_MAX_TOKEN];
+  unsigned char split_flags[ARKSH_MAX_TOKEN];
+  char pattern[ARKSH_MAX_TOKEN * 2];
   int has_glob = 0;
   int saw_quote_open = 0;
 
@@ -1853,11 +1853,11 @@ int oosh_expand_word(
     return 1;
   }
 
-  if (mode == OOSH_EXPAND_MODE_COMMAND && has_glob) {
+  if (mode == ARKSH_EXPAND_MODE_COMMAND && has_glob) {
     int match_count = 0;
     int glob_status;
 
-    glob_status = oosh_platform_glob(pattern, out_values, max_values, &match_count);
+    glob_status = arksh_platform_glob(pattern, out_values, max_values, &match_count);
     if (glob_status == 0 && match_count > 0) {
       *out_count = match_count;
       return 0;
@@ -1873,8 +1873,8 @@ int oosh_expand_word(
   }
 
   /* Apply IFS field splitting for command arguments. */
-  if (mode == OOSH_EXPAND_MODE_COMMAND) {
-    const char *ifs = oosh_shell_get_var(shell, "IFS");
+  if (mode == ARKSH_EXPAND_MODE_COMMAND) {
+    const char *ifs = arksh_shell_get_var(shell, "IFS");
     size_t exp_len = strlen(expanded);
 
     if (ifs == NULL) {

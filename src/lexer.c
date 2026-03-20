@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "oosh/lexer.h"
+#include "arksh/lexer.h"
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {
   if (dest_size == 0) {
@@ -28,8 +28,8 @@ static int append_char(char *dest, size_t dest_size, size_t *length, char c, cha
   return 0;
 }
 
-static int push_token(OoshTokenStream *stream, OoshTokenKind kind, const char *text, const char *raw, size_t position) {
-  if (stream->count >= OOSH_MAX_LEXER_TOKENS) {
+static int push_token(ArkshTokenStream *stream, ArkshTokenKind kind, const char *text, const char *raw, size_t position) {
+  if (stream->count >= ARKSH_MAX_LEXER_TOKENS) {
     return 1;
   }
 
@@ -41,7 +41,7 @@ static int push_token(OoshTokenStream *stream, OoshTokenKind kind, const char *t
   return 0;
 }
 
-static int match_fd_redirection_token(const char *line, size_t index, size_t len, OoshTokenKind *out_kind, size_t *out_length) {
+static int match_fd_redirection_token(const char *line, size_t index, size_t len, ArkshTokenKind *out_kind, size_t *out_length) {
   size_t cursor = index;
 
   if (line == NULL || out_kind == NULL || out_length == NULL || index >= len || !isdigit((unsigned char) line[index])) {
@@ -56,27 +56,27 @@ static int match_fd_redirection_token(const char *line, size_t index, size_t len
   }
 
   if (line[cursor] == '>' && cursor + 1 < len && line[cursor + 1] == '&') {
-    *out_kind = OOSH_TOKEN_REDIRECT_DUP_OUT;
+    *out_kind = ARKSH_TOKEN_REDIRECT_DUP_OUT;
     *out_length = (cursor + 2) - index;
     return 0;
   }
   if (line[cursor] == '<' && cursor + 1 < len && line[cursor + 1] == '&') {
-    *out_kind = OOSH_TOKEN_REDIRECT_DUP_IN;
+    *out_kind = ARKSH_TOKEN_REDIRECT_DUP_IN;
     *out_length = (cursor + 2) - index;
     return 0;
   }
   if (line[cursor] == '>' && cursor + 1 < len && line[cursor + 1] == '>') {
-    *out_kind = OOSH_TOKEN_REDIRECT_FD_APPEND;
+    *out_kind = ARKSH_TOKEN_REDIRECT_FD_APPEND;
     *out_length = (cursor + 2) - index;
     return 0;
   }
   if (line[cursor] == '>') {
-    *out_kind = OOSH_TOKEN_REDIRECT_FD_OUT;
+    *out_kind = ARKSH_TOKEN_REDIRECT_FD_OUT;
     *out_length = (cursor + 1) - index;
     return 0;
   }
   if (line[cursor] == '<') {
-    *out_kind = OOSH_TOKEN_REDIRECT_FD_IN;
+    *out_kind = ARKSH_TOKEN_REDIRECT_FD_IN;
     *out_length = (cursor + 1) - index;
     return 0;
   }
@@ -85,7 +85,7 @@ static int match_fd_redirection_token(const char *line, size_t index, size_t len
 }
 
 static int is_special_token_start(const char *line, size_t index, size_t len) {
-  OoshTokenKind fd_kind;
+  ArkshTokenKind fd_kind;
   size_t fd_length = 0;
 
   if (index >= len) {
@@ -134,9 +134,9 @@ static int is_special_token_start(const char *line, size_t index, size_t len) {
          line[index] == ',';
 }
 
-static int scan_word_token(const char *line, size_t *index, size_t len, OoshToken *out_token, char *error, size_t error_size) {
-  char cooked[OOSH_MAX_TOKEN];
-  char raw[OOSH_MAX_TOKEN];
+static int scan_word_token(const char *line, size_t *index, size_t len, ArkshToken *out_token, char *error, size_t error_size) {
+  char cooked[ARKSH_MAX_TOKEN];
+  char raw[ARKSH_MAX_TOKEN];
   size_t cooked_len = 0;
   size_t raw_len = 0;
   size_t start;
@@ -306,74 +306,74 @@ static int scan_word_token(const char *line, size_t *index, size_t len, OoshToke
   }
 
   memset(out_token, 0, sizeof(*out_token));
-  out_token->kind = OOSH_TOKEN_WORD;
+  out_token->kind = ARKSH_TOKEN_WORD;
   copy_string(out_token->text, sizeof(out_token->text), cooked);
   copy_string(out_token->raw, sizeof(out_token->raw), raw);
   out_token->position = start;
   return 0;
 }
 
-const char *oosh_token_kind_name(OoshTokenKind kind) {
+const char *arksh_token_kind_name(ArkshTokenKind kind) {
   switch (kind) {
-    case OOSH_TOKEN_EOF:
+    case ARKSH_TOKEN_EOF:
       return "eof";
-    case OOSH_TOKEN_WORD:
+    case ARKSH_TOKEN_WORD:
       return "word";
-    case OOSH_TOKEN_STRING:
+    case ARKSH_TOKEN_STRING:
       return "string";
-    case OOSH_TOKEN_ARROW:
+    case ARKSH_TOKEN_ARROW:
       return "arrow";
-    case OOSH_TOKEN_OBJECT_PIPE:
+    case ARKSH_TOKEN_OBJECT_PIPE:
       return "object-pipe";
-    case OOSH_TOKEN_SHELL_PIPE:
+    case ARKSH_TOKEN_SHELL_PIPE:
       return "shell-pipe";
-    case OOSH_TOKEN_REDIRECT_IN:
+    case ARKSH_TOKEN_REDIRECT_IN:
       return "redirect-in";
-    case OOSH_TOKEN_REDIRECT_OUT:
+    case ARKSH_TOKEN_REDIRECT_OUT:
       return "redirect-out";
-    case OOSH_TOKEN_REDIRECT_APPEND:
+    case ARKSH_TOKEN_REDIRECT_APPEND:
       return "redirect-append";
-    case OOSH_TOKEN_HEREDOC:
+    case ARKSH_TOKEN_HEREDOC:
       return "heredoc";
-    case OOSH_TOKEN_HEREDOC_STRIP:
+    case ARKSH_TOKEN_HEREDOC_STRIP:
       return "heredoc-strip";
-    case OOSH_TOKEN_REDIRECT_ERROR:
+    case ARKSH_TOKEN_REDIRECT_ERROR:
       return "redirect-error";
-    case OOSH_TOKEN_REDIRECT_ERROR_APPEND:
+    case ARKSH_TOKEN_REDIRECT_ERROR_APPEND:
       return "redirect-error-append";
-    case OOSH_TOKEN_REDIRECT_ERROR_TO_OUTPUT:
+    case ARKSH_TOKEN_REDIRECT_ERROR_TO_OUTPUT:
       return "redirect-error-to-output";
-    case OOSH_TOKEN_REDIRECT_FD_IN:
+    case ARKSH_TOKEN_REDIRECT_FD_IN:
       return "redirect-fd-in";
-    case OOSH_TOKEN_REDIRECT_FD_OUT:
+    case ARKSH_TOKEN_REDIRECT_FD_OUT:
       return "redirect-fd-out";
-    case OOSH_TOKEN_REDIRECT_FD_APPEND:
+    case ARKSH_TOKEN_REDIRECT_FD_APPEND:
       return "redirect-fd-append";
-    case OOSH_TOKEN_REDIRECT_DUP_IN:
+    case ARKSH_TOKEN_REDIRECT_DUP_IN:
       return "redirect-dup-in";
-    case OOSH_TOKEN_REDIRECT_DUP_OUT:
+    case ARKSH_TOKEN_REDIRECT_DUP_OUT:
       return "redirect-dup-out";
-    case OOSH_TOKEN_AND_IF:
+    case ARKSH_TOKEN_AND_IF:
       return "and-if";
-    case OOSH_TOKEN_OR_IF:
+    case ARKSH_TOKEN_OR_IF:
       return "or-if";
-    case OOSH_TOKEN_SEQUENCE:
+    case ARKSH_TOKEN_SEQUENCE:
       return "sequence";
-    case OOSH_TOKEN_BACKGROUND:
+    case ARKSH_TOKEN_BACKGROUND:
       return "background";
-    case OOSH_TOKEN_LPAREN:
+    case ARKSH_TOKEN_LPAREN:
       return "lparen";
-    case OOSH_TOKEN_RPAREN:
+    case ARKSH_TOKEN_RPAREN:
       return "rparen";
-    case OOSH_TOKEN_COMMA:
+    case ARKSH_TOKEN_COMMA:
       return "comma";
-    case OOSH_TOKEN_INVALID:
+    case ARKSH_TOKEN_INVALID:
     default:
       return "invalid";
   }
 }
 
-int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, size_t error_size) {
+int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, size_t error_size) {
   size_t i = 0;
   size_t len;
 
@@ -387,9 +387,9 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
 
   while (i < len) {
     char c = line[i];
-    OoshTokenKind fd_kind;
+    ArkshTokenKind fd_kind;
     size_t fd_length = 0;
-    char fd_text[OOSH_MAX_TOKEN];
+    char fd_text[ARKSH_MAX_TOKEN];
 
     if (isspace((unsigned char) c)) {
       i++;
@@ -412,7 +412,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '|' && i + 1 < len && line[i + 1] == '>') {
-      if (push_token(out_stream, OOSH_TOKEN_OBJECT_PIPE, "|>", "|>", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_OBJECT_PIPE, "|>", "|>", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -421,7 +421,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '|' && i + 1 < len && line[i + 1] == '|') {
-      if (push_token(out_stream, OOSH_TOKEN_OR_IF, "||", "||", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_OR_IF, "||", "||", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -430,7 +430,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '-' && i + 1 < len && line[i + 1] == '>') {
-      if (push_token(out_stream, OOSH_TOKEN_ARROW, "->", "->", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_ARROW, "->", "->", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -439,7 +439,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '|') {
-      if (push_token(out_stream, OOSH_TOKEN_SHELL_PIPE, "|", "|", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_SHELL_PIPE, "|", "|", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -448,7 +448,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '&' && i + 1 < len && line[i + 1] == '&') {
-      if (push_token(out_stream, OOSH_TOKEN_AND_IF, "&&", "&&", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_AND_IF, "&&", "&&", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -457,7 +457,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '&') {
-      if (push_token(out_stream, OOSH_TOKEN_BACKGROUND, "&", "&", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_BACKGROUND, "&", "&", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -466,7 +466,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == ';') {
-      if (push_token(out_stream, OOSH_TOKEN_SEQUENCE, ";", ";", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_SEQUENCE, ";", ";", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -475,7 +475,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '2' && i + 3 < len && line[i + 1] == '>' && line[i + 2] == '&' && line[i + 3] == '1') {
-      if (push_token(out_stream, OOSH_TOKEN_REDIRECT_ERROR_TO_OUTPUT, "2>&1", "2>&1", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_REDIRECT_ERROR_TO_OUTPUT, "2>&1", "2>&1", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -484,7 +484,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '2' && i + 2 < len && line[i + 1] == '>' && line[i + 2] == '>') {
-      if (push_token(out_stream, OOSH_TOKEN_REDIRECT_ERROR_APPEND, "2>>", "2>>", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_REDIRECT_ERROR_APPEND, "2>>", "2>>", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -493,7 +493,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '2' && i + 1 < len && line[i + 1] == '>') {
-      if (push_token(out_stream, OOSH_TOKEN_REDIRECT_ERROR, "2>", "2>", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_REDIRECT_ERROR, "2>", "2>", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -502,7 +502,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '<' && i + 2 < len && line[i + 1] == '<' && line[i + 2] == '-') {
-      if (push_token(out_stream, OOSH_TOKEN_HEREDOC_STRIP, "<<-", "<<-", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_HEREDOC_STRIP, "<<-", "<<-", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -511,7 +511,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '<' && i + 1 < len && line[i + 1] == '<') {
-      if (push_token(out_stream, OOSH_TOKEN_HEREDOC, "<<", "<<", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_HEREDOC, "<<", "<<", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -520,7 +520,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '>' && i + 1 < len && line[i + 1] == '>') {
-      if (push_token(out_stream, OOSH_TOKEN_REDIRECT_APPEND, ">>", ">>", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_REDIRECT_APPEND, ">>", ">>", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -529,7 +529,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '>') {
-      if (push_token(out_stream, OOSH_TOKEN_REDIRECT_OUT, ">", ">", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_REDIRECT_OUT, ">", ">", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -538,7 +538,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '<') {
-      if (push_token(out_stream, OOSH_TOKEN_REDIRECT_IN, "<", "<", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_REDIRECT_IN, "<", "<", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -547,7 +547,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == '(') {
-      if (push_token(out_stream, OOSH_TOKEN_LPAREN, "(", "(", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_LPAREN, "(", "(", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -556,7 +556,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == ')') {
-      if (push_token(out_stream, OOSH_TOKEN_RPAREN, ")", ")", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_RPAREN, ")", ")", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -565,7 +565,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     }
 
     if (c == ',') {
-      if (push_token(out_stream, OOSH_TOKEN_COMMA, ",", ",", i) != 0) {
+      if (push_token(out_stream, ARKSH_TOKEN_COMMA, ",", ",", i) != 0) {
         snprintf(error, error_size, "too many tokens");
         return 1;
       }
@@ -573,7 +573,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
       continue;
     }
 
-    if (out_stream->count >= OOSH_MAX_LEXER_TOKENS) {
+    if (out_stream->count >= ARKSH_MAX_LEXER_TOKENS) {
       snprintf(error, error_size, "too many tokens");
       return 1;
     }
@@ -584,7 +584,7 @@ int oosh_lex_line(const char *line, OoshTokenStream *out_stream, char *error, si
     out_stream->count++;
   }
 
-  if (push_token(out_stream, OOSH_TOKEN_EOF, "", "", len) != 0) {
+  if (push_token(out_stream, ARKSH_TOKEN_EOF, "", "", len) != 0) {
     snprintf(error, error_size, "too many tokens");
     return 1;
   }

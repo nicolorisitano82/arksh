@@ -1,0 +1,4 @@
+./arksh_test_echo_stdin <<EOF | ./arksh_test_count_lines
+one
+two
+EOF

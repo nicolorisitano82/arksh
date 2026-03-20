@@ -1,0 +1,4 @@
+if true ; then ./arksh_test_echo_stdin <<EOF
+hello
+EOF
+fi

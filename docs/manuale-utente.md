@@ -1,4 +1,4 @@
-# Manuale Utente di oosh
+# Manuale Utente di arksh
 
 Versione di riferimento: attuale (marzo 2026)
 
@@ -6,7 +6,7 @@ Versione di riferimento: attuale (marzo 2026)
 
 ## Indice
 
-1. [Cos'e oosh](#1-cose-oosh)
+1. [Cos'e arksh](#1-cose-arksh)
 2. [Avvio rapido](#2-avvio-rapido)
 3. [Modello mentale](#3-modello-mentale)
 4. [Linguaggio — Sintassi di base](#4-linguaggio--sintassi-di-base)
@@ -92,13 +92,13 @@ Versione di riferimento: attuale (marzo 2026)
 
 ---
 
-## 1. Cos'e oosh
+## 1. Cos'e arksh
 
-oosh e una shell interattiva e linguaggio di scripting orientato agli oggetti, progettata per essere compatibile con le abitudini Unix consolidate, pur aggiungendo un livello oggetti ricco e un sistema di tipi integrato.
+arksh e una shell interattiva e linguaggio di scripting orientato agli oggetti, progettata per essere compatibile con le abitudini Unix consolidate, pur aggiungendo un livello oggetti ricco e un sistema di tipi integrato.
 
 L'obiettivo principale e consentire all'utente di trattare le entita del filesystem, i valori di programma e l'output dei processi come oggetti strutturati, senza abbandonare la sintassi tradizionale delle shell POSIX per i comandi di sistema ordinari.
 
-Le caratteristiche principali di oosh sono:
+Le caratteristiche principali di arksh sono:
 
 - **Pipeline oggetti**: un operatore `|>` distinto permette di concatenare trasformazioni su valori tipizzati, separando nettamente il flusso di testo tradizionale dalle elaborazioni strutturate.
 - **Tipi di valore**: stringhe, numeri, booleani, liste, mappe e blocchi sono valori di prima classe, costruibili con costruttori espliciti e manipolabili in espressioni.
@@ -107,7 +107,7 @@ Le caratteristiche principali di oosh sono:
 - **Sistema di plugin**: l'ABI C stabile permette di aggiungere comandi, stage pipeline, tipi e resolver senza ricompilare la shell.
 - **Editor di riga avanzato**: syntax highlighting in tempo reale, autosuggestion dalla history e tab completion contestuale.
 
-oosh non e uno strato di compatibilita su bash o zsh. E una shell autonoma con il proprio interprete, che punta ad essere pienamente usabile come shell di sistema e come linguaggio di automazione.
+arksh non e uno strato di compatibilita su bash o zsh. E una shell autonoma con il proprio interprete, che punta ad essere pienamente usabile come shell di sistema e come linguaggio di automazione.
 
 ---
 
@@ -115,7 +115,7 @@ oosh non e uno strato di compatibilita su bash o zsh. E una shell autonoma con i
 
 ### Compilazione
 
-Il sorgente di oosh usa un sistema di build basato su CMake. Per compilare:
+Il sorgente di arksh usa un sistema di build basato su CMake. Per compilare:
 
 ```bash
 mkdir build
@@ -133,14 +133,14 @@ cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON ..
 make
 ```
 
-L'eseguibile risultante si trova in `build/oosh` (o `build-asan/oosh`).
+L'eseguibile risultante si trova in `build/arksh` (o `build-asan/arksh`).
 
 ### Prima esecuzione
 
 Per avviare la shell in modo interattivo:
 
 ```bash
-./build/oosh
+./build/arksh
 ```
 
 Il prompt predefinito mostra utente, host e directory corrente. Per uscire:
@@ -156,13 +156,13 @@ oppure con `Ctrl-D` su riga vuota.
 Passare il percorso dello script come primo argomento:
 
 ```bash
-./build/oosh mio_script.osh
+./build/arksh mio_script.osh
 ```
 
 Lo script viene eseguito nel contesto corrente della shell. Non occorre nessun shebang speciale, ma per rendere lo script eseguibile direttamente e possibile usare:
 
 ```bash
-#!/usr/bin/env oosh
+#!/usr/bin/env arksh
 ```
 
 ### Primo script di esempio
@@ -170,7 +170,7 @@ Lo script viene eseguito nel contesto corrente della shell. Non occorre nessun s
 Creare il file `esempio.osh`:
 
 ```bash
-#!/usr/bin/env oosh
+#!/usr/bin/env arksh
 
 # Stampa il percorso corrente come oggetto
 let cwd_obj = path(".")
@@ -188,14 +188,14 @@ righe |> grep("ssh") |> count()
 Eseguirlo:
 
 ```bash
-./build/oosh esempio.osh
+./build/arksh esempio.osh
 ```
 
 ---
 
 ## 3. Modello mentale
 
-Per usare oosh efficacemente e utile comprendere il modello concettuale su cui e costruita.
+Per usare arksh efficacemente e utile comprendere il modello concettuale su cui e costruita.
 
 ### Comandi shell classici
 
@@ -207,11 +207,11 @@ grep "pattern" file.txt
 echo "ciao mondo"
 ```
 
-Questi comandi vengono eseguiti come processi figli. oosh gestisce l'eredita dell'ambiente, la redirection e le pipeline testuali esattamente come una shell POSIX.
+Questi comandi vengono eseguiti come processi figli. arksh gestisce l'eredita dell'ambiente, la redirection e le pipeline testuali esattamente come una shell POSIX.
 
 ### Espressioni oggetto
 
-Accanto ai comandi, oosh introduce le **espressioni oggetto**. Un'espressione oggetto e una stringa di token che produce un valore tipizzato anziche eseguire un processo. Le espressioni oggetto compaiono:
+Accanto ai comandi, arksh introduce le **espressioni oggetto**. Un'espressione oggetto e una stringa di token che produce un valore tipizzato anziche eseguire un processo. Le espressioni oggetto compaiono:
 
 - nel secondo membro di `let nome = <espressione>`
 - come argomenti di stage pipeline
@@ -252,7 +252,7 @@ Blocchi, liste, mappe e numeri sono valori che possono essere assegnati a bindin
 
 ### 4.1 Token e lessico
 
-oosh distingue i seguenti tipi di token:
+arksh distingue i seguenti tipi di token:
 
 - **Keyword**: `if`, `then`, `else`, `elif`, `fi`, `while`, `until`, `for`, `in`, `do`, `done`, `function`, `endfunction`, `class`, `extends`, `endclass`, `extend`, `return`, `break`, `continue`, `switch`, `case`, `default`, `endswitch`, `esac`, `true`, `false`
 - **Identificatori**: sequenze di lettere, cifre e `_`, non inizianti con cifra
@@ -559,7 +559,7 @@ Nella shell interattiva, il tab completion dopo `->` mostra le proprieta e i met
 
 ### 5.2 Tipi di oggetto filesystem
 
-oosh riconosce i seguenti tipi di oggetto filesystem, usati come valore della proprieta `type`:
+arksh riconosce i seguenti tipi di oggetto filesystem, usati come valore della proprieta `type`:
 
 | Tipo | Descrizione |
 |------|-------------|
@@ -668,7 +668,7 @@ Disponibile sugli oggetti `file`. Serializza il valore `binding` come JSON e lo 
 
 ```bash
 let conf = path("output.json")
-let dati = map("nome", text("oosh"), "versione", number(1))
+let dati = map("nome", text("arksh"), "versione", number(1))
 conf -> write_json(dati)
 ```
 
@@ -933,7 +933,7 @@ path_val |> split(":") |> count()
 
 | Chiave | Descrizione |
 |--------|-------------|
-| `pid` | PID del processo oosh corrente |
+| `pid` | PID del processo arksh corrente |
 | `ppid` | PID del processo padre |
 | `cwd` | Directory di lavoro corrente |
 | `host` | Nome host |
@@ -969,7 +969,7 @@ stato -> get("binding") -> render()
 
 ### 7.1 Concetto e sintassi
 
-L'operatore `|>` e il cuore del sistema di trasformazione strutturata di oosh. Prende un **valore sorgente** sul lato sinistro e lo passa a una serie di **stage** separati da `|>`.
+L'operatore `|>` e il cuore del sistema di trasformazione strutturata di arksh. Prende un **valore sorgente** sul lato sinistro e lo passa a una serie di **stage** separati da `|>`.
 
 ```
 sorgente |> stage1 |> stage2 |> ... |> stageN
@@ -991,7 +991,7 @@ path("/etc") -> children()
 
 ### 7.2 Bridge shell/object
 
-Quando un **comando esterno** (o una pipeline shell) appare come sorgente prima di `|>`, oosh cattura automaticamente lo stdout del processo e lo tratta come una stringa, convertendola in ingresso per la pipeline oggetti.
+Quando un **comando esterno** (o una pipeline shell) appare come sorgente prima di `|>`, arksh cattura automaticamente lo stdout del processo e lo tratta come una stringa, convertendola in ingresso per la pipeline oggetti.
 
 ```bash
 ls /usr/bin |> grep("ssh") |> count()
@@ -1261,7 +1261,7 @@ I comandi in una pipeline shell vengono eseguiti in parallelo come processi figl
 
 ### 8.2 Redirection
 
-oosh supporta la redirection completa in stile POSIX.
+arksh supporta la redirection completa in stile POSIX.
 
 #### Redirection in input (<)
 
@@ -1367,11 +1367,11 @@ rsync -av /sorgente /destinazione &
 # [2] 12346
 ```
 
-Il job viene aggiunto alla lista dei job (vedi sezione 14). oosh segnala il completamento del job quando diventa rilevabile.
+Il job viene aggiunto alla lista dei job (vedi sezione 14). arksh segnala il completamento del job quando diventa rilevabile.
 
 ### 8.5 Limiti dei built-in nelle pipeline shell
 
-I comandi built-in di oosh non possono essere usati nelle posizioni intermedie o finali di una pipeline shell multi-stage. Il motivo e che i built-in non sono processi separati e non hanno uno stdin/stdout connettibile a pipe del sistema operativo.
+I comandi built-in di arksh non possono essere usati nelle posizioni intermedie o finali di una pipeline shell multi-stage. Il motivo e che i built-in non sono processi separati e non hanno uno stdin/stdout connettibile a pipe del sistema operativo.
 
 ```bash
 # ERRORE: cd non e un processo, non puo stare in una pipeline
@@ -1919,7 +1919,7 @@ class Persona
 
 ## 12. Estensioni (extend)
 
-Il comando `extend` permette di aggiungere proprieta e metodi a tipi esistenti, senza modificarne il codice sorgente. E il meccanismo di monkey-patching tipizzato di oosh.
+Il comando `extend` permette di aggiungere proprieta e metodi a tipi esistenti, senza modificarne il codice sorgente. E il meccanismo di monkey-patching tipizzato di arksh.
 
 **Sintassi**:
 
@@ -2084,7 +2084,7 @@ continue 2    # agisce sui 2 loop piu interni
 
 ### eval
 
-Valuta la stringa fornita come codice oosh nel contesto corrente:
+Valuta la stringa fornita come codice arksh nel contesto corrente:
 
 ```bash
 eval "echo ciao"
@@ -2097,10 +2097,10 @@ eval "$cmd"
 
 ### exec
 
-Sostituisce il processo shell corrente con il comando specificato (non crea un processo figlio). Dopo `exec`, il processo oosh non esiste piu:
+Sostituisce il processo shell corrente con il comando specificato (non crea un processo figlio). Dopo `exec`, il processo arksh non esiste piu:
 
 ```bash
-exec /bin/bash    # sostituisce oosh con bash
+exec /bin/bash    # sostituisce arksh con bash
 exec env -i sh    # shell pulita senza ambiente
 ```
 
@@ -2303,7 +2303,7 @@ Le variabili impostate con `set` non sono esportate automaticamente ai processi 
 Esegue un file nel contesto corrente della shell (non in un sottoprocesso):
 
 ```bash
-source ~/.ooshrc
+source ~/.arkshrc
 source /percorso/script.osh argomento1 argomento2
 . ~/.profile
 ```
@@ -2339,7 +2339,7 @@ done
 
 ### type
 
-Mostra come oosh risolve un nome (in quale categoria cade):
+Mostra come arksh risolve un nome (in quale categoria cade):
 
 ```bash
 type ls
@@ -2407,7 +2407,7 @@ find / -name "*.log" -mtime +30 &
 # [2] 12346
 ```
 
-oosh assegna un numero progressivo al job (mostrato in `[n]`) e il PID del processo. Il controllo torna immediatamente al prompt.
+arksh assegna un numero progressivo al job (mostrato in `[n]`) e il PID del processo. Il controllo torna immediatamente al prompt.
 
 ### 14.2 Visualizzazione (jobs)
 
@@ -2454,7 +2454,7 @@ fg %1      # porta il job numero 1 in foreground
 fg %2      # porta il job numero 2 in foreground
 ```
 
-oosh usa `tcsetpgrp` per cedere correttamente il terminale al process group del job, e lo riprende al termine o quando il job viene stoppato di nuovo.
+arksh usa `tcsetpgrp` per cedere correttamente il terminale al process group del job, e lo riprende al termine o quando il job viene stoppato di nuovo.
 
 ### 14.4 Background (bg)
 
@@ -2477,9 +2477,9 @@ vim documento.txt
 [1]  Stopped    vim documento.txt
 ```
 
-oosh gestisce i process group correttamente: quando una pipeline e in foreground, tutti i processi della pipeline appartengono allo stesso process group (il PGID coincide con il PID del primo processo). Alla fermata, l'intero gruppo viene fermato, non solo il primo processo.
+arksh gestisce i process group correttamente: quando una pipeline e in foreground, tutti i processi della pipeline appartengono allo stesso process group (il PGID coincide con il PID del primo processo). Alla fermata, l'intero gruppo viene fermato, non solo il primo processo.
 
-oosh rileva il segnale `WIFSTOPPED` nella risposta di `waitpid` e aggiunge automaticamente il job alla lista senza richiedere azioni esplicite dell'utente.
+arksh rileva il segnale `WIFSTOPPED` nella risposta di `waitpid` e aggiunge automaticamente il job alla lista senza richiedere azioni esplicite dell'utente.
 
 Dettagli implementativi del signal handling (E4-S3):
 - `setpgid` viene chiamato nel figlio **prima** di ripristinare `SIGINT`/`SIGQUIT` a `SIG_DFL`, eliminando la race condition dove un Ctrl-C poteva uccidere il figlio prima che si spostasse nel proprio process group
@@ -2492,7 +2492,7 @@ Dettagli implementativi del signal handling (E4-S3):
 
 ### 15.1 Tasti supportati
 
-L'editor di riga interattivo di oosh supporta i seguenti comandi da tastiera:
+L'editor di riga interattivo di arksh supporta i seguenti comandi da tastiera:
 
 | Tasto | Azione |
 |-------|--------|
@@ -2510,7 +2510,7 @@ L'editor di riga interattivo di oosh supporta i seguenti comandi da tastiera:
 
 ### 15.2 Syntax highlighting
 
-oosh evidenzia la riga di input in tempo reale, colorando i token in base al loro tipo:
+arksh evidenzia la riga di input in tempo reale, colorando i token in base al loro tipo:
 
 | Categoria | Colore |
 |-----------|--------|
@@ -2520,11 +2520,11 @@ oosh evidenzia la riga di input in tempo reale, colorando i token in base al lor
 | Commenti (da `#` a fine riga) | Grigio |
 | Variabili (`$VAR`, `${VAR}`) | Ciano |
 
-Il colore verde dei comandi indica che oosh ha risolto il nome con successo. Un comando non riconosciuto (non built-in, non in PATH, non funzione, non alias) viene mostrato senza colore speciale.
+Il colore verde dei comandi indica che arksh ha risolto il nome con successo. Un comando non riconosciuto (non built-in, non in PATH, non funzione, non alias) viene mostrato senza colore speciale.
 
 ### 15.3 Autosuggestion
 
-oosh mostra un suggerimento grigio dopo il cursore: e il suffisso della voce di history piu recente che inizia con il testo corrente nel buffer.
+arksh mostra un suggerimento grigio dopo il cursore: e il suffisso della voce di history piu recente che inizia con il testo corrente nel buffer.
 
 Esempio: se la history contiene `ls -la /home/utente` e l'utente scrive `ls`, il suggerimento mostra ` -la /home/utente` in grigio.
 
@@ -2551,7 +2551,7 @@ Il completion offre:
 - Eseguibili trovati nel `PATH`
 
 ```
-oosh> ls<Tab>
+arksh> ls<Tab>
 ls        (cmd)
 lsblk     /usr/bin/lsblk
 lscpu     /usr/bin/lscpu
@@ -2563,7 +2563,7 @@ lsof      /usr/bin/lsof
 Mostra le variabili shell disponibili, con il prefisso `$`:
 
 ```
-oosh> echo $H<Tab>
+arksh> echo $H<Tab>
 $HOME
 $HISTFILE
 $HOST
@@ -2574,7 +2574,7 @@ $HOST
 Mostra i binding tipizzati attivi, con indicatore `(let)`:
 
 ```
-oosh> let nuova = <Tab>
+arksh> let nuova = <Tab>
 x     (let)
 lista (let)
 nome  (let)
@@ -2585,7 +2585,7 @@ nome  (let)
 Mostra gli stage disponibili per la pipeline oggetti:
 
 ```
-oosh> list() |> <Tab>
+arksh> list() |> <Tab>
 where(
 sort(
 take(
@@ -2608,7 +2608,7 @@ grep(
 Mostra le proprieta e i metodi disponibili per il tipo dell'oggetto corrente, con il tipo indicato tra parentesi:
 
 ```
-oosh> path("/etc") -><Tab>
+arksh> path("/etc") -><Tab>
 name         (string)
 type         (string)
 size         (number)
@@ -2643,7 +2643,7 @@ Il completion mostra indicatori di tipo accanto a ogni voce per aiutare l'utente
 
 ### 17.1 Configurazione
 
-Il prompt di oosh e configurabile tramite un file di testo in formato `chiave=valore`. I parametri principali sono:
+Il prompt di arksh e configurabile tramite un file di testo in formato `chiave=valore`. I parametri principali sono:
 
 ```
 theme=aurora
@@ -2696,11 +2696,11 @@ I segmenti sono le unita di informazione mostrate nel prompt. Ogni segmento puo 
 
 ### 17.3 Caricamento automatico
 
-oosh cerca la configurazione del prompt nel seguente ordine:
+arksh cerca la configurazione del prompt nel seguente ordine:
 
-1. Il percorso specificato dalla variabile di ambiente `OOSH_CONFIG`
-2. `oosh.conf` nella directory corrente (o nella directory del progetto)
-3. `~/.oosh/prompt.conf` (configurazione utente globale)
+1. Il percorso specificato dalla variabile di ambiente `ARKSH_CONFIG`
+2. `arksh.conf` nella directory corrente (o nella directory del progetto)
+3. `~/.arksh/prompt.conf` (configurazione utente globale)
 
 Se nessuno di questi file esiste, viene usata la configurazione di default.
 
@@ -2722,13 +2722,13 @@ prompt show
 
 ### 18.1 Caricare un plugin
 
-I plugin sono librerie condivise (`.so` su Linux, `.dylib` su macOS) compilate contro l'ABI C stabile di oosh. Per caricare un plugin:
+I plugin sono librerie condivise (`.so` su Linux, `.dylib` su macOS) compilate contro l'ABI C stabile di arksh. Per caricare un plugin:
 
 ```bash
 plugin load /percorso/al/plugin.so
 ```
 
-oosh verifica la compatibilita dell'ABI e carica il plugin nel contesto corrente. I simboli esportati dal plugin diventano immediatamente disponibili.
+arksh verifica la compatibilita dell'ABI e carica il plugin nel contesto corrente. I simboli esportati dal plugin diventano immediatamente disponibili.
 
 Un plugin puo essere caricato automaticamente aggiungendo la riga `plugin load ...` al file RC di avvio.
 
@@ -2750,7 +2750,7 @@ plugin enable nome_plugin
 
 ### 18.3 Creare un plugin (cenni)
 
-Un plugin oosh e una libreria C che esporta una struttura di registrazione. Il template di partenza si trova in `plugins/skeleton/` nel sorgente di oosh.
+Un plugin arksh e una libreria C che esporta una struttura di registrazione. Il template di partenza si trova in `plugins/skeleton/` nel sorgente di arksh.
 
 Un plugin puo registrare:
 - **Nuovi comandi built-in**: funzioni C che vengono chiamate come comandi shell
@@ -2759,28 +2759,28 @@ Un plugin puo registrare:
 - **Nuovi value resolver**: logica per interpretare espressioni come valori tipizzati
 - **Nuovi stage pipeline**: stage aggiuntivi usabili dopo `|>`
 
-L'ABI e stabile: i plugin compilati per una versione di oosh rimangono compatibili con versioni future (salvo aggiornamenti maggiori dell'ABI documentati nel changelog).
+L'ABI e stabile: i plugin compilati per una versione di arksh rimangono compatibili con versioni future (salvo aggiornamenti maggiori dell'ABI documentati nel changelog).
 
 Struttura minima di un plugin:
 
 ```c
-#include "oosh_plugin.h"
+#include "arksh_plugin.h"
 
-static int cmd_mio_comando(oosh_ctx *ctx, int argc, char **argv) {
-    oosh_print(ctx, "Ciao dal plugin!\n");
+static int cmd_mio_comando(arksh_ctx *ctx, int argc, char **argv) {
+    arksh_print(ctx, "Ciao dal plugin!\n");
     return 0;
 }
 
-static oosh_plugin_def plugin = {
+static arksh_plugin_def plugin = {
     .name    = "mio_plugin",
     .version = "1.0.0",
-    .commands = (oosh_command_def[]) {
+    .commands = (arksh_command_def[]) {
         { "mio_comando", cmd_mio_comando, "Descrizione del comando" },
         { NULL }
     },
 };
 
-OOSH_PLUGIN_EXPORT(&plugin);
+ARKSH_PLUGIN_EXPORT(&plugin);
 ```
 
 ---
@@ -2789,16 +2789,16 @@ OOSH_PLUGIN_EXPORT(&plugin);
 
 ### 19.1 File RC
 
-All'avvio, oosh esegue automaticamente un file di inizializzazione. L'ordine di ricerca e:
+All'avvio, arksh esegue automaticamente un file di inizializzazione. L'ordine di ricerca e:
 
-1. Il percorso specificato dalla variabile di ambiente `OOSH_RC`
-2. `~/.ooshrc` (file RC utente standard)
+1. Il percorso specificato dalla variabile di ambiente `ARKSH_RC`
+2. `~/.arkshrc` (file RC utente standard)
 
 Se nessuno dei due esiste, la shell si avvia senza file RC.
 
-Il file RC puo contenere qualsiasi comando oosh valido: alias, funzioni, binding, caricamento plugin, configurazione del prompt, esportazione di variabili.
+Il file RC puo contenere qualsiasi comando arksh valido: alias, funzioni, binding, caricamento plugin, configurazione del prompt, esportazione di variabili.
 
-Esempio di `~/.ooshrc`:
+Esempio di `~/.arkshrc`:
 
 ```bash
 # Alias comuni
@@ -2817,10 +2817,10 @@ function mkcd(dir) do
 endfunction
 
 # Plugin
-plugin load ~/.oosh/plugins/git.so
+plugin load ~/.arksh/plugins/git.so
 
 # Prompt
-prompt load ~/.oosh/prompt.conf
+prompt load ~/.arksh/prompt.conf
 
 # Binding globali
 let home_dir = path("~")
@@ -2830,8 +2830,8 @@ let home_dir = path("~")
 
 La history dei comandi viene salvata in un file. L'ordine di ricerca del file di history e:
 
-1. Il percorso specificato dalla variabile di ambiente `OOSH_HISTORY`
-2. `~/.oosh/history` (percorso di default)
+1. Il percorso specificato dalla variabile di ambiente `ARKSH_HISTORY`
+2. `~/.arksh/history` (percorso di default)
 
 La history e condivisa tra sessioni: i comandi di una sessione diventano disponibili nelle sessioni successive. L'editor di riga usa la history per l'autosuggestion e per la navigazione con le frecce.
 
@@ -2843,13 +2843,13 @@ history
 
 ### 19.3 Variabili di ambiente speciali
 
-Le seguenti variabili di ambiente hanno significato speciale per oosh:
+Le seguenti variabili di ambiente hanno significato speciale per arksh:
 
 | Variabile | Descrizione |
 |-----------|-------------|
-| `OOSH_RC` | Percorso alternativo al file RC di avvio |
-| `OOSH_HISTORY` | Percorso alternativo al file di history |
-| `OOSH_CONFIG` | Percorso alternativo alla configurazione prompt |
+| `ARKSH_RC` | Percorso alternativo al file RC di avvio |
+| `ARKSH_HISTORY` | Percorso alternativo al file di history |
+| `ARKSH_CONFIG` | Percorso alternativo alla configurazione prompt |
 | `HOME` | Directory home dell'utente (usata da `cd` senza argomenti e da `~`) |
 | `PATH` | Percorsi in cui cercare eseguibili |
 | `PWD` | Directory di lavoro corrente (aggiornata automaticamente da `cd`) |
@@ -2958,7 +2958,7 @@ Il core ha sempre la precedenza. `extend` aggiunge proprieta e metodi nuovi, non
 
 ### Diagnostica con type e inspect
 
-Per capire come oosh risolve un nome:
+Per capire come arksh risolve un nome:
 
 ```bash
 type ls
@@ -3108,7 +3108,7 @@ Tabella compatta di riferimento rapido per i costrutti piu usati.
 | `alias n="cmd"` | Definisce alias |
 | `unalias n` | Rimuove alias |
 | `source path` | Esegue file nel contesto corrente |
-| `eval "str"` | Valuta stringa come codice oosh |
+| `eval "str"` | Valuta stringa come codice arksh |
 | `exec cmd` | Sostituisce shell con il comando |
 | `exit [n]` | Esce con status n |
 | `type nome` | Risolve nome: built-in, funzione, alias, eseguibile |
@@ -3141,4 +3141,4 @@ Tabella compatta di riferimento rapido per i costrutti piu usati.
 
 ---
 
-*Fine del manuale utente di oosh.*
+*Fine del manuale utente di arksh.*

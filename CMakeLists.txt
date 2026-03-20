@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(oosh VERSION 0.1.0 LANGUAGES C)
+project(arksh VERSION 0.1.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -12,43 +12,43 @@ endif()
 
 # E8-S3-T1: AddressSanitizer + UndefinedBehaviorSanitizer
 #
-# OOSH_SANITIZE=ON  — full ASan+UBSan; intended for Linux CI (GitHub Actions).
+# ARKSH_SANITIZE=ON  — full ASan+UBSan; intended for Linux CI (GitHub Actions).
 #                     On macOS 14+/SIP, ASan shadow-memory setup may hang at
 #                     launch unless the binary is signed with get-task-allow.
-#                     Use OOSH_UBSAN=ON for local macOS development instead.
+#                     Use ARKSH_UBSAN=ON for local macOS development instead.
 #
-# OOSH_UBSAN=ON     — UBSan only; works on macOS without special entitlements.
+# ARKSH_UBSAN=ON     — UBSan only; works on macOS without special entitlements.
 #
 # Usage (Linux / CI):
-#   cmake -S . -B build-san -DOOSH_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug
+#   cmake -S . -B build-san -DARKSH_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug
 #   cmake --build build-san && ctest --test-dir build-san
 #
 # Usage (macOS local):
-#   cmake -S . -B build-ubsan -DOOSH_UBSAN=ON -DCMAKE_BUILD_TYPE=Debug
+#   cmake -S . -B build-ubsan -DARKSH_UBSAN=ON -DCMAKE_BUILD_TYPE=Debug
 #   cmake --build build-ubsan && ctest --test-dir build-ubsan
-option(OOSH_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer (Linux CI)" OFF)
-option(OOSH_UBSAN    "Build with UndefinedBehaviorSanitizer only (macOS-safe)"               OFF)
-if(OOSH_SANITIZE AND OOSH_UBSAN)
-  message(FATAL_ERROR "OOSH_SANITIZE and OOSH_UBSAN are mutually exclusive")
+option(ARKSH_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer (Linux CI)" OFF)
+option(ARKSH_UBSAN    "Build with UndefinedBehaviorSanitizer only (macOS-safe)"               OFF)
+if(ARKSH_SANITIZE AND ARKSH_UBSAN)
+  message(FATAL_ERROR "ARKSH_SANITIZE and ARKSH_UBSAN are mutually exclusive")
 endif()
-if(OOSH_SANITIZE)
+if(ARKSH_SANITIZE)
   if(MSVC)
-    message(FATAL_ERROR "OOSH_SANITIZE is not supported with MSVC")
+    message(FATAL_ERROR "ARKSH_SANITIZE is not supported with MSVC")
   endif()
   add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
   add_link_options(-fsanitize=address,undefined)
   message(STATUS "Sanitizers enabled: -fsanitize=address,undefined")
 endif()
-if(OOSH_UBSAN)
+if(ARKSH_UBSAN)
   if(MSVC)
-    message(FATAL_ERROR "OOSH_UBSAN is not supported with MSVC")
+    message(FATAL_ERROR "ARKSH_UBSAN is not supported with MSVC")
   endif()
   add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer)
   add_link_options(-fsanitize=undefined)
   message(STATUS "Sanitizers enabled: -fsanitize=undefined")
 endif()
 
-add_library(oosh_core STATIC
+add_library(arksh_core STATIC
   src/expand.c
   src/executor.c
   src/line_editor.c
@@ -61,16 +61,16 @@ add_library(oosh_core STATIC
   src/shell.c
 )
 
-target_include_directories(oosh_core PUBLIC include)
+target_include_directories(arksh_core PUBLIC include)
 
 if(NOT WIN32)
-  target_link_libraries(oosh_core PUBLIC dl)
+  target_link_libraries(arksh_core PUBLIC dl)
 endif()
 
-add_executable(oosh src/main.c)
-target_link_libraries(oosh PRIVATE oosh_core)
+add_executable(arksh src/main.c)
+target_link_libraries(arksh PRIVATE arksh_core)
 
-function(oosh_add_plugin target_name source_file)
+function(arksh_add_plugin target_name source_file)
   add_library(${target_name} MODULE ${source_file})
   target_include_directories(${target_name} PRIVATE include)
   set_target_properties(${target_name} PROPERTIES PREFIX "")
@@ -85,817 +85,817 @@ function(oosh_add_plugin target_name source_file)
   endif()
 endfunction()
 
-oosh_add_plugin(oosh_sample_plugin plugins/sample/sample_plugin.c)
-oosh_add_plugin(oosh_skeleton_plugin plugins/skeleton/skeleton_plugin.c)
+arksh_add_plugin(arksh_sample_plugin plugins/sample/sample_plugin.c)
+arksh_add_plugin(arksh_skeleton_plugin plugins/skeleton/skeleton_plugin.c)
 # E6-S2-T3: typed-map example plugin (links against libm for sqrt)
-oosh_add_plugin(oosh_point_plugin plugins/point/point_plugin.c)
+arksh_add_plugin(arksh_point_plugin plugins/point/point_plugin.c)
 if(NOT WIN32)
-  target_link_libraries(oosh_point_plugin PRIVATE m)
+  target_link_libraries(arksh_point_plugin PRIVATE m)
 endif()
 
 include(CTest)
 
 if(BUILD_TESTING)
-  add_executable(oosh_test_emit_args tests/emit_args.c)
-  add_executable(oosh_test_count_lines tests/count_lines.c)
-  add_executable(oosh_test_echo_stdin tests/echo_stdin.c)
-  add_executable(oosh_test_pause tests/pause_seconds.c)
+  add_executable(arksh_test_emit_args tests/emit_args.c)
+  add_executable(arksh_test_count_lines tests/count_lines.c)
+  add_executable(arksh_test_echo_stdin tests/echo_stdin.c)
+  add_executable(arksh_test_pause tests/pause_seconds.c)
 
-  # E8-S1: unit test executables (link against oosh_core for lexer/parser APIs)
-  add_executable(oosh_unit_lexer tests/unit_lexer.c)
-  target_link_libraries(oosh_unit_lexer PRIVATE oosh_core)
-  add_executable(oosh_unit_parser tests/unit_parser.c)
-  target_link_libraries(oosh_unit_parser PRIVATE oosh_core)
+  # E8-S1: unit test executables (link against arksh_core for lexer/parser APIs)
+  add_executable(arksh_unit_lexer tests/unit_lexer.c)
+  target_link_libraries(arksh_unit_lexer PRIVATE arksh_core)
+  add_executable(arksh_unit_parser tests/unit_parser.c)
+  target_link_libraries(arksh_unit_parser PRIVATE arksh_core)
 
   file(COPY tests/fixtures DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tests")
 
   if(WIN32)
-    set(OOSH_TEST_EMIT "oosh_test_emit_args.exe")
-    set(OOSH_TEST_COUNT "oosh_test_count_lines.exe")
-    set(OOSH_TEST_ECHO "oosh_test_echo_stdin.exe")
-    set(OOSH_TEST_PAUSE "oosh_test_pause.exe")
+    set(ARKSH_TEST_EMIT "arksh_test_emit_args.exe")
+    set(ARKSH_TEST_COUNT "arksh_test_count_lines.exe")
+    set(ARKSH_TEST_ECHO "arksh_test_echo_stdin.exe")
+    set(ARKSH_TEST_PAUSE "arksh_test_pause.exe")
   else()
-    set(OOSH_TEST_EMIT "./oosh_test_emit_args")
-    set(OOSH_TEST_COUNT "./oosh_test_count_lines")
-    set(OOSH_TEST_ECHO "./oosh_test_echo_stdin")
-    set(OOSH_TEST_PAUSE "./oosh_test_pause")
+    set(ARKSH_TEST_EMIT "./arksh_test_emit_args")
+    set(ARKSH_TEST_COUNT "./arksh_test_count_lines")
+    set(ARKSH_TEST_ECHO "./arksh_test_echo_stdin")
+    set(ARKSH_TEST_PAUSE "./arksh_test_pause")
   endif()
 
-  add_test(NAME oosh_help COMMAND oosh -c help)
-  add_test(NAME oosh_object_type COMMAND oosh -c "obj(\".\").type")
-  add_test(NAME oosh_human_object_type COMMAND oosh -c ". -> type")
-  add_test(NAME oosh_pipeline_count COMMAND oosh -c ". -> children() |> count()")
-  add_test(NAME oosh_external_command COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" hello")
-  add_test(NAME oosh_shell_pipeline COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" alpha beta | \"${OOSH_TEST_COUNT}\"")
-  add_test(NAME oosh_glob_command_args COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" tests/fixtures/glob/*.fixture | \"${OOSH_TEST_COUNT}\"")
-  add_test(NAME oosh_env_expansion COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" \"\$PWD\"")
-  add_test(NAME oosh_command_substitution COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" \$(pwd)")
-  add_test(NAME oosh_history_builtin COMMAND oosh -c "history")
-  add_test(NAME oosh_sequence_operator COMMAND oosh -c "true ; true")
-  add_test(NAME oosh_and_operator COMMAND oosh -c "true && true")
-  add_test(NAME oosh_or_operator COMMAND oosh -c "false || true")
-  add_test(NAME oosh_if_command COMMAND oosh -c "if true ; then \"${OOSH_TEST_EMIT}\" ok ; fi")
-  add_test(NAME oosh_if_value_condition COMMAND oosh -c "if bool(false) ; then false ; else true ; fi")
-  add_test(NAME oosh_ternary_true COMMAND oosh -c "bool(true) ? \"yes\" : \"no\"")
-  add_test(NAME oosh_ternary_false COMMAND oosh -c "1 == 2 ? \"yes\" : \"no\"")
-  add_test(NAME oosh_while_command COMMAND oosh -c "while false ; do true ; done")
-  add_test(NAME oosh_for_command COMMAND oosh -c "for n in list(1, 2, 3) ; do n -> value ; done")
-  add_test(NAME oosh_switch_match COMMAND oosh -c "switch 2 ; case 1 ; then text(\"one\") -> print() ; case 2 ; then text(\"two\") -> print() ; default ; then text(\"other\") -> print() ; endswitch")
-  add_test(NAME oosh_switch_default COMMAND oosh -c "switch \"missing\" ; case \"one\" ; then text(\"one\") -> print() ; default ; then text(\"fallback\") -> print() ; endswitch")
-  add_test(NAME oosh_block_local_reduce COMMAND oosh -c "list(1, 2, 3) |> reduce(number(0), [:acc :n | local next = acc + n ; next])")
-  add_test(NAME oosh_block_local_scope_restore COMMAND oosh -c "let next = 99 ; let sum = list(1, 2) |> reduce(number(0), [:acc :n | local next = acc + n ; next]) ; text(\"%v\") -> print(next)")
-  add_test(NAME oosh_background_job COMMAND oosh -c "\"${OOSH_TEST_PAUSE}\" 1 & jobs")
-  add_test(NAME oosh_source_file COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/examples/ooshrc")
-  add_test(NAME oosh_control_flow_script COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/examples/scripts/04-control-flow.oosh")
-  add_test(NAME oosh_function_script COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/examples/scripts/05-shell-functions.oosh")
-  add_test(NAME oosh_case_builtins_script COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/examples/scripts/07-case-and-builtins.oosh")
-  add_test(NAME oosh_alias_rc COMMAND oosh -c "type ll")
-  add_test(NAME oosh_shell_var_precedence COMMAND oosh -c "README.md -> read_text(\$LIMIT)")
-  add_test(NAME oosh_function_basic COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/basic.oosh")
-  add_test(NAME oosh_function_redefine COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/redefine.oosh")
-  add_test(NAME oosh_function_scope COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/scope.oosh")
-  add_test(NAME oosh_break_nested COMMAND oosh -c "while true ; do while true ; do text(\"once\") -> print() ; break 2 ; done ; done")
-  add_test(NAME oosh_continue_nested COMMAND oosh -c "for outer in list(1, 2) ; do while true ; do outer -> print() ; continue 2 ; done ; done")
-  add_test(NAME oosh_function_return COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/return.oosh")
-  add_test(NAME oosh_function_return_from_loop COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/return-from-loop.oosh")
-  add_test(NAME oosh_break_invalid COMMAND oosh -c "break || true")
-  add_test(NAME oosh_continue_invalid COMMAND oosh -c "continue || true")
-  add_test(NAME oosh_return_invalid COMMAND oosh -c "return text(\"x\") || true")
-  add_test(NAME oosh_until_command COMMAND oosh -c "until true ; do text(\"retry\") -> print() ; done")
-  add_test(NAME oosh_case_exact COMMAND oosh -c "case text(\"directory\") in directory) text(\"dir\") -> print() ;; *) text(\"other\") -> print() ;; esac")
-  add_test(NAME oosh_case_wildcard COMMAND oosh -c "case text(\"demo.txt\") in *.md) text(\"md\") -> print() ;; *.txt) text(\"txt\") -> print() ;; esac")
-  add_test(NAME oosh_case_alternatives COMMAND oosh -c "case text(\"blue\") in red|green) text(\"warm\") -> print() ;; blue|cyan) text(\"cool\") -> print() ;; esac")
-  add_test(NAME oosh_eval_builtin COMMAND oosh -c "eval \"text(\\\"hi\\\") -> print()\"")
-  add_test(NAME oosh_exec_builtin COMMAND oosh -c "exec \"${OOSH_TEST_EMIT}\" hello world")
-  add_test(NAME oosh_wait_builtin COMMAND oosh -c "\"${OOSH_TEST_PAUSE}\" 0 & wait %1")
-  add_test(NAME oosh_wait_done_message COMMAND oosh -c "\"${OOSH_TEST_PAUSE}\" 0 & wait %1")
-  add_test(NAME oosh_jobs_current_marker COMMAND oosh -c "\"${OOSH_TEST_PAUSE}\" 1 & jobs")
-  add_test(NAME oosh_pipeline_three_stage COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" a b c | \"${OOSH_TEST_ECHO}\" | \"${OOSH_TEST_COUNT}\"")
-  add_test(NAME oosh_pipeline_sigpipe_safe COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" x y z | \"${OOSH_TEST_COUNT}\"")
-  add_test(NAME oosh_bridge_capture_lines COMMAND oosh -c "capture_lines(\"${OOSH_TEST_EMIT} a b c\") |> count()")
+  add_test(NAME arksh_help COMMAND arksh -c help)
+  add_test(NAME arksh_object_type COMMAND arksh -c "obj(\".\").type")
+  add_test(NAME arksh_human_object_type COMMAND arksh -c ". -> type")
+  add_test(NAME arksh_pipeline_count COMMAND arksh -c ". -> children() |> count()")
+  add_test(NAME arksh_external_command COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" hello")
+  add_test(NAME arksh_shell_pipeline COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" alpha beta | \"${ARKSH_TEST_COUNT}\"")
+  add_test(NAME arksh_glob_command_args COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" tests/fixtures/glob/*.fixture | \"${ARKSH_TEST_COUNT}\"")
+  add_test(NAME arksh_env_expansion COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" \"\$PWD\"")
+  add_test(NAME arksh_command_substitution COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" \$(pwd)")
+  add_test(NAME arksh_history_builtin COMMAND arksh -c "history")
+  add_test(NAME arksh_sequence_operator COMMAND arksh -c "true ; true")
+  add_test(NAME arksh_and_operator COMMAND arksh -c "true && true")
+  add_test(NAME arksh_or_operator COMMAND arksh -c "false || true")
+  add_test(NAME arksh_if_command COMMAND arksh -c "if true ; then \"${ARKSH_TEST_EMIT}\" ok ; fi")
+  add_test(NAME arksh_if_value_condition COMMAND arksh -c "if bool(false) ; then false ; else true ; fi")
+  add_test(NAME arksh_ternary_true COMMAND arksh -c "bool(true) ? \"yes\" : \"no\"")
+  add_test(NAME arksh_ternary_false COMMAND arksh -c "1 == 2 ? \"yes\" : \"no\"")
+  add_test(NAME arksh_while_command COMMAND arksh -c "while false ; do true ; done")
+  add_test(NAME arksh_for_command COMMAND arksh -c "for n in list(1, 2, 3) ; do n -> value ; done")
+  add_test(NAME arksh_switch_match COMMAND arksh -c "switch 2 ; case 1 ; then text(\"one\") -> print() ; case 2 ; then text(\"two\") -> print() ; default ; then text(\"other\") -> print() ; endswitch")
+  add_test(NAME arksh_switch_default COMMAND arksh -c "switch \"missing\" ; case \"one\" ; then text(\"one\") -> print() ; default ; then text(\"fallback\") -> print() ; endswitch")
+  add_test(NAME arksh_block_local_reduce COMMAND arksh -c "list(1, 2, 3) |> reduce(number(0), [:acc :n | local next = acc + n ; next])")
+  add_test(NAME arksh_block_local_scope_restore COMMAND arksh -c "let next = 99 ; let sum = list(1, 2) |> reduce(number(0), [:acc :n | local next = acc + n ; next]) ; text(\"%v\") -> print(next)")
+  add_test(NAME arksh_background_job COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 1 & jobs")
+  add_test(NAME arksh_source_file COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/examples/arkshrc")
+  add_test(NAME arksh_control_flow_script COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/examples/scripts/04-control-flow.arksh")
+  add_test(NAME arksh_function_script COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/examples/scripts/05-shell-functions.arksh")
+  add_test(NAME arksh_case_builtins_script COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/examples/scripts/07-case-and-builtins.arksh")
+  add_test(NAME arksh_alias_rc COMMAND arksh -c "type ll")
+  add_test(NAME arksh_shell_var_precedence COMMAND arksh -c "README.md -> read_text(\$LIMIT)")
+  add_test(NAME arksh_function_basic COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/basic.arksh")
+  add_test(NAME arksh_function_redefine COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/redefine.arksh")
+  add_test(NAME arksh_function_scope COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/scope.arksh")
+  add_test(NAME arksh_break_nested COMMAND arksh -c "while true ; do while true ; do text(\"once\") -> print() ; break 2 ; done ; done")
+  add_test(NAME arksh_continue_nested COMMAND arksh -c "for outer in list(1, 2) ; do while true ; do outer -> print() ; continue 2 ; done ; done")
+  add_test(NAME arksh_function_return COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/return.arksh")
+  add_test(NAME arksh_function_return_from_loop COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/return-from-loop.arksh")
+  add_test(NAME arksh_break_invalid COMMAND arksh -c "break || true")
+  add_test(NAME arksh_continue_invalid COMMAND arksh -c "continue || true")
+  add_test(NAME arksh_return_invalid COMMAND arksh -c "return text(\"x\") || true")
+  add_test(NAME arksh_until_command COMMAND arksh -c "until true ; do text(\"retry\") -> print() ; done")
+  add_test(NAME arksh_case_exact COMMAND arksh -c "case text(\"directory\") in directory) text(\"dir\") -> print() ;; *) text(\"other\") -> print() ;; esac")
+  add_test(NAME arksh_case_wildcard COMMAND arksh -c "case text(\"demo.txt\") in *.md) text(\"md\") -> print() ;; *.txt) text(\"txt\") -> print() ;; esac")
+  add_test(NAME arksh_case_alternatives COMMAND arksh -c "case text(\"blue\") in red|green) text(\"warm\") -> print() ;; blue|cyan) text(\"cool\") -> print() ;; esac")
+  add_test(NAME arksh_eval_builtin COMMAND arksh -c "eval \"text(\\\"hi\\\") -> print()\"")
+  add_test(NAME arksh_exec_builtin COMMAND arksh -c "exec \"${ARKSH_TEST_EMIT}\" hello world")
+  add_test(NAME arksh_wait_builtin COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 0 & wait %1")
+  add_test(NAME arksh_wait_done_message COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 0 & wait %1")
+  add_test(NAME arksh_jobs_current_marker COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 1 & jobs")
+  add_test(NAME arksh_pipeline_three_stage COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" a b c | \"${ARKSH_TEST_ECHO}\" | \"${ARKSH_TEST_COUNT}\"")
+  add_test(NAME arksh_pipeline_sigpipe_safe COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" x y z | \"${ARKSH_TEST_COUNT}\"")
+  add_test(NAME arksh_bridge_capture_lines COMMAND arksh -c "capture_lines(\"${ARKSH_TEST_EMIT} a b c\") |> count()")
   # E4-S4: force_capture path (capture() sets force_capture=1 — exercises the
   # interactive-detection + capture-pipe branch on both POSIX and Windows)
-  add_test(NAME oosh_capture_text_first
-    COMMAND oosh -c "capture(\"${OOSH_TEST_EMIT} hello\") |> lines() |> first()")
-  add_test(NAME oosh_capture_text_count
-    COMMAND oosh -c "capture(\"${OOSH_TEST_EMIT} alpha beta\") |> lines() |> count()")
-  add_test(NAME oosh_bridge_multiword COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" x y z |> lines() |> count()")
-  add_test(NAME oosh_trap_exit COMMAND oosh -c "trap \"text(\\\"bye\\\") -> print()\" EXIT ; text(\"run\") -> print()")
-  add_test(NAME oosh_heredoc_basic COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/basic.oosh")
-  add_test(NAME oosh_heredoc_strip_tabs COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/strip-tabs.oosh")
-  add_test(NAME oosh_heredoc_pipeline COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/pipeline.oosh")
-  add_test(NAME oosh_heredoc_preserve_blank_and_comment COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/preserve-blank-and-comment.oosh")
-  add_test(NAME oosh_inline_if_heredoc COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/inline-if.oosh")
-  add_test(NAME oosh_group_heredoc_tail COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/group-tail.oosh")
-  add_test(NAME oosh_subshell_heredoc_tail COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/subshell-tail.oosh")
-  add_test(NAME oosh_fd_redirect_output_dup COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" hello 3> fd3.out 1>&3 ; fd3.out -> read_text(64)")
-  add_test(NAME oosh_fd_redirect_input_dup COMMAND oosh -c "\"${OOSH_TEST_EMIT}\" left right > fdin.txt ; \"${OOSH_TEST_COUNT}\" 3< fdin.txt 0<&3")
-  add_test(NAME oosh_group_binding_scope COMMAND oosh -c "{ let flavor = text(\"mint\") ; } ; flavor -> value")
-  add_test(NAME oosh_subshell_binding_scope COMMAND oosh -c "let flavor = text(\"vanilla\") ; ( let flavor = text(\"mint\") ) ; flavor -> value")
-  add_test(NAME oosh_group_env_scope COMMAND oosh -c "{ set MODE grouped ; } ; text(\"%s\") -> print(\"\$MODE\")")
-  add_test(NAME oosh_subshell_env_scope COMMAND oosh -c "set MODE outer ; ( set MODE inner ) ; text(\"%s\") -> print(\"\$MODE\")")
-  add_test(NAME oosh_group_redirection COMMAND oosh -c "{ text(\"grouped\") -> print() ; } > group_scope.out ; group_scope.out -> read_text(32)")
-  add_test(NAME oosh_subshell_redirection COMMAND oosh -c "( text(\"isolated\") -> print() ) > subshell_scope.out ; subshell_scope.out -> read_text(32)")
-  add_test(NAME oosh_group_input_redirection COMMAND oosh -c "{ ${OOSH_TEST_COUNT} ; } < ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/basic.oosh")
-  add_test(NAME oosh_subshell_input_redirection COMMAND oosh -c "( ${OOSH_TEST_COUNT} ) < ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/basic.oosh")
-  add_test(NAME oosh_class_basic COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/basic.oosh")
-  add_test(NAME oosh_class_init_inheritance COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/init-and-inheritance.oosh")
-  add_test(NAME oosh_class_multiple_inheritance COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/multiple-inheritance.oosh")
-  add_test(NAME oosh_class_introspection COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/introspection.oosh")
-  add_test(NAME oosh_print_method COMMAND oosh -c "text(\"hello\") -> print()")
-  add_test(NAME oosh_print_format_method COMMAND oosh -c "text(\"%s:%d\") -> print(\"file\", 3)")
-  add_test(NAME oosh_proc_namespace COMMAND oosh -c "proc() -> pid")
-  add_test(NAME oosh_shell_namespace COMMAND oosh -c "shell() -> plugins |> count()")
-  add_test(NAME oosh_nested_json_roundtrip COMMAND oosh -c "tests/fixtures/json/nested.json -> read_json() |> to_json()")
-  add_test(NAME oosh_plugin_value_resolver COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_sample_plugin> ; sample() -> name")
-  add_test(NAME oosh_plugin_pipeline_stage COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_sample_plugin> ; text(\"ciao\") |> sample_wrap()")
-  add_test(NAME oosh_positional_in_function COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/positional-in-function.oosh")
-  add_test(NAME oosh_positional_count COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-count.oosh")
-  add_test(NAME oosh_positional_all COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-all.oosh")
-  add_test(NAME oosh_positional_shell_pid COMMAND oosh -c "text(\"%s\") -> print(\"$$\")")
-  add_test(NAME oosh_positional_source_args COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/source-params.oosh hello")
-  add_test(NAME oosh_positional_scope_restore COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/scope-restore.oosh")
-  add_test(NAME oosh_param_expand_default COMMAND oosh -c "text(\"%s\") -> print(\"\${UNDEF:-fallback}\")")
-  add_test(NAME oosh_param_expand_set_nodefault COMMAND oosh -c "set X hello ; text(\"%s\") -> print(\"\${X:-fallback}\")")
-  add_test(NAME oosh_param_expand_assign COMMAND oosh -c "text(\"%s\") -> print(\"\${NEW:=assigned}\") ; text(\"%s\") -> print(\"\$NEW\")")
-  add_test(NAME oosh_param_expand_alt COMMAND oosh -c "set Y yes ; text(\"%s\") -> print(\"\${Y:+alt}\")")
-  add_test(NAME oosh_param_expand_alt_unset COMMAND oosh -c "text(\"%s\") -> print(\"\${NOPE:+alt}\")")
-  add_test(NAME oosh_param_expand_length COMMAND oosh -c "set WORD hello ; text(\"%s\") -> print(\"\${#WORD}\")")
-  add_test(NAME oosh_param_expand_suffix_shortest COMMAND oosh -c "set F file.tar.gz ; text(\"%s\") -> print(\"\${F%.*}\")")
-  add_test(NAME oosh_param_expand_suffix_longest COMMAND oosh -c "set F file.tar.gz ; text(\"%s\") -> print(\"\${F%%.*}\")")
-  add_test(NAME oosh_param_expand_prefix_shortest COMMAND oosh -c "set P /usr/local/bin ; text(\"%s\") -> print(\"\${P#/usr}\")")
-  add_test(NAME oosh_param_expand_prefix_longest COMMAND oosh -c "set P /usr/local/bin ; text(\"%s\") -> print(\"\${P##*/}\")")
-  add_test(NAME oosh_param_expand_script COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-expansion.oosh")
-  add_test(NAME oosh_ifs_split_count COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/split-count.oosh")
-  add_test(NAME oosh_ifs_split_first COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/split-first.oosh")
-  add_test(NAME oosh_ifs_quoted_no_split COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/quoted-no-split.oosh")
-  add_test(NAME oosh_ifs_custom COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/custom-ifs.oosh")
-  add_test(NAME oosh_ifs_quote_removal COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/quote-removal.oosh")
-  add_test(NAME oosh_ifs_empty_var COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/empty-var.oosh")
+  add_test(NAME arksh_capture_text_first
+    COMMAND arksh -c "capture(\"${ARKSH_TEST_EMIT} hello\") |> lines() |> first()")
+  add_test(NAME arksh_capture_text_count
+    COMMAND arksh -c "capture(\"${ARKSH_TEST_EMIT} alpha beta\") |> lines() |> count()")
+  add_test(NAME arksh_bridge_multiword COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" x y z |> lines() |> count()")
+  add_test(NAME arksh_trap_exit COMMAND arksh -c "trap \"text(\\\"bye\\\") -> print()\" EXIT ; text(\"run\") -> print()")
+  add_test(NAME arksh_heredoc_basic COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/basic.arksh")
+  add_test(NAME arksh_heredoc_strip_tabs COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/strip-tabs.arksh")
+  add_test(NAME arksh_heredoc_pipeline COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/pipeline.arksh")
+  add_test(NAME arksh_heredoc_preserve_blank_and_comment COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/preserve-blank-and-comment.arksh")
+  add_test(NAME arksh_inline_if_heredoc COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/inline-if.arksh")
+  add_test(NAME arksh_group_heredoc_tail COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/group-tail.arksh")
+  add_test(NAME arksh_subshell_heredoc_tail COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/subshell-tail.arksh")
+  add_test(NAME arksh_fd_redirect_output_dup COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" hello 3> fd3.out 1>&3 ; fd3.out -> read_text(64)")
+  add_test(NAME arksh_fd_redirect_input_dup COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" left right > fdin.txt ; \"${ARKSH_TEST_COUNT}\" 3< fdin.txt 0<&3")
+  add_test(NAME arksh_group_binding_scope COMMAND arksh -c "{ let flavor = text(\"mint\") ; } ; flavor -> value")
+  add_test(NAME arksh_subshell_binding_scope COMMAND arksh -c "let flavor = text(\"vanilla\") ; ( let flavor = text(\"mint\") ) ; flavor -> value")
+  add_test(NAME arksh_group_env_scope COMMAND arksh -c "{ set MODE grouped ; } ; text(\"%s\") -> print(\"\$MODE\")")
+  add_test(NAME arksh_subshell_env_scope COMMAND arksh -c "set MODE outer ; ( set MODE inner ) ; text(\"%s\") -> print(\"\$MODE\")")
+  add_test(NAME arksh_group_redirection COMMAND arksh -c "{ text(\"grouped\") -> print() ; } > group_scope.out ; group_scope.out -> read_text(32)")
+  add_test(NAME arksh_subshell_redirection COMMAND arksh -c "( text(\"isolated\") -> print() ) > subshell_scope.out ; subshell_scope.out -> read_text(32)")
+  add_test(NAME arksh_group_input_redirection COMMAND arksh -c "{ ${ARKSH_TEST_COUNT} ; } < ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/basic.arksh")
+  add_test(NAME arksh_subshell_input_redirection COMMAND arksh -c "( ${ARKSH_TEST_COUNT} ) < ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/basic.arksh")
+  add_test(NAME arksh_class_basic COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/basic.arksh")
+  add_test(NAME arksh_class_init_inheritance COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/init-and-inheritance.arksh")
+  add_test(NAME arksh_class_multiple_inheritance COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/multiple-inheritance.arksh")
+  add_test(NAME arksh_class_introspection COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/introspection.arksh")
+  add_test(NAME arksh_print_method COMMAND arksh -c "text(\"hello\") -> print()")
+  add_test(NAME arksh_print_format_method COMMAND arksh -c "text(\"%s:%d\") -> print(\"file\", 3)")
+  add_test(NAME arksh_proc_namespace COMMAND arksh -c "proc() -> pid")
+  add_test(NAME arksh_shell_namespace COMMAND arksh -c "shell() -> plugins |> count()")
+  add_test(NAME arksh_nested_json_roundtrip COMMAND arksh -c "tests/fixtures/json/nested.json -> read_json() |> to_json()")
+  add_test(NAME arksh_plugin_value_resolver COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_sample_plugin> ; sample() -> name")
+  add_test(NAME arksh_plugin_pipeline_stage COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_sample_plugin> ; text(\"ciao\") |> sample_wrap()")
+  add_test(NAME arksh_positional_in_function COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/positional-in-function.arksh")
+  add_test(NAME arksh_positional_count COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-count.arksh")
+  add_test(NAME arksh_positional_all COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-all.arksh")
+  add_test(NAME arksh_positional_shell_pid COMMAND arksh -c "text(\"%s\") -> print(\"$$\")")
+  add_test(NAME arksh_positional_source_args COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/source-params.arksh hello")
+  add_test(NAME arksh_positional_scope_restore COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/scope-restore.arksh")
+  add_test(NAME arksh_param_expand_default COMMAND arksh -c "text(\"%s\") -> print(\"\${UNDEF:-fallback}\")")
+  add_test(NAME arksh_param_expand_set_nodefault COMMAND arksh -c "set X hello ; text(\"%s\") -> print(\"\${X:-fallback}\")")
+  add_test(NAME arksh_param_expand_assign COMMAND arksh -c "text(\"%s\") -> print(\"\${NEW:=assigned}\") ; text(\"%s\") -> print(\"\$NEW\")")
+  add_test(NAME arksh_param_expand_alt COMMAND arksh -c "set Y yes ; text(\"%s\") -> print(\"\${Y:+alt}\")")
+  add_test(NAME arksh_param_expand_alt_unset COMMAND arksh -c "text(\"%s\") -> print(\"\${NOPE:+alt}\")")
+  add_test(NAME arksh_param_expand_length COMMAND arksh -c "set WORD hello ; text(\"%s\") -> print(\"\${#WORD}\")")
+  add_test(NAME arksh_param_expand_suffix_shortest COMMAND arksh -c "set F file.tar.gz ; text(\"%s\") -> print(\"\${F%.*}\")")
+  add_test(NAME arksh_param_expand_suffix_longest COMMAND arksh -c "set F file.tar.gz ; text(\"%s\") -> print(\"\${F%%.*}\")")
+  add_test(NAME arksh_param_expand_prefix_shortest COMMAND arksh -c "set P /usr/local/bin ; text(\"%s\") -> print(\"\${P#/usr}\")")
+  add_test(NAME arksh_param_expand_prefix_longest COMMAND arksh -c "set P /usr/local/bin ; text(\"%s\") -> print(\"\${P##*/}\")")
+  add_test(NAME arksh_param_expand_script COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-expansion.arksh")
+  add_test(NAME arksh_ifs_split_count COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/split-count.arksh")
+  add_test(NAME arksh_ifs_split_first COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/split-first.arksh")
+  add_test(NAME arksh_ifs_quoted_no_split COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/quoted-no-split.arksh")
+  add_test(NAME arksh_ifs_custom COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/custom-ifs.arksh")
+  add_test(NAME arksh_ifs_quote_removal COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/quote-removal.arksh")
+  add_test(NAME arksh_ifs_empty_var COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ifs/empty-var.arksh")
 
   # E2-S4: arithmetic expansion
-  add_test(NAME oosh_arith_basic   COMMAND oosh -c "text(\"%d\") -> print($((3 + 4)))")
-  add_test(NAME oosh_arith_var     COMMAND oosh -c "set X \"6\" ; text(\"%d\") -> print($((X * 7)))")
-  add_test(NAME oosh_arith_prec    COMMAND oosh -c "text(\"%d\") -> print($((2 + 3 * 4)))")
-  add_test(NAME oosh_arith_quoted  COMMAND oosh -c "text(\"%d\") -> print(\"$((10 - 3))\")")
+  add_test(NAME arksh_arith_basic   COMMAND arksh -c "text(\"%d\") -> print($((3 + 4)))")
+  add_test(NAME arksh_arith_var     COMMAND arksh -c "set X \"6\" ; text(\"%d\") -> print($((X * 7)))")
+  add_test(NAME arksh_arith_prec    COMMAND arksh -c "text(\"%d\") -> print($((2 + 3 * 4)))")
+  add_test(NAME arksh_arith_quoted  COMMAND arksh -c "text(\"%d\") -> print(\"$((10 - 3))\")")
 
   # E2-S5: binary arithmetic operators in value expression context
-  add_test(NAME oosh_binop_add     COMMAND oosh -c "number(3) + number(4)")
-  add_test(NAME oosh_binop_sub     COMMAND oosh -c "number(10) - number(3)")
-  add_test(NAME oosh_binop_mul     COMMAND oosh -c "number(4) * number(5)")
-  add_test(NAME oosh_binop_div     COMMAND oosh -c "number(9) / number(3)")
-  add_test(NAME oosh_binop_prec    COMMAND oosh -c "number(2) + number(3) * number(4)")
-  add_test(NAME oosh_binop_nested  COMMAND oosh -c "number(6) + number(2) - number(1)")
+  add_test(NAME arksh_binop_add     COMMAND arksh -c "number(3) + number(4)")
+  add_test(NAME arksh_binop_sub     COMMAND arksh -c "number(10) - number(3)")
+  add_test(NAME arksh_binop_mul     COMMAND arksh -c "number(4) * number(5)")
+  add_test(NAME arksh_binop_div     COMMAND arksh -c "number(9) / number(3)")
+  add_test(NAME arksh_binop_prec    COMMAND arksh -c "number(2) + number(3) * number(4)")
+  add_test(NAME arksh_binop_nested  COMMAND arksh -c "number(6) + number(2) - number(1)")
 
   # E3-S1: builtin-kind metadata visible via `type`
-  add_test(NAME oosh_type_pure   COMMAND oosh -c "type pwd")
-  add_test(NAME oosh_type_mutant COMMAND oosh -c "type cd")
-  add_test(NAME oosh_type_mixed  COMMAND oosh -c "type alias")
+  add_test(NAME arksh_type_pure   COMMAND arksh -c "type pwd")
+  add_test(NAME arksh_type_mutant COMMAND arksh -c "type cd")
+  add_test(NAME arksh_type_mixed  COMMAND arksh -c "type alias")
 
   # E3-S2: PURE built-ins as first stage in shell pipelines
-  add_test(NAME oosh_builtin_pipe_pwd     COMMAND oosh -c "pwd | cat")
-  add_test(NAME oosh_builtin_pipe_history COMMAND oosh -c "history | cat")
-  add_test(NAME oosh_builtin_pipe_mutant  COMMAND oosh -c "cd /tmp | cat")
+  add_test(NAME arksh_builtin_pipe_pwd     COMMAND arksh -c "pwd | cat")
+  add_test(NAME arksh_builtin_pipe_history COMMAND arksh -c "history | cat")
+  add_test(NAME arksh_builtin_pipe_mutant  COMMAND arksh -c "cd /tmp | cat")
 
   # E3-S2-T3: built-in stderr/FD redirections
-  add_test(NAME oosh_builtin_redir_err_trunc  COMMAND oosh -c "history 2> /dev/null")
-  add_test(NAME oosh_builtin_redir_err_append COMMAND oosh -c "history 2>> /dev/null")
-  add_test(NAME oosh_builtin_redir_err_merge  COMMAND oosh -c "pwd 2>&1")
+  add_test(NAME arksh_builtin_redir_err_trunc  COMMAND arksh -c "history 2> /dev/null")
+  add_test(NAME arksh_builtin_redir_err_append COMMAND arksh -c "history 2>> /dev/null")
+  add_test(NAME arksh_builtin_redir_err_merge  COMMAND arksh -c "pwd 2>&1")
 
   # E3-S3: shell command as object pipeline source (bridge)
-  add_test(NAME oosh_shell_obj_bridge_count  COMMAND oosh -c "capture(\"ls\") |> lines |> count")
-  add_test(NAME oosh_shell_obj_bridge_words  COMMAND oosh -c "echo hello world |> lines |> count")
-  add_test(NAME oosh_shell_obj_bridge_trim   COMMAND oosh -c "echo hello |> trim")
+  add_test(NAME arksh_shell_obj_bridge_count  COMMAND arksh -c "capture(\"ls\") |> lines |> count")
+  add_test(NAME arksh_shell_obj_bridge_words  COMMAND arksh -c "echo hello world |> lines |> count")
+  add_test(NAME arksh_shell_obj_bridge_trim   COMMAND arksh -c "echo hello |> trim")
 
   # grep stage: filter lines/list items by substring
-  add_test(NAME oosh_grep_list     COMMAND oosh -c "capture_lines(\"ls /usr\") |> grep(\"lib\") |> count")
-  add_test(NAME oosh_grep_string   COMMAND oosh -c "echo hello |> grep(\"hello\")")
-  add_test(NAME oosh_grep_no_match COMMAND oosh -c "capture_lines(\"ls /usr\") |> grep(\"ZZZNOMATCH\") |> count")
+  add_test(NAME arksh_grep_list     COMMAND arksh -c "capture_lines(\"ls /usr\") |> grep(\"lib\") |> count")
+  add_test(NAME arksh_grep_string   COMMAND arksh -c "echo hello |> grep(\"hello\")")
+  add_test(NAME arksh_grep_no_match COMMAND arksh -c "capture_lines(\"ls /usr\") |> grep(\"ZZZNOMATCH\") |> count")
 
   # E3-S4: boolean literals in object expressions and conditions
-  add_test(NAME oosh_bool_lit_true_value   COMMAND oosh -c "true -> value")
-  add_test(NAME oosh_bool_lit_false_type   COMMAND oosh -c "false -> type")
-  add_test(NAME oosh_bool_lit_true_type    COMMAND oosh -c "true -> type")
-  add_test(NAME oosh_bool_lit_if_true      COMMAND oosh -c "if true ; then echo yes ; fi")
-  add_test(NAME oosh_bool_lit_if_false     COMMAND oosh -c "if false ; then echo wrong ; else echo ok ; fi")
+  add_test(NAME arksh_bool_lit_true_value   COMMAND arksh -c "true -> value")
+  add_test(NAME arksh_bool_lit_false_type   COMMAND arksh -c "false -> type")
+  add_test(NAME arksh_bool_lit_true_type    COMMAND arksh -c "true -> type")
+  add_test(NAME arksh_bool_lit_if_true      COMMAND arksh -c "if true ; then echo yes ; fi")
+  add_test(NAME arksh_bool_lit_if_false     COMMAND arksh -c "if false ; then echo wrong ; else echo ok ; fi")
 
   # E3-S5: command override + builtin escape
-  add_test(NAME oosh_builtin_cd_override
-    COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/builtin-cd-override.oosh")
-  add_test(NAME oosh_builtin_pwd_override
-    COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/builtin-pwd-override.oosh")
-  add_test(NAME oosh_builtin_escape
-    COMMAND oosh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/builtin-escape.oosh")
+  add_test(NAME arksh_builtin_cd_override
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/builtin-cd-override.arksh")
+  add_test(NAME arksh_builtin_pwd_override
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/builtin-pwd-override.arksh")
+  add_test(NAME arksh_builtin_escape
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/builtin-escape.arksh")
 
   set_tests_properties(
-    oosh_external_command
-    oosh_shell_pipeline
-    oosh_glob_command_args
-    oosh_env_expansion
-    oosh_command_substitution
-    oosh_if_command
-    oosh_background_job
-    oosh_exec_builtin
-    oosh_wait_builtin
-    oosh_wait_done_message
-    oosh_jobs_current_marker
-    oosh_pipeline_three_stage
-    oosh_pipeline_sigpipe_safe
-    oosh_bridge_capture_lines
-    oosh_bridge_multiword
-    oosh_fd_redirect_output_dup
-    oosh_fd_redirect_input_dup
-    oosh_print_method
-    oosh_print_format_method
-    oosh_proc_namespace
-    oosh_shell_namespace
-    oosh_nested_json_roundtrip
-    oosh_plugin_value_resolver
-    oosh_plugin_pipeline_stage
+    arksh_external_command
+    arksh_shell_pipeline
+    arksh_glob_command_args
+    arksh_env_expansion
+    arksh_command_substitution
+    arksh_if_command
+    arksh_background_job
+    arksh_exec_builtin
+    arksh_wait_builtin
+    arksh_wait_done_message
+    arksh_jobs_current_marker
+    arksh_pipeline_three_stage
+    arksh_pipeline_sigpipe_safe
+    arksh_bridge_capture_lines
+    arksh_bridge_multiword
+    arksh_fd_redirect_output_dup
+    arksh_fd_redirect_input_dup
+    arksh_print_method
+    arksh_print_format_method
+    arksh_proc_namespace
+    arksh_shell_namespace
+    arksh_nested_json_roundtrip
+    arksh_plugin_value_resolver
+    arksh_plugin_pipeline_stage
     PROPERTIES
       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
   set_tests_properties(
-    oosh_external_command
+    arksh_external_command
     PROPERTIES
       PASS_REGULAR_EXPRESSION "hello"
   )
   set_tests_properties(
-    oosh_shell_pipeline
-    oosh_glob_command_args
+    arksh_shell_pipeline
+    arksh_glob_command_args
     PROPERTIES
       PASS_REGULAR_EXPRESSION "2"
   )
   set_tests_properties(
-    oosh_if_command
+    arksh_if_command
     PROPERTIES
       PASS_REGULAR_EXPRESSION "ok"
   )
   set_tests_properties(
-    oosh_ternary_true
+    arksh_ternary_true
     PROPERTIES
       PASS_REGULAR_EXPRESSION "yes"
   )
   set_tests_properties(
-    oosh_ternary_false
+    arksh_ternary_false
     PROPERTIES
       PASS_REGULAR_EXPRESSION "no"
   )
   set_tests_properties(
-    oosh_switch_match
+    arksh_switch_match
     PROPERTIES
       PASS_REGULAR_EXPRESSION "two"
   )
   set_tests_properties(
-    oosh_switch_default
+    arksh_switch_default
     PROPERTIES
       PASS_REGULAR_EXPRESSION "fallback"
   )
   set_tests_properties(
-    oosh_case_exact
+    arksh_case_exact
     PROPERTIES
       PASS_REGULAR_EXPRESSION "dir"
   )
   set_tests_properties(
-    oosh_case_wildcard
+    arksh_case_wildcard
     PROPERTIES
       PASS_REGULAR_EXPRESSION "txt"
   )
   set_tests_properties(
-    oosh_case_alternatives
+    arksh_case_alternatives
     PROPERTIES
       PASS_REGULAR_EXPRESSION "cool"
   )
   set_tests_properties(
-    oosh_eval_builtin
+    arksh_eval_builtin
     PROPERTIES
       PASS_REGULAR_EXPRESSION "hi"
   )
   set_tests_properties(
-    oosh_exec_builtin
+    arksh_exec_builtin
     PROPERTIES
       PASS_REGULAR_EXPRESSION "hello[\r\n]+world"
   )
   set_tests_properties(
-    oosh_trap_exit
+    arksh_trap_exit
     PROPERTIES
       PASS_REGULAR_EXPRESSION "run[\r\n]+bye"
   )
   set_tests_properties(
-    oosh_heredoc_basic
-    oosh_heredoc_pipeline
+    arksh_heredoc_basic
+    arksh_heredoc_pipeline
     PROPERTIES
       PASS_REGULAR_EXPRESSION "2"
   )
   set_tests_properties(
-    oosh_heredoc_strip_tabs
+    arksh_heredoc_strip_tabs
     PROPERTIES
       PASS_REGULAR_EXPRESSION "one[\r\n]+two"
   )
   set_tests_properties(
-    oosh_heredoc_preserve_blank_and_comment
+    arksh_heredoc_preserve_blank_and_comment
     PROPERTIES
       PASS_REGULAR_EXPRESSION "one[\r\n]+[\r\n]+#kept[\r\n]+three"
   )
   set_tests_properties(
-    oosh_inline_if_heredoc
-    oosh_group_heredoc_tail
-    oosh_subshell_heredoc_tail
+    arksh_inline_if_heredoc
+    arksh_group_heredoc_tail
+    arksh_subshell_heredoc_tail
     PROPERTIES
       PASS_REGULAR_EXPRESSION "hello"
   )
   set_tests_properties(
-    oosh_fd_redirect_output_dup
+    arksh_fd_redirect_output_dup
     PROPERTIES
       PASS_REGULAR_EXPRESSION "hello"
   )
   set_tests_properties(
-    oosh_fd_redirect_input_dup
+    arksh_fd_redirect_input_dup
     PROPERTIES
       PASS_REGULAR_EXPRESSION "2"
   )
   set_tests_properties(
-    oosh_block_local_reduce
+    arksh_block_local_reduce
     PROPERTIES
       PASS_REGULAR_EXPRESSION "6"
   )
   set_tests_properties(
-    oosh_block_local_scope_restore
+    arksh_block_local_scope_restore
     PROPERTIES
       PASS_REGULAR_EXPRESSION "99"
   )
   set_tests_properties(
-    oosh_class_basic
+    arksh_class_basic
     PROPERTIES
       PASS_REGULAR_EXPRESSION "animal"
   )
   set_tests_properties(
-    oosh_class_init_inheritance
+    arksh_class_init_inheritance
     PROPERTIES
       PASS_REGULAR_EXPRESSION "readme"
   )
   set_tests_properties(
-    oosh_class_multiple_inheritance
+    arksh_class_multiple_inheritance
     PROPERTIES
       PASS_REGULAR_EXPRESSION "left"
   )
   set_tests_properties(
-    oosh_class_introspection
+    arksh_class_introspection
     PROPERTIES
       PASS_REGULAR_EXPRESSION "true[\r\n]+Child[\r\n]+1"
   )
   set_tests_properties(
-    oosh_print_method
+    arksh_print_method
     PROPERTIES
       PASS_REGULAR_EXPRESSION "hello"
   )
   set_tests_properties(
-    oosh_case_builtins_script
+    arksh_case_builtins_script
     PROPERTIES
       PASS_REGULAR_EXPRESSION "until-once[\r\n]+text-file[\r\n]+eval-ok[\r\n]+script-end[\r\n]+exit-trap"
   )
   set_tests_properties(
-    oosh_function_script
+    arksh_function_script
     PROPERTIES
       PASS_REGULAR_EXPRESSION "ciao nicolo"
   )
   set_tests_properties(
-    oosh_function_basic
+    arksh_function_basic
     PROPERTIES
       PASS_REGULAR_EXPRESSION "hi nicolo"
   )
   set_tests_properties(
-    oosh_function_redefine
+    arksh_function_redefine
     PROPERTIES
       PASS_REGULAR_EXPRESSION "two:demo"
   )
   set_tests_properties(
-    oosh_function_scope
+    arksh_function_scope
     PROPERTIES
       PASS_REGULAR_EXPRESSION "outer"
   )
   set_tests_properties(
-    oosh_break_nested
+    arksh_break_nested
     PROPERTIES
       PASS_REGULAR_EXPRESSION "once"
   )
   set_tests_properties(
-    oosh_continue_nested
+    arksh_continue_nested
     PROPERTIES
       PASS_REGULAR_EXPRESSION "1[\r\n]+2"
   )
   set_tests_properties(
-    oosh_function_return
+    arksh_function_return
     PROPERTIES
       PASS_REGULAR_EXPRESSION "hi"
   )
   set_tests_properties(
-    oosh_function_return_from_loop
+    arksh_function_return_from_loop
     PROPERTIES
       PASS_REGULAR_EXPRESSION "1"
   )
   set_tests_properties(
-    oosh_break_invalid
+    arksh_break_invalid
     PROPERTIES
       PASS_REGULAR_EXPRESSION "break is only valid inside loops"
   )
   set_tests_properties(
-    oosh_continue_invalid
+    arksh_continue_invalid
     PROPERTIES
       PASS_REGULAR_EXPRESSION "continue is only valid inside loops"
   )
   set_tests_properties(
-    oosh_return_invalid
+    arksh_return_invalid
     PROPERTIES
       PASS_REGULAR_EXPRESSION "return is only valid inside shell functions"
   )
   set_tests_properties(
-    oosh_group_binding_scope
+    arksh_group_binding_scope
     PROPERTIES
       PASS_REGULAR_EXPRESSION "mint"
   )
   set_tests_properties(
-    oosh_subshell_binding_scope
+    arksh_subshell_binding_scope
     PROPERTIES
       PASS_REGULAR_EXPRESSION "vanilla"
   )
   set_tests_properties(
-    oosh_group_env_scope
+    arksh_group_env_scope
     PROPERTIES
       PASS_REGULAR_EXPRESSION "grouped"
   )
   set_tests_properties(
-    oosh_subshell_env_scope
+    arksh_subshell_env_scope
     PROPERTIES
       PASS_REGULAR_EXPRESSION "outer"
   )
   set_tests_properties(
-    oosh_group_redirection
+    arksh_group_redirection
     PROPERTIES
       PASS_REGULAR_EXPRESSION "grouped"
   )
   set_tests_properties(
-    oosh_subshell_redirection
+    arksh_subshell_redirection
     PROPERTIES
       PASS_REGULAR_EXPRESSION "isolated"
   )
   set_tests_properties(
-    oosh_group_input_redirection
-    oosh_subshell_input_redirection
+    arksh_group_input_redirection
+    arksh_subshell_input_redirection
     PROPERTIES
       PASS_REGULAR_EXPRESSION "4"
   )
   set_tests_properties(
-    oosh_print_format_method
+    arksh_print_format_method
     PROPERTIES
       PASS_REGULAR_EXPRESSION "file:3"
   )
   set_tests_properties(
-    oosh_proc_namespace
+    arksh_proc_namespace
     PROPERTIES
       PASS_REGULAR_EXPRESSION "[0-9]+"
   )
   set_tests_properties(
-    oosh_shell_namespace
+    arksh_shell_namespace
     PROPERTIES
       PASS_REGULAR_EXPRESSION "0"
   )
   set_tests_properties(
-    oosh_nested_json_roundtrip
+    arksh_nested_json_roundtrip
     PROPERTIES
       PASS_REGULAR_EXPRESSION "\\{\"a\":\\[1,2,\\{\"b\":true\\}\\],\"name\":\"demo\"\\}"
   )
   set_tests_properties(
-    oosh_plugin_value_resolver
+    arksh_plugin_value_resolver
     PROPERTIES
       PASS_REGULAR_EXPRESSION "sample-plugin"
   )
   set_tests_properties(
-    oosh_plugin_pipeline_stage
+    arksh_plugin_pipeline_stage
     PROPERTIES
       PASS_REGULAR_EXPRESSION "sample:ciao"
   )
   set_tests_properties(
-    oosh_ifs_split_count
+    arksh_ifs_split_count
     PROPERTIES
       PASS_REGULAR_EXPRESSION "3"
   )
   set_tests_properties(
-    oosh_ifs_split_first
+    arksh_ifs_split_first
     PROPERTIES
       PASS_REGULAR_EXPRESSION "hello"
   )
   set_tests_properties(
-    oosh_ifs_quoted_no_split
+    arksh_ifs_quoted_no_split
     PROPERTIES
       PASS_REGULAR_EXPRESSION "x y z"
   )
   set_tests_properties(
-    oosh_ifs_custom
+    arksh_ifs_custom
     PROPERTIES
       PASS_REGULAR_EXPRESSION "a"
   )
   set_tests_properties(
-    oosh_ifs_quote_removal
+    arksh_ifs_quote_removal
     PROPERTIES
       PASS_REGULAR_EXPRESSION "hello world"
   )
   set_tests_properties(
-    oosh_ifs_empty_var
+    arksh_ifs_empty_var
     PROPERTIES
       PASS_REGULAR_EXPRESSION "done"
   )
   set_tests_properties(
-    oosh_arith_basic
+    arksh_arith_basic
     PROPERTIES
       PASS_REGULAR_EXPRESSION "7"
   )
   set_tests_properties(
-    oosh_arith_var
+    arksh_arith_var
     PROPERTIES
       PASS_REGULAR_EXPRESSION "42"
   )
   set_tests_properties(
-    oosh_arith_prec
+    arksh_arith_prec
     PROPERTIES
       PASS_REGULAR_EXPRESSION "14"
   )
   set_tests_properties(
-    oosh_arith_quoted
+    arksh_arith_quoted
     PROPERTIES
       PASS_REGULAR_EXPRESSION "7"
   )
-  set_tests_properties(oosh_builtin_pipe_pwd     PROPERTIES PASS_REGULAR_EXPRESSION ".+")
-  set_tests_properties(oosh_builtin_pipe_history PROPERTIES PASS_REGULAR_EXPRESSION ".+")
-  set_tests_properties(oosh_builtin_pipe_mutant  PROPERTIES WILL_FAIL TRUE)
-  set_tests_properties(oosh_builtin_redir_err_trunc  PROPERTIES PASS_REGULAR_EXPRESSION ".*")
-  set_tests_properties(oosh_builtin_redir_err_append PROPERTIES PASS_REGULAR_EXPRESSION ".*")
-  set_tests_properties(oosh_builtin_redir_err_merge  PROPERTIES PASS_REGULAR_EXPRESSION ".+")
-  set_tests_properties(oosh_shell_obj_bridge_count PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
-  set_tests_properties(oosh_shell_obj_bridge_words PROPERTIES PASS_REGULAR_EXPRESSION "1")
-  set_tests_properties(oosh_shell_obj_bridge_trim  PROPERTIES PASS_REGULAR_EXPRESSION "hello")
-  set_tests_properties(oosh_grep_list      PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
-  set_tests_properties(oosh_grep_string    PROPERTIES PASS_REGULAR_EXPRESSION "hello")
-  set_tests_properties(oosh_grep_no_match  PROPERTIES PASS_REGULAR_EXPRESSION "0")
-  set_tests_properties(oosh_bool_lit_true_value  PROPERTIES PASS_REGULAR_EXPRESSION "true")
-  set_tests_properties(oosh_bool_lit_false_type  PROPERTIES PASS_REGULAR_EXPRESSION "bool")
-  set_tests_properties(oosh_bool_lit_true_type   PROPERTIES PASS_REGULAR_EXPRESSION "bool")
-  set_tests_properties(oosh_bool_lit_if_true     PROPERTIES PASS_REGULAR_EXPRESSION "yes")
-  set_tests_properties(oosh_bool_lit_if_false    PROPERTIES PASS_REGULAR_EXPRESSION "ok")
-  set_tests_properties(oosh_builtin_cd_override  PROPERTIES PASS_REGULAR_EXPRESSION "tmp")
-  set_tests_properties(oosh_builtin_pwd_override PROPERTIES PASS_REGULAR_EXPRESSION "overridden")
-  set_tests_properties(oosh_builtin_escape       PROPERTIES PASS_REGULAR_EXPRESSION ".+")
-  set_tests_properties(oosh_binop_add    PROPERTIES PASS_REGULAR_EXPRESSION "7")
-  set_tests_properties(oosh_binop_sub    PROPERTIES PASS_REGULAR_EXPRESSION "7")
-  set_tests_properties(oosh_binop_mul    PROPERTIES PASS_REGULAR_EXPRESSION "20")
-  set_tests_properties(oosh_binop_div    PROPERTIES PASS_REGULAR_EXPRESSION "3")
-  set_tests_properties(oosh_binop_prec   PROPERTIES PASS_REGULAR_EXPRESSION "14")
-  set_tests_properties(oosh_binop_nested PROPERTIES PASS_REGULAR_EXPRESSION "7")
+  set_tests_properties(arksh_builtin_pipe_pwd     PROPERTIES PASS_REGULAR_EXPRESSION ".+")
+  set_tests_properties(arksh_builtin_pipe_history PROPERTIES PASS_REGULAR_EXPRESSION ".+")
+  set_tests_properties(arksh_builtin_pipe_mutant  PROPERTIES WILL_FAIL TRUE)
+  set_tests_properties(arksh_builtin_redir_err_trunc  PROPERTIES PASS_REGULAR_EXPRESSION ".*")
+  set_tests_properties(arksh_builtin_redir_err_append PROPERTIES PASS_REGULAR_EXPRESSION ".*")
+  set_tests_properties(arksh_builtin_redir_err_merge  PROPERTIES PASS_REGULAR_EXPRESSION ".+")
+  set_tests_properties(arksh_shell_obj_bridge_count PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
+  set_tests_properties(arksh_shell_obj_bridge_words PROPERTIES PASS_REGULAR_EXPRESSION "1")
+  set_tests_properties(arksh_shell_obj_bridge_trim  PROPERTIES PASS_REGULAR_EXPRESSION "hello")
+  set_tests_properties(arksh_grep_list      PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
+  set_tests_properties(arksh_grep_string    PROPERTIES PASS_REGULAR_EXPRESSION "hello")
+  set_tests_properties(arksh_grep_no_match  PROPERTIES PASS_REGULAR_EXPRESSION "0")
+  set_tests_properties(arksh_bool_lit_true_value  PROPERTIES PASS_REGULAR_EXPRESSION "true")
+  set_tests_properties(arksh_bool_lit_false_type  PROPERTIES PASS_REGULAR_EXPRESSION "bool")
+  set_tests_properties(arksh_bool_lit_true_type   PROPERTIES PASS_REGULAR_EXPRESSION "bool")
+  set_tests_properties(arksh_bool_lit_if_true     PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(arksh_bool_lit_if_false    PROPERTIES PASS_REGULAR_EXPRESSION "ok")
+  set_tests_properties(arksh_builtin_cd_override  PROPERTIES PASS_REGULAR_EXPRESSION "tmp")
+  set_tests_properties(arksh_builtin_pwd_override PROPERTIES PASS_REGULAR_EXPRESSION "overridden")
+  set_tests_properties(arksh_builtin_escape       PROPERTIES PASS_REGULAR_EXPRESSION ".+")
+  set_tests_properties(arksh_binop_add    PROPERTIES PASS_REGULAR_EXPRESSION "7")
+  set_tests_properties(arksh_binop_sub    PROPERTIES PASS_REGULAR_EXPRESSION "7")
+  set_tests_properties(arksh_binop_mul    PROPERTIES PASS_REGULAR_EXPRESSION "20")
+  set_tests_properties(arksh_binop_div    PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(arksh_binop_prec   PROPERTIES PASS_REGULAR_EXPRESSION "14")
+  set_tests_properties(arksh_binop_nested PROPERTIES PASS_REGULAR_EXPRESSION "7")
   set_tests_properties(
-    oosh_type_pure
+    arksh_type_pure
     PROPERTIES
       PASS_REGULAR_EXPRESSION "pure shell builtin"
   )
   set_tests_properties(
-    oosh_type_mutant
+    arksh_type_mutant
     PROPERTIES
       PASS_REGULAR_EXPRESSION "mutant shell builtin"
   )
   set_tests_properties(
-    oosh_type_mixed
+    arksh_type_mixed
     PROPERTIES
       PASS_REGULAR_EXPRESSION "mixed shell builtin"
   )
   set_tests_properties(
-    oosh_source_file
-    oosh_control_flow_script
-    oosh_function_script
-    oosh_case_builtins_script
-    oosh_alias_rc
-    oosh_shell_var_precedence
-    oosh_function_basic
-    oosh_function_redefine
-    oosh_function_scope
-    oosh_break_nested
-    oosh_continue_nested
-    oosh_function_return
-    oosh_function_return_from_loop
+    arksh_source_file
+    arksh_control_flow_script
+    arksh_function_script
+    arksh_case_builtins_script
+    arksh_alias_rc
+    arksh_shell_var_precedence
+    arksh_function_basic
+    arksh_function_redefine
+    arksh_function_scope
+    arksh_break_nested
+    arksh_continue_nested
+    arksh_function_return
+    arksh_function_return_from_loop
     PROPERTIES
       WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-      ENVIRONMENT "OOSH_RC=${CMAKE_CURRENT_SOURCE_DIR}/examples/ooshrc"
+      ENVIRONMENT "ARKSH_RC=${CMAKE_CURRENT_SOURCE_DIR}/examples/arkshrc"
   )
   set_tests_properties(
-    oosh_shell_var_precedence
+    arksh_shell_var_precedence
     PROPERTIES
-      ENVIRONMENT "OOSH_RC=${CMAKE_CURRENT_SOURCE_DIR}/examples/ooshrc;LIMIT=not-a-number"
+      ENVIRONMENT "ARKSH_RC=${CMAKE_CURRENT_SOURCE_DIR}/examples/arkshrc;LIMIT=not-a-number"
   )
   set_tests_properties(
-    oosh_group_redirection
-    oosh_subshell_redirection
-    PROPERTIES
-      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  )
-  set_tests_properties(
-    oosh_heredoc_basic
-    oosh_heredoc_strip_tabs
-    oosh_heredoc_pipeline
-    oosh_heredoc_preserve_blank_and_comment
-    oosh_inline_if_heredoc
-    oosh_group_heredoc_tail
-    oosh_subshell_heredoc_tail
-    PROPERTIES
-      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-      ENVIRONMENT "OOSH_RC=${CMAKE_CURRENT_SOURCE_DIR}/examples/ooshrc"
-  )
-  set_tests_properties(
-    oosh_group_input_redirection
-    oosh_subshell_input_redirection
+    arksh_group_redirection
+    arksh_subshell_redirection
     PROPERTIES
       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  set_tests_properties(oosh_wait_done_message    PROPERTIES PASS_REGULAR_EXPRESSION "done")
-  set_tests_properties(oosh_jobs_current_marker  PROPERTIES PASS_REGULAR_EXPRESSION "\\+")
-  set_tests_properties(oosh_pipeline_three_stage  PROPERTIES PASS_REGULAR_EXPRESSION "3")
-  set_tests_properties(oosh_pipeline_sigpipe_safe PROPERTIES PASS_REGULAR_EXPRESSION "3")
-  set_tests_properties(oosh_bridge_capture_lines  PROPERTIES PASS_REGULAR_EXPRESSION "3")
-  set_tests_properties(oosh_bridge_multiword      PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(
+    arksh_heredoc_basic
+    arksh_heredoc_strip_tabs
+    arksh_heredoc_pipeline
+    arksh_heredoc_preserve_blank_and_comment
+    arksh_inline_if_heredoc
+    arksh_group_heredoc_tail
+    arksh_subshell_heredoc_tail
+    PROPERTIES
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+      ENVIRONMENT "ARKSH_RC=${CMAKE_CURRENT_SOURCE_DIR}/examples/arkshrc"
+  )
+  set_tests_properties(
+    arksh_group_input_redirection
+    arksh_subshell_input_redirection
+    PROPERTIES
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  set_tests_properties(arksh_wait_done_message    PROPERTIES PASS_REGULAR_EXPRESSION "done")
+  set_tests_properties(arksh_jobs_current_marker  PROPERTIES PASS_REGULAR_EXPRESSION "\\+")
+  set_tests_properties(arksh_pipeline_three_stage  PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(arksh_pipeline_sigpipe_safe PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(arksh_bridge_capture_lines  PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(arksh_bridge_multiword      PROPERTIES PASS_REGULAR_EXPRESSION "3")
   # E4-S4 tests
-  set_tests_properties(oosh_capture_text_first    PROPERTIES PASS_REGULAR_EXPRESSION "hello"
+  set_tests_properties(arksh_capture_text_first    PROPERTIES PASS_REGULAR_EXPRESSION "hello"
                                                              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-  set_tests_properties(oosh_capture_text_count    PROPERTIES PASS_REGULAR_EXPRESSION "2"
+  set_tests_properties(arksh_capture_text_count    PROPERTIES PASS_REGULAR_EXPRESSION "2"
                                                              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   if(NOT WIN32)
     set_tests_properties(
-      oosh_fd_redirect_output_dup
-      oosh_fd_redirect_input_dup
+      arksh_fd_redirect_output_dup
+      arksh_fd_redirect_input_dup
       PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     )
   else()
     set_tests_properties(
-      oosh_fd_redirect_output_dup
-      oosh_fd_redirect_input_dup
+      arksh_fd_redirect_output_dup
+      arksh_fd_redirect_input_dup
       PROPERTIES
         DISABLED TRUE
     )
   endif()
 
   # E6-S1: namespace resolvers
-  add_test(NAME oosh_ns_fs_cwd       COMMAND oosh -c "fs() -> cwd")
-  add_test(NAME oosh_ns_fs_home      COMMAND oosh -c "fs() -> home")
-  add_test(NAME oosh_ns_fs_temp      COMMAND oosh -c "fs() -> temp")
-  add_test(NAME oosh_ns_fs_separator COMMAND oosh -c "fs() -> separator")
-  add_test(NAME oosh_ns_user_name    COMMAND oosh -c "user() -> name")
-  add_test(NAME oosh_ns_user_home    COMMAND oosh -c "user() -> home")
-  add_test(NAME oosh_ns_sys_os       COMMAND oosh -c "sys() -> os")
-  add_test(NAME oosh_ns_sys_arch     COMMAND oosh -c "sys() -> arch")
-  add_test(NAME oosh_ns_sys_cpus     COMMAND oosh -c "sys() -> cpu_count")
-  add_test(NAME oosh_ns_time_iso     COMMAND oosh -c "time() -> iso")
-  add_test(NAME oosh_ns_time_year    COMMAND oosh -c "time() -> year")
-  add_test(NAME oosh_ns_time_epoch   COMMAND oosh -c "time() -> epoch")
+  add_test(NAME arksh_ns_fs_cwd       COMMAND arksh -c "fs() -> cwd")
+  add_test(NAME arksh_ns_fs_home      COMMAND arksh -c "fs() -> home")
+  add_test(NAME arksh_ns_fs_temp      COMMAND arksh -c "fs() -> temp")
+  add_test(NAME arksh_ns_fs_separator COMMAND arksh -c "fs() -> separator")
+  add_test(NAME arksh_ns_user_name    COMMAND arksh -c "user() -> name")
+  add_test(NAME arksh_ns_user_home    COMMAND arksh -c "user() -> home")
+  add_test(NAME arksh_ns_sys_os       COMMAND arksh -c "sys() -> os")
+  add_test(NAME arksh_ns_sys_arch     COMMAND arksh -c "sys() -> arch")
+  add_test(NAME arksh_ns_sys_cpus     COMMAND arksh -c "sys() -> cpu_count")
+  add_test(NAME arksh_ns_time_iso     COMMAND arksh -c "time() -> iso")
+  add_test(NAME arksh_ns_time_year    COMMAND arksh -c "time() -> year")
+  add_test(NAME arksh_ns_time_epoch   COMMAND arksh -c "time() -> epoch")
   set_tests_properties(
-    oosh_ns_fs_cwd oosh_ns_fs_home oosh_ns_fs_temp oosh_ns_fs_separator
-    oosh_ns_user_name oosh_ns_user_home
-    oosh_ns_sys_os oosh_ns_sys_arch oosh_ns_sys_cpus
-    oosh_ns_time_iso oosh_ns_time_year oosh_ns_time_epoch
+    arksh_ns_fs_cwd arksh_ns_fs_home arksh_ns_fs_temp arksh_ns_fs_separator
+    arksh_ns_user_name arksh_ns_user_home
+    arksh_ns_sys_os arksh_ns_sys_arch arksh_ns_sys_cpus
+    arksh_ns_time_iso arksh_ns_time_year arksh_ns_time_epoch
     PROPERTIES PASS_REGULAR_EXPRESSION ".+" WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
   if(NOT WIN32)
-    add_test(NAME oosh_ns_user_uid COMMAND oosh -c "user() -> uid")
-    add_test(NAME oosh_ns_user_gid COMMAND oosh -c "user() -> gid")
-    set_tests_properties(oosh_ns_user_uid oosh_ns_user_gid
+    add_test(NAME arksh_ns_user_uid COMMAND arksh -c "user() -> uid")
+    add_test(NAME arksh_ns_user_gid COMMAND arksh -c "user() -> gid")
+    set_tests_properties(arksh_ns_user_uid arksh_ns_user_gid
       PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+" WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     )
   endif()
 
   # E6-S2-T3: point plugin custom type tests
-  add_test(NAME oosh_point_type
-    COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_point_plugin> ; point(3, 4) -> type")
-  add_test(NAME oosh_point_x
-    COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_point_plugin> ; point(3, 4) -> x")
-  add_test(NAME oosh_point_y
-    COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_point_plugin> ; point(3, 4) -> y")
-  add_test(NAME oosh_point_distance
-    COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_point_plugin> ; point(3, 4) -> distance()")
-  add_test(NAME oosh_point_translate
-    COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_point_plugin> ; point(1, 2) -> translate(2, 3) -> type")
-  add_test(NAME oosh_point_stage
-    COMMAND oosh -c "plugin load $<TARGET_FILE_NAME:oosh_point_plugin> ; text(\"6,8\") |> as_point")
+  add_test(NAME arksh_point_type
+    COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_point_plugin> ; point(3, 4) -> type")
+  add_test(NAME arksh_point_x
+    COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_point_plugin> ; point(3, 4) -> x")
+  add_test(NAME arksh_point_y
+    COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_point_plugin> ; point(3, 4) -> y")
+  add_test(NAME arksh_point_distance
+    COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_point_plugin> ; point(3, 4) -> distance()")
+  add_test(NAME arksh_point_translate
+    COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_point_plugin> ; point(1, 2) -> translate(2, 3) -> type")
+  add_test(NAME arksh_point_stage
+    COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_point_plugin> ; text(\"6,8\") |> as_point")
   set_tests_properties(
-    oosh_point_type oosh_point_x oosh_point_y oosh_point_distance
-    oosh_point_translate oosh_point_stage
+    arksh_point_type arksh_point_x arksh_point_y arksh_point_distance
+    arksh_point_translate arksh_point_stage
     PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  set_tests_properties(oosh_point_type      PROPERTIES PASS_REGULAR_EXPRESSION "Point")
-  set_tests_properties(oosh_point_x         PROPERTIES PASS_REGULAR_EXPRESSION "3")
-  set_tests_properties(oosh_point_y         PROPERTIES PASS_REGULAR_EXPRESSION "4")
-  set_tests_properties(oosh_point_distance  PROPERTIES PASS_REGULAR_EXPRESSION "5")
-  set_tests_properties(oosh_point_translate PROPERTIES PASS_REGULAR_EXPRESSION "Point")
-  set_tests_properties(oosh_point_stage     PROPERTIES PASS_REGULAR_EXPRESSION "Point")
+  set_tests_properties(arksh_point_type      PROPERTIES PASS_REGULAR_EXPRESSION "Point")
+  set_tests_properties(arksh_point_x         PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(arksh_point_y         PROPERTIES PASS_REGULAR_EXPRESSION "4")
+  set_tests_properties(arksh_point_distance  PROPERTIES PASS_REGULAR_EXPRESSION "5")
+  set_tests_properties(arksh_point_translate PROPERTIES PASS_REGULAR_EXPRESSION "Point")
+  set_tests_properties(arksh_point_stage     PROPERTIES PASS_REGULAR_EXPRESSION "Point")
 
   # E6-S3: pipeline object-aware stages
-  add_test(NAME oosh_map_block
-    COMMAND oosh -c "list(1, 2, 3) |> map([:it | it]) |> count()")
-  add_test(NAME oosh_filter_alias
-    COMMAND oosh -c ". -> children() |> filter(type == \"file\") |> count()")
-  add_test(NAME oosh_flat_map_block
-    COMMAND oosh -c "list(1, 2) |> flat_map([:it | list(it, it)]) |> count()")
-  add_test(NAME oosh_group_by_property
-    COMMAND oosh -c ". -> children() |> group_by(type) |> count()")
-  add_test(NAME oosh_group_by_block
-    COMMAND oosh -c "list(\"a\", \"b\", \"a\") |> group_by([:it | it]) |> count()")
-  add_test(NAME oosh_sum_numbers
-    COMMAND oosh -c "list(1, 2, 3) |> sum()")
-  add_test(NAME oosh_min_numbers
-    COMMAND oosh -c "list(3, 1, 4, 1, 5) |> min()")
-  add_test(NAME oosh_max_numbers
-    COMMAND oosh -c "list(3, 1, 4, 1, 5) |> max()")
-  add_test(NAME oosh_sum_property
-    COMMAND oosh -c ". -> children() |> where(type == \"file\") |> sum(size)")
+  add_test(NAME arksh_map_block
+    COMMAND arksh -c "list(1, 2, 3) |> map([:it | it]) |> count()")
+  add_test(NAME arksh_filter_alias
+    COMMAND arksh -c ". -> children() |> filter(type == \"file\") |> count()")
+  add_test(NAME arksh_flat_map_block
+    COMMAND arksh -c "list(1, 2) |> flat_map([:it | list(it, it)]) |> count()")
+  add_test(NAME arksh_group_by_property
+    COMMAND arksh -c ". -> children() |> group_by(type) |> count()")
+  add_test(NAME arksh_group_by_block
+    COMMAND arksh -c "list(\"a\", \"b\", \"a\") |> group_by([:it | it]) |> count()")
+  add_test(NAME arksh_sum_numbers
+    COMMAND arksh -c "list(1, 2, 3) |> sum()")
+  add_test(NAME arksh_min_numbers
+    COMMAND arksh -c "list(3, 1, 4, 1, 5) |> min()")
+  add_test(NAME arksh_max_numbers
+    COMMAND arksh -c "list(3, 1, 4, 1, 5) |> max()")
+  add_test(NAME arksh_sum_property
+    COMMAND arksh -c ". -> children() |> where(type == \"file\") |> sum(size)")
   set_tests_properties(
-    oosh_map_block oosh_filter_alias oosh_flat_map_block
-    oosh_group_by_property oosh_group_by_block
-    oosh_sum_numbers oosh_min_numbers oosh_max_numbers oosh_sum_property
+    arksh_map_block arksh_filter_alias arksh_flat_map_block
+    arksh_group_by_property arksh_group_by_block
+    arksh_sum_numbers arksh_min_numbers arksh_max_numbers arksh_sum_property
     PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  set_tests_properties(oosh_map_block       PROPERTIES PASS_REGULAR_EXPRESSION "3")
-  set_tests_properties(oosh_filter_alias    PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
-  set_tests_properties(oosh_flat_map_block  PROPERTIES PASS_REGULAR_EXPRESSION "4")
-  set_tests_properties(oosh_group_by_property PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
-  set_tests_properties(oosh_group_by_block  PROPERTIES PASS_REGULAR_EXPRESSION "2")
-  set_tests_properties(oosh_sum_numbers     PROPERTIES PASS_REGULAR_EXPRESSION "6")
-  set_tests_properties(oosh_min_numbers     PROPERTIES PASS_REGULAR_EXPRESSION "1")
-  set_tests_properties(oosh_max_numbers     PROPERTIES PASS_REGULAR_EXPRESSION "5")
-  set_tests_properties(oosh_sum_property    PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
+  set_tests_properties(arksh_map_block       PROPERTIES PASS_REGULAR_EXPRESSION "3")
+  set_tests_properties(arksh_filter_alias    PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
+  set_tests_properties(arksh_flat_map_block  PROPERTIES PASS_REGULAR_EXPRESSION "4")
+  set_tests_properties(arksh_group_by_property PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
+  set_tests_properties(arksh_group_by_block  PROPERTIES PASS_REGULAR_EXPRESSION "2")
+  set_tests_properties(arksh_sum_numbers     PROPERTIES PASS_REGULAR_EXPRESSION "6")
+  set_tests_properties(arksh_min_numbers     PROPERTIES PASS_REGULAR_EXPRESSION "1")
+  set_tests_properties(arksh_max_numbers     PROPERTIES PASS_REGULAR_EXPRESSION "5")
+  set_tests_properties(arksh_sum_property    PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
 
   # E1-S6: POSIX compatibility tests
-  add_test(NAME oosh_trap_posix_all
-    COMMAND oosh -c "trap 'echo caught' TERM; trap -p"
+  add_test(NAME arksh_trap_posix_all
+    COMMAND arksh -c "trap 'echo caught' TERM; trap -p"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  add_test(NAME oosh_trap_err
-    COMMAND oosh -c "trap 'echo err' ERR; /usr/bin/false; echo after"
+  add_test(NAME arksh_trap_err
+    COMMAND arksh -c "trap 'echo err' ERR; /usr/bin/false; echo after"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  add_test(NAME oosh_set_errexit
-    COMMAND oosh -c "set -e; /usr/bin/false; echo after"
+  add_test(NAME arksh_set_errexit
+    COMMAND arksh -c "set -e; /usr/bin/false; echo after"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  add_test(NAME oosh_set_nounset
-    COMMAND oosh -c "set -u; echo \${UNSET_VAR_12345:-ok}"
+  add_test(NAME arksh_set_nounset
+    COMMAND arksh -c "set -u; echo \${UNSET_VAR_12345:-ok}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  add_test(NAME oosh_printf_basic
-    COMMAND oosh -c "printf '%s %d' hello 42"
+  add_test(NAME arksh_printf_basic
+    COMMAND arksh -c "printf '%s %d' hello 42"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  add_test(NAME oosh_param_subst_single
-    COMMAND oosh -c "set x hello; echo \${x/ell/ELL}"
+  add_test(NAME arksh_param_subst_single
+    COMMAND arksh -c "set x hello; echo \${x/ell/ELL}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  add_test(NAME oosh_param_subst_global
-    COMMAND oosh -c "set x aabbcc; echo \${x//b/X}"
+  add_test(NAME arksh_param_subst_global
+    COMMAND arksh -c "set x aabbcc; echo \${x//b/X}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  add_test(NAME oosh_test_builtin_string
-    COMMAND oosh -c "test -n hello && echo yes"
+  add_test(NAME arksh_test_builtin_string
+    COMMAND arksh -c "test -n hello && echo yes"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  add_test(NAME oosh_test_bracket_numeric
-    COMMAND oosh -c "if [ 5 -gt 3 ]; then echo yes; fi"
+  add_test(NAME arksh_test_bracket_numeric
+    COMMAND arksh -c "if [ 5 -gt 3 ]; then echo yes; fi"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
-  add_test(NAME oosh_cmd_subst_file
-    COMMAND oosh -c "echo hello > /tmp/oosh_cs_test.txt; set contents \$(< /tmp/oosh_cs_test.txt); echo \$contents"
+  add_test(NAME arksh_cmd_subst_file
+    COMMAND arksh -c "echo hello > /tmp/arksh_cs_test.txt; set contents \$(< /tmp/arksh_cs_test.txt); echo \$contents"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
   set_tests_properties(
-    oosh_trap_posix_all oosh_trap_err oosh_set_errexit oosh_set_nounset
-    oosh_printf_basic oosh_param_subst_single oosh_param_subst_global
-    oosh_test_builtin_string oosh_test_bracket_numeric oosh_cmd_subst_file
+    arksh_trap_posix_all arksh_trap_err arksh_set_errexit arksh_set_nounset
+    arksh_printf_basic arksh_param_subst_single arksh_param_subst_global
+    arksh_test_builtin_string arksh_test_bracket_numeric arksh_cmd_subst_file
     PROPERTIES TIMEOUT 10
   )
-  set_tests_properties(oosh_trap_posix_all    PROPERTIES PASS_REGULAR_EXPRESSION "TERM")
-  set_tests_properties(oosh_trap_err          PROPERTIES PASS_REGULAR_EXPRESSION "err")
-  set_tests_properties(oosh_set_errexit       PROPERTIES WILL_FAIL TRUE)
-  set_tests_properties(oosh_set_nounset       PROPERTIES PASS_REGULAR_EXPRESSION "ok")
-  set_tests_properties(oosh_printf_basic      PROPERTIES PASS_REGULAR_EXPRESSION "hello 42")
-  set_tests_properties(oosh_param_subst_single PROPERTIES PASS_REGULAR_EXPRESSION "hELLo")
-  set_tests_properties(oosh_param_subst_global PROPERTIES PASS_REGULAR_EXPRESSION "aaXXcc")
-  set_tests_properties(oosh_test_builtin_string PROPERTIES PASS_REGULAR_EXPRESSION "yes")
-  set_tests_properties(oosh_test_bracket_numeric PROPERTIES PASS_REGULAR_EXPRESSION "yes")
-  set_tests_properties(oosh_cmd_subst_file    PROPERTIES PASS_REGULAR_EXPRESSION "hello")
+  set_tests_properties(arksh_trap_posix_all    PROPERTIES PASS_REGULAR_EXPRESSION "TERM")
+  set_tests_properties(arksh_trap_err          PROPERTIES PASS_REGULAR_EXPRESSION "err")
+  set_tests_properties(arksh_set_errexit       PROPERTIES WILL_FAIL TRUE)
+  set_tests_properties(arksh_set_nounset       PROPERTIES PASS_REGULAR_EXPRESSION "ok")
+  set_tests_properties(arksh_printf_basic      PROPERTIES PASS_REGULAR_EXPRESSION "hello 42")
+  set_tests_properties(arksh_param_subst_single PROPERTIES PASS_REGULAR_EXPRESSION "hELLo")
+  set_tests_properties(arksh_param_subst_global PROPERTIES PASS_REGULAR_EXPRESSION "aaXXcc")
+  set_tests_properties(arksh_test_builtin_string PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(arksh_test_bracket_numeric PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(arksh_cmd_subst_file    PROPERTIES PASS_REGULAR_EXPRESSION "hello")
 
   # E8-S1-T1: lexer unit tests
-  add_test(NAME oosh_unit_lexer COMMAND oosh_unit_lexer)
-  set_tests_properties(oosh_unit_lexer PROPERTIES
+  add_test(NAME arksh_unit_lexer COMMAND arksh_unit_lexer)
+  set_tests_properties(arksh_unit_lexer PROPERTIES
     PASS_REGULAR_EXPRESSION "all tests passed"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
 
   # E8-S1-T2: parser unit tests
-  add_test(NAME oosh_unit_parser COMMAND oosh_unit_parser)
-  set_tests_properties(oosh_unit_parser PROPERTIES
+  add_test(NAME arksh_unit_parser COMMAND arksh_unit_parser)
+  set_tests_properties(arksh_unit_parser PROPERTIES
     PASS_REGULAR_EXPRESSION "all tests passed"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )

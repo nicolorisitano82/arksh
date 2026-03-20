@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_FILE="${1:-$ROOT_DIR/docs/assets/oosh-cover.png}"
+OUT_FILE="${1:-$ROOT_DIR/docs/assets/arksh-cover.png}"
 TMP_DIR="$(mktemp -d)"
 BASE="$TMP_DIR/base.png"
 GLOW="$TMP_DIR/glow.png"
@@ -75,7 +75,7 @@ cmd+=(
   -draw "stroke rgba(255,172,96,0.20) stroke-width 2 line 973,158 1095,185"
   -draw "stroke rgba(126,232,255,0.20) stroke-width 2 line 292,430 180,420"
   -draw "stroke rgba(255,172,96,0.20) stroke-width 2 line 947,492 1095,442"
-  -font "$TITLE_FONT" -pointsize 60 -fill '#f4fbff' -annotate +76+528 'oosh'
+  -font "$TITLE_FONT" -pointsize 60 -fill '#f4fbff' -annotate +76+528 'arksh'
   -font "$CODE_FONT" -pointsize 21 -fill '#92ebff' -annotate +86+566 'OBJECT-ORIENTED SHELL IN C'
   -font "$CODE_FONT" -pointsize 16 -fill '#ffb46f' -annotate +88+596 'objects  blocks  plugins  pipelines  cross-platform'
   -font "$CODE_FONT" -pointsize 16 -fill '#7fe8ff' -annotate +98+148 'OBJECT FILE'
@@ -86,11 +86,11 @@ cmd+=(
   -font "$CODE_FONT" -pointsize 12 -fill '#dbeaf5' -annotate +98+437 'each  where  reduce  local'
   -font "$CODE_FONT" -pointsize 16 -fill '#ffb56c' -annotate +968+478 'DATA JSON'
   -font "$CODE_FONT" -pointsize 12 -fill '#dbeaf5' -annotate +968+501 'maps, lists, strings, numbers'
-  -font "$CODE_FONT" -pointsize 18 -fill '#87dbff' -annotate +224+118 '[default] nicolo@oosh | /workspace'
+  -font "$CODE_FONT" -pointsize 18 -fill '#87dbff' -annotate +224+118 '[default] nicolo@arksh | /workspace'
   -font "$CODE_FONT" -pointsize 19 -fill '#7fe8ff' -annotate +224+177 'let files = . -> children()'
   -font "$CODE_FONT" -pointsize 19 -fill '#e6f5ff' -annotate +224+214 'files |> where([:it | it -> type == \"file\"])'
   -font "$CODE_FONT" -pointsize 19 -fill '#ffb56c' -annotate +224+251 '     |> each([:it | local name = it -> name ; name])'
-  -font "$CODE_FONT" -pointsize 19 -fill '#87ffcb' -annotate +224+288 'plugin load build/oosh_sample_plugin.dylib'
+  -font "$CODE_FONT" -pointsize 19 -fill '#87ffcb' -annotate +224+288 'plugin load build/arksh_sample_plugin.dylib'
   -font "$CODE_FONT" -pointsize 19 -fill '#e6f5ff' -annotate +224+325 'env() -> HOME    shell() -> plugins    proc() -> pid'
   -font "$CODE_FONT" -pointsize 19 -fill '#ffb56c' -annotate +224+362 'class Artifact extends Named, Printable do ... endclass'
   -font "$CODE_FONT" -pointsize 19 -fill '#87dbff' -annotate +224+399 'text(\"$(pwd)\") -> print()'

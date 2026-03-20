@@ -1,33 +1,33 @@
 # Parser Dispatch Rules
 
-_oosh_ analizza ogni riga in input attraverso una sequenza ordinata di test.
+_arksh_ analizza ogni riga in input attraverso una sequenza ordinata di test.
 Il primo ramo che riconosce la riga vince; se nessun ramo corrisponde la riga viene segnalata come errore di sintassi.
 
 ---
 
-## 1. `oosh_parse_line` — albero di dispatch
+## 1. `arksh_parse_line` — albero di dispatch
 
 ```
 riga input
 │
-├── commento (#...)          → OOSH_AST_NOP (ignorata)
+├── commento (#...)          → ARKSH_AST_NOP (ignorata)
 │
-├── istruzione composta      → OOSH_AST_COMPOUND_*
+├── istruzione composta      → ARKSH_AST_COMPOUND_*
 │   (while / for / if / until / case / select / function / class / {...} / (...))
 │
-├── lista di comandi         → OOSH_AST_COMMAND_LIST
+├── lista di comandi         → ARKSH_AST_COMMAND_LIST
 │   (operatori && / || / ; che separano sotto-comandi semplici)
 │
-├── pipeline oggetto         → OOSH_AST_OBJECT_PIPELINE
+├── pipeline oggetto         → ARKSH_AST_OBJECT_PIPELINE
 │   (contiene |> — vedi §2)
 │
-├── espressione oggetto      → OOSH_AST_OBJECT_EXPRESSION
+├── espressione oggetto      → ARKSH_AST_OBJECT_EXPRESSION
 │   (contiene -> ma non |> — vedi §3)
 │
-├── espressione valore       → OOSH_AST_VALUE_EXPRESSION
+├── espressione valore       → ARKSH_AST_VALUE_EXPRESSION
 │   (token singolo: numero / stringa quotata / booleano / chiamata resolver)
 │
-└── pipeline shell           → OOSH_AST_SHELL_PIPELINE / OOSH_AST_SIMPLE_COMMAND
+└── pipeline shell           → ARKSH_AST_SHELL_PIPELINE / ARKSH_AST_SIMPLE_COMMAND
     (comandi esterni e built-in shell, con | e reindirizzamenti)
 ```
 
@@ -55,7 +55,7 @@ Una riga che contiene `|>` viene spezzata in:
 | 8 | token singolo non riconosciuto | → fallback E3-S3 |
 | 9 | qualsiasi altra stringa non vuota | `CAPTURE_SHELL` (E3-S3 bridge) |
 
-**Nota E3-S3**: se nessun parser riconosce la sorgente ma la stringa non è vuota, viene impostato `OOSH_VALUE_SOURCE_CAPTURE_SHELL`: il testo viene eseguito verbatim come riga shell e la stdout diventa un valore text nella pipeline.
+**Nota E3-S3**: se nessun parser riconosce la sorgente ma la stringa non è vuota, viene impostato `ARKSH_VALUE_SOURCE_CAPTURE_SHELL`: il testo viene eseguito verbatim come riga shell e la stdout diventa un valore text nella pipeline.
 Esempio: `ls examples/scripts |> lines |> count`.
 
 ---
@@ -88,7 +88,7 @@ Usato nei contesti dove `allow_binding_ref=0` (per es. argomenti di espressioni)
 
 ---
 
-## 5. Tipi valore sorgente — `OoshValueSourceKind`
+## 5. Tipi valore sorgente — `ArkshValueSourceKind`
 
 | Costante | Descrizione |
 |---|---|
@@ -120,5 +120,5 @@ Per eseguirlo come comando shell usare `capture("pwd")`.
 I comandi **multi-parola** (`ls -la`) non sono identificatori validi e finiscono nel fallback `CAPTURE_SHELL`.
 
 ### Built-in PURE vs MUTANT in pipeline shell
-Un built-in al primo stage di una pipeline shell (`cmd1 | cmd2`) è permesso solo se è `OOSH_BUILTIN_PURE` (non modifica lo stato della shell).
+Un built-in al primo stage di una pipeline shell (`cmd1 | cmd2`) è permesso solo se è `ARKSH_BUILTIN_PURE` (non modifica lo stato della shell).
 Built-in `MUTANT` o `MIXED` in posizione di stage-0 producono un errore esplicito.

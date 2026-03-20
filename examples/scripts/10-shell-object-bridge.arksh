@@ -1,4 +1,4 @@
-# oosh example 10
+# arksh example 10
 # Bridge shell/object: usare l'output di un comando esterno come sorgente
 # di una object pipeline (E3-S3).
 #
@@ -12,9 +12,9 @@ ls examples/scripts |> lines |> count
 
 # ── Filtrare righe ────────────────────────────────────────────────────────────
 #
-# Solo i file .oosh nella directory:
+# Solo i file .arksh nella directory:
 
-ls examples/scripts |> lines |> where([:x | text($x) -> ends_with(".oosh")]) |> count
+ls examples/scripts |> lines |> where([:x | text($x) -> ends_with(".arksh")]) |> count
 
 # ── trim + lines ──────────────────────────────────────────────────────────────
 

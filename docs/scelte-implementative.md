@@ -1,4 +1,4 @@
-# Scelte implementative di oosh
+# Scelte implementative di arksh
 
 ## Obiettivo
 
@@ -47,14 +47,14 @@ Runtime principale. Contiene:
 - alias
 - registry comandi
 - built-in
-- startup file loader per `~/.ooshrc`
+- startup file loader per `~/.arkshrc`
 - alias expansion prima del parse
 - rendering del prompt
 - caricamento config e plugin
 
 ### `src/lexer.c`
 
-Lexer del linguaggio `oosh`. Trasforma una linea in token come:
+Lexer del linguaggio `arksh`. Trasforma una linea in token come:
 
 - `word`
 - `string`
@@ -171,7 +171,7 @@ Gestisce:
 
 Carica librerie dinamiche e invoca l'entry point ABI:
 
-- `oosh_plugin_init`
+- `arksh_plugin_init`
 
 ## Modello ad oggetti
 
@@ -222,8 +222,8 @@ Per avvicinare il runtime alle basi di una shell tradizionale sono stati introdo
 - tabella variabili shell con flag `exported`
 - tabella alias
 - built-in `set`, `export`, `unset`, `alias`, `unalias`, `source`, `.`, `type`
-- caricamento opzionale di `~/.ooshrc`
-- override del file startup tramite `OOSH_RC`
+- caricamento opzionale di `~/.arkshrc`
+- override del file startup tramite `ARKSH_RC`
 - history persistente su file
 - line editor interattivo minimale senza dipendenze esterne
 - job table in memoria
@@ -238,7 +238,7 @@ Per avvicinare il runtime alle basi di una shell tradizionale sono stati introdo
 3. `source` deve lavorare nello stesso runtime e non in un processo figlio, altrimenti non potrebbe aggiornare directory corrente, alias o variabili.
 4. `type` e un built-in strategico per capire come un nome viene risolto mentre la grammatica evolve.
 5. Per la fase E e stato preferito un line editor integrato invece di `readline`, cosi il core resta leggero e portabile anche dove la dipendenza non e disponibile.
-6. Per la fase F i job in background vengono eseguiti in una nuova istanza di `oosh -c ...`, cosi possono riusare tutta la grammatica gia supportata senza duplicare l'executor asincrono.
+6. Per la fase F i job in background vengono eseguiti in una nuova istanza di `arksh -c ...`, cosi possono riusare tutta la grammatica gia supportata senza duplicare l'executor asincrono.
 7. Nella tranche successiva del job control POSIX i background job usano process group dedicati, cosi `fg`, `bg` e `Ctrl-Z` possono lavorare su unita coerenti lato terminale.
 
 ## Perche un object model e non solo comandi
@@ -289,7 +289,7 @@ color.cwd=cyan
 color.status=yellow
 color.date=blue
 color.time=yellow
-plugin=./build/oosh_sample_plugin.so
+plugin=./build/arksh_sample_plugin.so
 ```
 
 ### Motivazione della scelta
@@ -305,7 +305,7 @@ plugin=./build/oosh_sample_plugin.so
 Il plugin esporta:
 
 ```c
-int oosh_plugin_init(OoshShell *shell, const OoshPluginHost *host, OoshPluginInfo *out_info);
+int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHost *host, ArkshPluginInfo *out_info);
 ```
 
 Il core espone al plugin:
@@ -366,7 +366,7 @@ La logica di business non deve mai chiamare direttamente API OS-specifiche. Tutt
 
 ## Flusso di esecuzione
 
-1. `main` inizializza `OoshShell`
+1. `main` inizializza `ArkshShell`
 2. `shell_init` registra built-in e carica config di default
 3. ogni linea passa al lexer
 4. il parser costruisce un AST esplicito

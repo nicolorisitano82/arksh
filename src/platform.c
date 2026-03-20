@@ -22,8 +22,8 @@
 #include <unistd.h>
 #endif
 
-#include "oosh/ast.h"
-#include "oosh/platform.h"
+#include "arksh/ast.h"
+#include "arksh/platform.h"
 
 #ifndef _WIN32
 extern char **environ;
@@ -78,7 +78,7 @@ static int is_absolute_path(const char *path) {
 
 static void normalize_separators(const char *src, char *dest, size_t dest_size) {
   size_t i;
-  char native_sep = oosh_platform_path_separator()[0];
+  char native_sep = arksh_platform_path_separator()[0];
 
   if (dest_size == 0) {
     return;
@@ -91,25 +91,25 @@ static void normalize_separators(const char *src, char *dest, size_t dest_size) 
   dest[i] = '\0';
 }
 
-static int push_segment(char segments[][OOSH_MAX_NAME], int *count, const char *segment) {
+static int push_segment(char segments[][ARKSH_MAX_NAME], int *count, const char *segment) {
   if (*count >= 64) {
     return 1;
   }
 
-  copy_string(segments[*count], OOSH_MAX_NAME, segment);
+  copy_string(segments[*count], ARKSH_MAX_NAME, segment);
   (*count)++;
   return 0;
 }
 
 static int normalize_path(const char *input, char *out, size_t out_size) {
-  char temp[OOSH_MAX_PATH];
-  char segments[64][OOSH_MAX_NAME];
+  char temp[ARKSH_MAX_PATH];
+  char segments[64][ARKSH_MAX_NAME];
   char prefix[16] = "";
   char *cursor;
   int count = 0;
   int absolute = 0;
   size_t pos = 0;
-  char sep = oosh_platform_path_separator()[0];
+  char sep = arksh_platform_path_separator()[0];
   size_t i;
 
   if (input == NULL || out == NULL || out_size == 0) {
@@ -144,7 +144,7 @@ static int normalize_path(const char *input, char *out, size_t out_size) {
 
   cursor = temp + pos;
   {
-    char token[OOSH_MAX_NAME];
+    char token[ARKSH_MAX_NAME];
     size_t token_len = 0;
 
     for (i = 0; i <= strlen(cursor); ++i) {
@@ -192,7 +192,7 @@ static int normalize_path(const char *input, char *out, size_t out_size) {
 
   if (count == 0) {
     if (out[0] == '\0') {
-      copy_string(out, out_size, absolute ? oosh_platform_path_separator() : ".");
+      copy_string(out, out_size, absolute ? arksh_platform_path_separator() : ".");
     }
     return 0;
   }
@@ -207,7 +207,7 @@ static int normalize_path(const char *input, char *out, size_t out_size) {
   return 0;
 }
 
-int oosh_platform_getcwd(char *out, size_t out_size) {
+int arksh_platform_getcwd(char *out, size_t out_size) {
 #ifdef _WIN32
   return _getcwd(out, (int) out_size) == NULL ? 1 : 0;
 #else
@@ -215,7 +215,7 @@ int oosh_platform_getcwd(char *out, size_t out_size) {
 #endif
 }
 
-int oosh_platform_chdir(const char *path) {
+int arksh_platform_chdir(const char *path) {
 #ifdef _WIN32
   return _chdir(path);
 #else
@@ -223,7 +223,7 @@ int oosh_platform_chdir(const char *path) {
 #endif
 }
 
-int oosh_platform_gethostname(char *out, size_t out_size) {
+int arksh_platform_gethostname(char *out, size_t out_size) {
 #ifdef _WIN32
   DWORD size = (DWORD) out_size;
   return GetComputerNameA(out, &size) ? 0 : 1;
@@ -232,9 +232,9 @@ int oosh_platform_gethostname(char *out, size_t out_size) {
 #endif
 }
 
-int oosh_platform_resolve_path(const char *cwd, const char *input, char *out, size_t out_size) {
-  char candidate[OOSH_MAX_PATH * 2];
-  char sep = oosh_platform_path_separator()[0];
+int arksh_platform_resolve_path(const char *cwd, const char *input, char *out, size_t out_size) {
+  char candidate[ARKSH_MAX_PATH * 2];
+  char sep = arksh_platform_path_separator()[0];
 
   if (cwd == NULL || input == NULL || out == NULL) {
     return 1;
@@ -258,10 +258,10 @@ int oosh_platform_resolve_path(const char *cwd, const char *input, char *out, si
   return normalize_path(candidate, out, out_size);
 }
 
-int oosh_platform_ensure_directory(const char *path) {
-  char normalized[OOSH_MAX_PATH];
-  char partial[OOSH_MAX_PATH];
-  char sep = oosh_platform_path_separator()[0];
+int arksh_platform_ensure_directory(const char *path) {
+  char normalized[ARKSH_MAX_PATH];
+  char partial[ARKSH_MAX_PATH];
+  char sep = arksh_platform_path_separator()[0];
   size_t i = 0;
   size_t partial_len = 0;
 
@@ -325,7 +325,7 @@ int oosh_platform_ensure_directory(const char *path) {
       partial[partial_len] = '\0';
     }
 
-    if (partial[0] != '\0' && strcmp(partial, ".") != 0 && strcmp(partial, oosh_platform_path_separator()) != 0) {
+    if (partial[0] != '\0' && strcmp(partial, ".") != 0 && strcmp(partial, arksh_platform_path_separator()) != 0) {
 #ifdef _WIN32
       if (_mkdir(partial) != 0 && errno != EEXIST) {
         return 1;
@@ -345,7 +345,7 @@ int oosh_platform_ensure_directory(const char *path) {
   return 0;
 }
 
-void oosh_platform_basename(const char *path, char *out, size_t out_size) {
+void arksh_platform_basename(const char *path, char *out, size_t out_size) {
   const char *cursor;
   const char *last = NULL;
   size_t len;
@@ -366,7 +366,7 @@ void oosh_platform_basename(const char *path, char *out, size_t out_size) {
   }
 
   if (cursor == path) {
-    copy_string(out, out_size, oosh_platform_path_separator());
+    copy_string(out, out_size, arksh_platform_path_separator());
     return;
   }
 
@@ -385,8 +385,8 @@ void oosh_platform_basename(const char *path, char *out, size_t out_size) {
   }
 }
 
-void oosh_platform_dirname(const char *path, char *out, size_t out_size) {
-  char temp[OOSH_MAX_PATH];
+void arksh_platform_dirname(const char *path, char *out, size_t out_size) {
+  char temp[ARKSH_MAX_PATH];
   size_t len;
 
   if (path == NULL || out == NULL || out_size == 0) {
@@ -426,15 +426,15 @@ void oosh_platform_dirname(const char *path, char *out, size_t out_size) {
   copy_string(out, out_size, temp);
 }
 
-int oosh_platform_stat(const char *path, OoshPlatformFileInfo *info) {
-  char name[OOSH_MAX_NAME];
+int arksh_platform_stat(const char *path, ArkshPlatformFileInfo *info) {
+  char name[ARKSH_MAX_NAME];
 
   if (path == NULL || info == NULL) {
     return 1;
   }
 
   memset(info, 0, sizeof(*info));
-  oosh_platform_basename(path, name, sizeof(name));
+  arksh_platform_basename(path, name, sizeof(name));
 
 #ifdef _WIN32
   {
@@ -466,7 +466,7 @@ int oosh_platform_stat(const char *path, OoshPlatformFileInfo *info) {
   {
     struct stat st;
     struct stat parent_st;
-    char parent[OOSH_MAX_PATH];
+    char parent[ARKSH_MAX_PATH];
 
     if (stat(path, &st) == 0) {
       info->exists = 1;
@@ -481,7 +481,7 @@ int oosh_platform_stat(const char *path, OoshPlatformFileInfo *info) {
       if (strcmp(path, "/") == 0) {
         info->is_mount_point = 1;
       } else if (info->is_directory) {
-        oosh_platform_dirname(path, parent, sizeof(parent));
+        arksh_platform_dirname(path, parent, sizeof(parent));
         if (stat(parent, &parent_st) == 0 && (st.st_dev != parent_st.st_dev || (st.st_dev == parent_st.st_dev && st.st_ino == parent_st.st_ino))) {
           info->is_mount_point = 1;
         }
@@ -495,7 +495,7 @@ int oosh_platform_stat(const char *path, OoshPlatformFileInfo *info) {
   return 0;
 }
 
-int oosh_platform_list_children(const char *path, char *out, size_t out_size) {
+int arksh_platform_list_children(const char *path, char *out, size_t out_size) {
   if (path == NULL || out == NULL || out_size == 0) {
     return 1;
   }
@@ -504,7 +504,7 @@ int oosh_platform_list_children(const char *path, char *out, size_t out_size) {
 
 #ifdef _WIN32
   {
-    char pattern[OOSH_MAX_PATH];
+    char pattern[ARKSH_MAX_PATH];
     WIN32_FIND_DATAA data;
     HANDLE handle;
     int first = 1;
@@ -558,7 +558,7 @@ int oosh_platform_list_children(const char *path, char *out, size_t out_size) {
   return 0;
 }
 
-int oosh_platform_list_children_names(const char *path, char names[][OOSH_MAX_PATH], size_t max_names, size_t *out_count) {
+int arksh_platform_list_children_names(const char *path, char names[][ARKSH_MAX_PATH], size_t max_names, size_t *out_count) {
   size_t count = 0;
 
   if (path == NULL || names == NULL || out_count == NULL) {
@@ -567,7 +567,7 @@ int oosh_platform_list_children_names(const char *path, char names[][OOSH_MAX_PA
 
 #ifdef _WIN32
   {
-    char pattern[OOSH_MAX_PATH];
+    char pattern[ARKSH_MAX_PATH];
     WIN32_FIND_DATAA data;
     HANDLE handle;
 
@@ -582,7 +582,7 @@ int oosh_platform_list_children_names(const char *path, char names[][OOSH_MAX_PA
         continue;
       }
       if (count < max_names) {
-        copy_string(names[count], OOSH_MAX_PATH, data.cFileName);
+        copy_string(names[count], ARKSH_MAX_PATH, data.cFileName);
         count++;
       }
     } while (FindNextFileA(handle, &data));
@@ -603,7 +603,7 @@ int oosh_platform_list_children_names(const char *path, char names[][OOSH_MAX_PA
         continue;
       }
       if (count < max_names) {
-        copy_string(names[count], OOSH_MAX_PATH, entry->d_name);
+        copy_string(names[count], ARKSH_MAX_PATH, entry->d_name);
         count++;
       }
     }
@@ -616,7 +616,7 @@ int oosh_platform_list_children_names(const char *path, char names[][OOSH_MAX_PA
   return 0;
 }
 
-int oosh_platform_read_text_file(const char *path, size_t limit, char *out, size_t out_size) {
+int arksh_platform_read_text_file(const char *path, size_t limit, char *out, size_t out_size) {
   FILE *fp;
   size_t max_read;
   size_t bytes_read;
@@ -638,7 +638,7 @@ int oosh_platform_read_text_file(const char *path, size_t limit, char *out, size
   return 0;
 }
 
-int oosh_platform_write_text_file(const char *path, const char *text, int append, char *out, size_t out_size) {
+int arksh_platform_write_text_file(const char *path, const char *text, int append, char *out, size_t out_size) {
   FILE *fp;
 
   if (path == NULL || out == NULL || out_size == 0) {
@@ -658,7 +658,7 @@ int oosh_platform_write_text_file(const char *path, const char *text, int append
   return 0;
 }
 
-int oosh_platform_list_environment(OoshPlatformEnvEntry entries[], size_t max_entries, size_t *out_count) {
+int arksh_platform_list_environment(ArkshPlatformEnvEntry entries[], size_t max_entries, size_t *out_count) {
   size_t count = 0;
 
   if (entries == NULL || out_count == NULL) {
@@ -725,7 +725,7 @@ int oosh_platform_list_environment(OoshPlatformEnvEntry entries[], size_t max_en
   return 0;
 }
 
-int oosh_platform_get_process_info(OoshPlatformProcessInfo *out_info) {
+int arksh_platform_get_process_info(ArkshPlatformProcessInfo *out_info) {
   if (out_info == NULL) {
     return 1;
   }
@@ -761,18 +761,18 @@ int oosh_platform_get_process_info(OoshPlatformProcessInfo *out_info) {
   return 0;
 }
 
-static void build_process_argv(const OoshPlatformProcessSpec *spec, char *argv[OOSH_MAX_ARGS + 1]) {
+static void build_process_argv(const ArkshPlatformProcessSpec *spec, char *argv[ARKSH_MAX_ARGS + 1]) {
   int i;
 
   if (spec == NULL) {
     return;
   }
 
-  for (i = 0; i < OOSH_MAX_ARGS + 1; ++i) {
+  for (i = 0; i < ARKSH_MAX_ARGS + 1; ++i) {
     argv[i] = NULL;
   }
 
-  for (i = 0; i < spec->argc && i < OOSH_MAX_ARGS; ++i) {
+  for (i = 0; i < spec->argc && i < ARKSH_MAX_ARGS; ++i) {
     argv[i] = (char *) spec->argv[i];
   }
 }
@@ -852,7 +852,7 @@ static void append_windows_quoted_arg(char *dest, size_t dest_size, const char *
   append_text(dest, dest_size, "\"");
 }
 
-static void build_windows_command_line(const OoshPlatformProcessSpec *spec, char *out, size_t out_size) {
+static void build_windows_command_line(const ArkshPlatformProcessSpec *spec, char *out, size_t out_size) {
   int i;
 
   if (out == NULL || out_size == 0) {
@@ -864,7 +864,7 @@ static void build_windows_command_line(const OoshPlatformProcessSpec *spec, char
     return;
   }
 
-  for (i = 0; i < spec->argc && i < OOSH_MAX_ARGS; ++i) {
+  for (i = 0; i < spec->argc && i < ARKSH_MAX_ARGS; ++i) {
     if (i > 0) {
       append_text(out, out_size, " ");
     }
@@ -941,9 +941,9 @@ static int read_fd_to_buffer(int fd, char *out, size_t out_size) {
 }
 #endif
 
-int oosh_platform_glob(
+int arksh_platform_glob(
   const char *pattern,
-  char matches[][OOSH_MAX_TOKEN],
+  char matches[][ARKSH_MAX_TOKEN],
   int max_matches,
   int *out_count
 ) {
@@ -955,8 +955,8 @@ int oosh_platform_glob(
 
 #ifdef _WIN32
   {
-    char normalized_pattern[OOSH_MAX_PATH];
-    char prefix[OOSH_MAX_PATH];
+    char normalized_pattern[ARKSH_MAX_PATH];
+    char prefix[ARKSH_MAX_PATH];
     const char *last_separator = NULL;
     WIN32_FIND_DATAA data;
     HANDLE handle;
@@ -1003,12 +1003,12 @@ int oosh_platform_glob(
       }
 
       if (prefix[0] != '\0') {
-        char combined[OOSH_MAX_PATH];
+        char combined[ARKSH_MAX_PATH];
 
         snprintf(combined, sizeof(combined), "%s%s", prefix, data.cFileName);
-        copy_string(matches[count], OOSH_MAX_TOKEN, combined);
+        copy_string(matches[count], ARKSH_MAX_TOKEN, combined);
       } else {
-        copy_string(matches[count], OOSH_MAX_TOKEN, data.cFileName);
+        copy_string(matches[count], ARKSH_MAX_TOKEN, data.cFileName);
       }
       count++;
     } while (FindNextFileA(handle, &data));
@@ -1040,7 +1040,7 @@ int oosh_platform_glob(
     }
 
     for (i = 0; i < glob_matches.gl_pathc; ++i) {
-      copy_string(matches[i], OOSH_MAX_TOKEN, glob_matches.gl_pathv[i]);
+      copy_string(matches[i], ARKSH_MAX_TOKEN, glob_matches.gl_pathv[i]);
     }
     *out_count = (int) glob_matches.gl_pathc;
     globfree(&glob_matches);
@@ -1049,14 +1049,14 @@ int oosh_platform_glob(
 #endif
 }
 
-int oosh_platform_run_process_pipeline(
+int arksh_platform_run_process_pipeline(
   const char *cwd,
-  const OoshPlatformProcessSpec *specs,
+  const ArkshPlatformProcessSpec *specs,
   size_t spec_count,
   char *out,
   size_t out_size,
   int *out_exit_code,
-  OoshPlatformAsyncProcess *out_stopped,
+  ArkshPlatformAsyncProcess *out_stopped,
   int force_capture
 ) {
   if (out == NULL || out_size == 0) {
@@ -1116,7 +1116,7 @@ int oosh_platform_run_process_pipeline(
 #ifdef _WIN32
   {
     SECURITY_ATTRIBUTES security_attributes;
-    PROCESS_INFORMATION process_infos[OOSH_MAX_PIPELINE_STAGES];
+    PROCESS_INFORMATION process_infos[ARKSH_MAX_PIPELINE_STAGES];
     HANDLE previous_read = INVALID_HANDLE_VALUE;
     HANDLE capture_read = INVALID_HANDLE_VALUE;
     size_t process_count = 0;
@@ -1147,8 +1147,8 @@ int oosh_platform_run_process_pipeline(
       HANDLE opened_stdin = INVALID_HANDLE_VALUE;
       HANDLE opened_stdout = INVALID_HANDLE_VALUE;
       HANDLE opened_stderr = INVALID_HANDLE_VALUE;
-      HANDLE opened_redirects[OOSH_MAX_REDIRECTIONS * 2];
-      char command_line[OOSH_MAX_LINE * 2];
+      HANDLE opened_redirects[ARKSH_MAX_REDIRECTIONS * 2];
+      char command_line[ARKSH_MAX_LINE * 2];
       int needs_next_pipe = (i + 1 < spec_count);
       /* E4-S4: match POSIX logic — only redirect to a capture pipe when the
        * caller asks for captured output (force_capture) or when stdin is not a
@@ -1204,7 +1204,7 @@ int oosh_platform_run_process_pipeline(
       }
 
       for (redirect_index = 0; redirect_index < specs[i].redirection_count; ++redirect_index) {
-        const OoshPlatformRedirectionSpec *redirect = &specs[i].redirections[redirect_index];
+        const ArkshPlatformRedirectionSpec *redirect = &specs[i].redirections[redirect_index];
         HANDLE *target_handle = NULL;
 
         if (redirect->fd < 0 || redirect->fd > 2 || redirect->target_fd > 2) {
@@ -1415,7 +1415,7 @@ windows_stage_cleanup:
   }
 #else
   {
-    pid_t pids[OOSH_MAX_PIPELINE_STAGES];
+    pid_t pids[ARKSH_MAX_PIPELINE_STAGES];
     size_t pid_count = 0;
     int previous_read = -1;
     int capture_read = -1;
@@ -1471,8 +1471,8 @@ windows_stage_cleanup:
       }
 
       if (pid == 0) {
-        char *argv[OOSH_MAX_ARGS + 1];
-        int opened_fds[OOSH_MAX_REDIRECTIONS * 2];
+        char *argv[ARKSH_MAX_ARGS + 1];
+        int opened_fds[ARKSH_MAX_REDIRECTIONS * 2];
         size_t opened_fd_count = 0;
         size_t redirect_index;
 
@@ -1507,7 +1507,7 @@ windows_stage_cleanup:
         }
 
         for (redirect_index = 0; redirect_index < specs[i].redirection_count; ++redirect_index) {
-          const OoshPlatformRedirectionSpec *redirect = &specs[i].redirections[redirect_index];
+          const ArkshPlatformRedirectionSpec *redirect = &specs[i].redirections[redirect_index];
 
           if (redirect->close_target) {
             close(redirect->fd);
@@ -1702,7 +1702,7 @@ windows_stage_cleanup:
 #endif
 }
 
-const char *oosh_platform_path_separator(void) {
+const char *arksh_platform_path_separator(void) {
 #ifdef _WIN32
   return "\\";
 #else
@@ -1710,10 +1710,10 @@ const char *oosh_platform_path_separator(void) {
 #endif
 }
 
-int oosh_platform_spawn_background_process(
+int arksh_platform_spawn_background_process(
   const char *cwd,
   char *const argv[],
-  OoshPlatformAsyncProcess *out_process,
+  ArkshPlatformAsyncProcess *out_process,
   char *error,
   size_t error_size
 ) {
@@ -1732,7 +1732,7 @@ int oosh_platform_spawn_background_process(
     HANDLE null_input = INVALID_HANDLE_VALUE;
     HANDLE stdout_handle = GetStdHandle(STD_OUTPUT_HANDLE);
     HANDLE stderr_handle = GetStdHandle(STD_ERROR_HANDLE);
-    char command_line[OOSH_MAX_LINE * 2];
+    char command_line[ARKSH_MAX_LINE * 2];
 
     memset(&security_attributes, 0, sizeof(security_attributes));
     security_attributes.nLength = sizeof(security_attributes);
@@ -1817,9 +1817,9 @@ int oosh_platform_spawn_background_process(
 #endif
 }
 
-int oosh_platform_poll_background_process(
-  OoshPlatformAsyncProcess *process,
-  OoshPlatformProcessState *out_state,
+int arksh_platform_poll_background_process(
+  ArkshPlatformAsyncProcess *process,
+  ArkshPlatformProcessState *out_state,
   int *out_exit_code
 ) {
   if (process == NULL || out_state == NULL || out_exit_code == NULL) {
@@ -1828,7 +1828,7 @@ int oosh_platform_poll_background_process(
 
 #ifdef _WIN32
   if (process->handle == NULL) {
-    *out_state = OOSH_PLATFORM_PROCESS_EXITED;
+    *out_state = ARKSH_PLATFORM_PROCESS_EXITED;
     *out_exit_code = 0;
     return 0;
   }
@@ -1841,12 +1841,12 @@ int oosh_platform_poll_background_process(
     }
 
     if (exit_code == STILL_ACTIVE) {
-      *out_state = OOSH_PLATFORM_PROCESS_UNCHANGED;
+      *out_state = ARKSH_PLATFORM_PROCESS_UNCHANGED;
       *out_exit_code = 0;
       return 0;
     }
 
-    *out_state = OOSH_PLATFORM_PROCESS_EXITED;
+    *out_state = ARKSH_PLATFORM_PROCESS_EXITED;
     *out_exit_code = (int) exit_code;
     CloseHandle((HANDLE) process->handle);
     process->handle = NULL;
@@ -1855,7 +1855,7 @@ int oosh_platform_poll_background_process(
   }
 #else
   if (process->pid <= 0) {
-    *out_state = OOSH_PLATFORM_PROCESS_EXITED;
+    *out_state = ARKSH_PLATFORM_PROCESS_EXITED;
     *out_exit_code = 0;
     return 0;
   }
@@ -1865,13 +1865,13 @@ int oosh_platform_poll_background_process(
     pid_t result = waitpid((pid_t) process->pid, &status, WNOHANG | WUNTRACED | WCONTINUED);
 
     if (result == 0) {
-      *out_state = OOSH_PLATFORM_PROCESS_UNCHANGED;
+      *out_state = ARKSH_PLATFORM_PROCESS_UNCHANGED;
       *out_exit_code = 0;
       return 0;
     }
     if (result < 0) {
       if (errno == ECHILD) {
-        *out_state = OOSH_PLATFORM_PROCESS_EXITED;
+        *out_state = ARKSH_PLATFORM_PROCESS_EXITED;
         *out_exit_code = 0;
         process->pid = 0;
         process->pgid = 0;
@@ -1881,23 +1881,23 @@ int oosh_platform_poll_background_process(
     }
 
     if (WIFCONTINUED(status)) {
-      *out_state = OOSH_PLATFORM_PROCESS_RUNNING;
+      *out_state = ARKSH_PLATFORM_PROCESS_RUNNING;
       *out_exit_code = 0;
     } else if (WIFSTOPPED(status)) {
-      *out_state = OOSH_PLATFORM_PROCESS_STOPPED;
+      *out_state = ARKSH_PLATFORM_PROCESS_STOPPED;
       *out_exit_code = 128 + WSTOPSIG(status);
     } else if (WIFEXITED(status)) {
-      *out_state = OOSH_PLATFORM_PROCESS_EXITED;
+      *out_state = ARKSH_PLATFORM_PROCESS_EXITED;
       *out_exit_code = WEXITSTATUS(status);
       process->pid = 0;
       process->pgid = 0;
     } else if (WIFSIGNALED(status)) {
-      *out_state = OOSH_PLATFORM_PROCESS_EXITED;
+      *out_state = ARKSH_PLATFORM_PROCESS_EXITED;
       *out_exit_code = 128 + WTERMSIG(status);
       process->pid = 0;
       process->pgid = 0;
     } else {
-      *out_state = OOSH_PLATFORM_PROCESS_UNCHANGED;
+      *out_state = ARKSH_PLATFORM_PROCESS_UNCHANGED;
       *out_exit_code = 0;
     }
     return 0;
@@ -1905,10 +1905,10 @@ int oosh_platform_poll_background_process(
 #endif
 }
 
-int oosh_platform_wait_background_process(
-  OoshPlatformAsyncProcess *process,
+int arksh_platform_wait_background_process(
+  ArkshPlatformAsyncProcess *process,
   int foreground,
-  OoshPlatformProcessState *out_state,
+  ArkshPlatformProcessState *out_state,
   int *out_exit_code
 ) {
   if (process == NULL || out_state == NULL || out_exit_code == NULL) {
@@ -1919,7 +1919,7 @@ int oosh_platform_wait_background_process(
   (void) foreground;
   if (process->handle == NULL) {
     *out_exit_code = 0;
-    *out_state = OOSH_PLATFORM_PROCESS_EXITED;
+    *out_state = ARKSH_PLATFORM_PROCESS_EXITED;
     return 0;
   }
 
@@ -1934,7 +1934,7 @@ int oosh_platform_wait_background_process(
       return 1;
     }
     *out_exit_code = (int) exit_code;
-    *out_state = OOSH_PLATFORM_PROCESS_EXITED;
+    *out_state = ARKSH_PLATFORM_PROCESS_EXITED;
     CloseHandle((HANDLE) process->handle);
     process->handle = NULL;
     process->pgid = 0;
@@ -1945,7 +1945,7 @@ int oosh_platform_wait_background_process(
 
   if (process->pid <= 0) {
     *out_exit_code = 0;
-    *out_state = OOSH_PLATFORM_PROCESS_EXITED;
+    *out_state = ARKSH_PLATFORM_PROCESS_EXITED;
     return 0;
   }
 
@@ -1970,20 +1970,20 @@ int oosh_platform_wait_background_process(
       return 1;
     }
     if (WIFSTOPPED(status)) {
-      *out_state = OOSH_PLATFORM_PROCESS_STOPPED;
+      *out_state = ARKSH_PLATFORM_PROCESS_STOPPED;
       *out_exit_code = 128 + WSTOPSIG(status);
     } else if (WIFEXITED(status)) {
-      *out_state = OOSH_PLATFORM_PROCESS_EXITED;
+      *out_state = ARKSH_PLATFORM_PROCESS_EXITED;
       *out_exit_code = WEXITSTATUS(status);
       process->pid = 0;
       process->pgid = 0;
     } else if (WIFSIGNALED(status)) {
-      *out_state = OOSH_PLATFORM_PROCESS_EXITED;
+      *out_state = ARKSH_PLATFORM_PROCESS_EXITED;
       *out_exit_code = 128 + WTERMSIG(status);
       process->pid = 0;
       process->pgid = 0;
     } else {
-      *out_state = OOSH_PLATFORM_PROCESS_UNCHANGED;
+      *out_state = ARKSH_PLATFORM_PROCESS_UNCHANGED;
       *out_exit_code = 0;
     }
     return 0;
@@ -1991,8 +1991,8 @@ int oosh_platform_wait_background_process(
 #endif
 }
 
-int oosh_platform_resume_background_process(
-  OoshPlatformAsyncProcess *process,
+int arksh_platform_resume_background_process(
+  ArkshPlatformAsyncProcess *process,
   int foreground,
   char *error,
   size_t error_size
@@ -2029,7 +2029,7 @@ int oosh_platform_resume_background_process(
 #endif
 }
 
-void oosh_platform_close_background_process(OoshPlatformAsyncProcess *process) {
+void arksh_platform_close_background_process(ArkshPlatformAsyncProcess *process) {
   if (process == NULL) {
     return;
   }
@@ -2047,7 +2047,7 @@ void oosh_platform_close_background_process(OoshPlatformAsyncProcess *process) {
 #endif
 }
 
-const char *oosh_platform_plugin_extension(void) {
+const char *arksh_platform_plugin_extension(void) {
 #ifdef _WIN32
   return ".dll";
 #elif defined(__APPLE__)
@@ -2057,7 +2057,7 @@ const char *oosh_platform_plugin_extension(void) {
 #endif
 }
 
-const char *oosh_platform_os_name(void) {
+const char *arksh_platform_os_name(void) {
 #ifdef _WIN32
   return "windows";
 #elif defined(__APPLE__)
@@ -2069,7 +2069,7 @@ const char *oosh_platform_os_name(void) {
 #endif
 }
 
-void *oosh_platform_library_open(const char *path) {
+void *arksh_platform_library_open(const char *path) {
   set_last_error(NULL);
 
 #ifdef _WIN32
@@ -2091,7 +2091,7 @@ void *oosh_platform_library_open(const char *path) {
 #endif
 }
 
-void *oosh_platform_library_symbol(void *handle, const char *name) {
+void *arksh_platform_library_symbol(void *handle, const char *name) {
   set_last_error(NULL);
 
 #ifdef _WIN32
@@ -2113,7 +2113,7 @@ void *oosh_platform_library_symbol(void *handle, const char *name) {
 #endif
 }
 
-void oosh_platform_library_close(void *handle) {
+void arksh_platform_library_close(void *handle) {
   if (handle == NULL) {
     return;
   }
@@ -2125,6 +2125,6 @@ void oosh_platform_library_close(void *handle) {
 #endif
 }
 
-const char *oosh_platform_last_error(void) {
+const char *arksh_platform_last_error(void) {
   return g_last_error[0] == '\0' ? "unknown error" : g_last_error;
 }

@@ -1,32 +1,32 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "oosh/platform.h"
-#include "oosh/plugin.h"
-#include "oosh/shell.h"
+#include "arksh/platform.h"
+#include "arksh/plugin.h"
+#include "arksh/shell.h"
 
-static int host_register_command(OoshShell *shell, const char *name, const char *description, OoshCommandFn fn) {
-  return oosh_shell_register_command(shell, name, description, fn, 1);
+static int host_register_command(ArkshShell *shell, const char *name, const char *description, ArkshCommandFn fn) {
+  return arksh_shell_register_command(shell, name, description, fn, 1);
 }
 
-static int host_register_property_extension(OoshShell *shell, const char *target, const char *name, OoshExtensionPropertyFn fn) {
-  return oosh_shell_register_native_property_extension(shell, target, name, fn, 1);
+static int host_register_property_extension(ArkshShell *shell, const char *target, const char *name, ArkshExtensionPropertyFn fn) {
+  return arksh_shell_register_native_property_extension(shell, target, name, fn, 1);
 }
 
-static int host_register_method_extension(OoshShell *shell, const char *target, const char *name, OoshExtensionMethodFn fn) {
-  return oosh_shell_register_native_method_extension(shell, target, name, fn, 1);
+static int host_register_method_extension(ArkshShell *shell, const char *target, const char *name, ArkshExtensionMethodFn fn) {
+  return arksh_shell_register_native_method_extension(shell, target, name, fn, 1);
 }
 
-static int host_register_value_resolver(OoshShell *shell, const char *name, OoshValueResolverFn fn) {
-  return oosh_shell_register_value_resolver(shell, name, fn, 1);
+static int host_register_value_resolver(ArkshShell *shell, const char *name, ArkshValueResolverFn fn) {
+  return arksh_shell_register_value_resolver(shell, name, fn, 1);
 }
 
-static int host_register_pipeline_stage(OoshShell *shell, const char *name, OoshPipelineStageFn fn) {
-  return oosh_shell_register_pipeline_stage(shell, name, fn, 1);
+static int host_register_pipeline_stage(ArkshShell *shell, const char *name, ArkshPipelineStageFn fn) {
+  return arksh_shell_register_pipeline_stage(shell, name, fn, 1);
 }
 
-static int host_register_type_descriptor(OoshShell *shell, const char *type_name, const char *description) {
-  return oosh_shell_register_type_descriptor(shell, type_name, description);
+static int host_register_type_descriptor(ArkshShell *shell, const char *type_name, const char *description) {
+  return arksh_shell_register_type_descriptor(shell, type_name, description);
 }
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {
@@ -37,12 +37,12 @@ static void copy_string(char *dest, size_t dest_size, const char *src) {
   snprintf(dest, dest_size, "%s", src == NULL ? "" : src);
 }
 
-int oosh_shell_load_plugin(OoshShell *shell, const char *path, char *out, size_t out_size) {
-  char resolved[OOSH_MAX_PATH];
+int arksh_shell_load_plugin(ArkshShell *shell, const char *path, char *out, size_t out_size) {
+  char resolved[ARKSH_MAX_PATH];
   void *handle;
-  OoshPluginInitFn init_fn;
-  OoshPluginInfo info;
-  OoshPluginHost host;
+  ArkshPluginInitFn init_fn;
+  ArkshPluginInfo info;
+  ArkshPluginHost host;
   size_t i;
   int status;
 
@@ -50,12 +50,12 @@ int oosh_shell_load_plugin(OoshShell *shell, const char *path, char *out, size_t
     return 1;
   }
 
-  if (shell->plugin_count >= OOSH_MAX_PLUGINS) {
+  if (shell->plugin_count >= ARKSH_MAX_PLUGINS) {
     snprintf(out, out_size, "plugin limit reached");
     return 1;
   }
 
-  if (oosh_platform_resolve_path(shell->cwd, path, resolved, sizeof(resolved)) != 0) {
+  if (arksh_platform_resolve_path(shell->cwd, path, resolved, sizeof(resolved)) != 0) {
     snprintf(out, out_size, "unable to resolve plugin path: %s", path);
     return 1;
   }
@@ -73,21 +73,21 @@ int oosh_shell_load_plugin(OoshShell *shell, const char *path, char *out, size_t
     }
   }
 
-  handle = oosh_platform_library_open(resolved);
+  handle = arksh_platform_library_open(resolved);
   if (handle == NULL) {
-    snprintf(out, out_size, "unable to open plugin %s: %s", resolved, oosh_platform_last_error());
+    snprintf(out, out_size, "unable to open plugin %s: %s", resolved, arksh_platform_last_error());
     return 1;
   }
 
-  init_fn = (OoshPluginInitFn) oosh_platform_library_symbol(handle, "oosh_plugin_init");
+  init_fn = (ArkshPluginInitFn) arksh_platform_library_symbol(handle, "arksh_plugin_init");
   if (init_fn == NULL) {
-    snprintf(out, out_size, "missing oosh_plugin_init in %s: %s", resolved, oosh_platform_last_error());
-    oosh_platform_library_close(handle);
+    snprintf(out, out_size, "missing arksh_plugin_init in %s: %s", resolved, arksh_platform_last_error());
+    arksh_platform_library_close(handle);
     return 1;
   }
 
   memset(&info, 0, sizeof(info));
-  host.api_version = OOSH_PLUGIN_API_VERSION;
+  host.api_version = ARKSH_PLUGIN_API_VERSION;
   host.register_command = host_register_command;
   host.register_property_extension = host_register_property_extension;
   host.register_method_extension = host_register_method_extension;
@@ -106,7 +106,7 @@ int oosh_shell_load_plugin(OoshShell *shell, const char *path, char *out, size_t
   if (status != 0) {
     snprintf(out, out_size, "plugin init failed for %s", resolved);
     memset(&shell->plugins[shell->plugin_count], 0, sizeof(shell->plugins[shell->plugin_count]));
-    oosh_platform_library_close(handle);
+    arksh_platform_library_close(handle);
     return 1;
   }
 

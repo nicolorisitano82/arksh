@@ -1,0 +1,13 @@
+# arksh example 08
+# Heredoc shell-style e redirection avanzata su file descriptor.
+
+./build/arksh_test_count_lines <<EOF
+one
+two
+EOF
+
+./build/arksh_test_emit_args hello 3> /tmp/arksh_example_fd3.txt 1>&3
+/tmp/arksh_example_fd3.txt -> read_text(64)
+
+./build/arksh_test_emit_args left right > /tmp/arksh_example_fdin.txt
+./build/arksh_test_count_lines 3< /tmp/arksh_example_fdin.txt 0<&3

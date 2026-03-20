@@ -1,4 +1,4 @@
-# Backlog incrementale per completare `oosh`
+# Backlog incrementale per completare `arksh`
 
 ## Scopo
 
@@ -200,7 +200,7 @@ delle value expression. Gli operatori sono sovraccaricabili per tipo tramite il 
 di extension (`__add__`, `__sub__`, ecc.). Non tocca il contesto shell.
 
 - `[x]` `E2-S5-T1` aggiungere token `PLUS`, `MINUS`, `STAR`, `SLASH` nel lexer (neutri in contesto shell, operatori in contesto value) — implementato come parsing testuale, senza nuovi token lexer, per preservare glob e path
-- `[x]` `E2-S5-T2` aggiungere nodo AST `OOSH_VALUE_SOURCE_BINARY_OP` con campi `left`, `op`, `right`
+- `[x]` `E2-S5-T2` aggiungere nodo AST `ARKSH_VALUE_SOURCE_BINARY_OP` con campi `left`, `op`, `right`
 - `[x]` `E2-S5-T3` implementare parser di espressioni binarie nel contesto value con precedenza corretta (`*`/`/` > `+`/`-`) e guard per evitare false detection su path e comandi shell
 - `[x]` `E2-S5-T4` implementare dispatch nell'executor: nativo per NUMBER, fallback su extension method (`__add__`, `__sub__`, `__mul__`, `__div__`) per altri tipi
 - `[x]` `E2-S5-T5` aggiungere test su numeri (add, sub, mul, div, prec, assoc) — 6 test aggiunti
@@ -233,9 +233,9 @@ Stato story: `[x]`
 
 Stato story: `[x]`
 
-- `[x]` `E3-S3-T1` conversione canonica: `text()` / `string()` gia supportati; `capture()` / `capture_lines()` sono gli idiomi espliciti; aggiunto `OOSH_VALUE_SOURCE_CAPTURE_SHELL` per la sintassi diretta
+- `[x]` `E3-S3-T1` conversione canonica: `text()` / `string()` gia supportati; `capture()` / `capture_lines()` sono gli idiomi espliciti; aggiunto `ARKSH_VALUE_SOURCE_CAPTURE_SHELL` per la sintassi diretta
 - `[x]` `E3-S3-T2` sintassi diretta: `<comando shell> |> <stage>` — se la sorgente non e riconosciuta come value expression, viene eseguita come comando shell e stdout diventa text value (es. `ls -la |> lines |> count`)
-- `[x]` `E3-S3-T3` test: `oosh_shell_obj_bridge_count`, `oosh_shell_obj_bridge_words`, `oosh_shell_obj_bridge_trim`; esempio `10-shell-object-bridge.oosh`
+- `[x]` `E3-S3-T3` test: `arksh_shell_obj_bridge_count`, `arksh_shell_obj_bridge_words`, `arksh_shell_obj_bridge_trim`; esempio `10-shell-object-bridge.arksh`
 
 ### E3-S4. Confine chiaro tra comando, value expression e object expression
 
@@ -243,7 +243,7 @@ Stato story: `[x]`
 
 - `[x]` `E3-S4-T1` formalizzare le regole di dispatch in documentazione tecnica (`docs/parser-dispatch.md`)
 - `[x]` `E3-S4-T2` ridurre i casi ambigui nel parser — riconoscimento `true`/`false` come `BOOLEAN_LITERAL` prima del check `BINDING` in `parse_value_source_text_ex` e `parse_non_object_value_source_tokens`; fix: `true -> value` → `"true"`, `true -> type` → `"bool"`, `while true` / `if true` ancora funzionanti
-- `[x]` `E3-S4-T3` test di regressione: `oosh_bool_lit_true_value`, `oosh_bool_lit_false_type`, `oosh_bool_lit_true_type`, `oosh_bool_lit_if_true`, `oosh_bool_lit_if_false` (126/126 pass)
+- `[x]` `E3-S4-T3` test di regressione: `arksh_bool_lit_true_value`, `arksh_bool_lit_false_type`, `arksh_bool_lit_true_type`, `arksh_bool_lit_if_true`, `arksh_bool_lit_if_false` (126/126 pass)
 
 ### E3-S5. Overloading e hook dei comandi
 
@@ -254,8 +254,8 @@ nome, e di chiamare comunque l'implementazione originale tramite `builtin <nome>
 Pattern idiomatico (POSIX): `function cd(dir) do ... ; builtin cd $dir ; endfunction`.
 
 - `[x]` `E3-S5-T1` implementare il built-in `builtin` (kind MUTANT): `command_builtin` in `shell.c` itera `shell->commands` e chiama il built-in direttamente; `execute_simple_command` in `executor.c` ora controlla `function_def` prima di `command_def` (funzioni override i built-in)
-- `[x]` `E3-S5-T2` documentare il pattern di override — `examples/scripts/11-command-override.oosh` con esempi per `cd`, `pwd` e `builtin` diretto
-- `[x]` `E3-S5-T3` test: `oosh_builtin_cd_override` (directory cambia), `oosh_builtin_pwd_override` (funzione prende priorità), `oosh_builtin_escape` (`builtin` bypassa la funzione); 132/132 pass
+- `[x]` `E3-S5-T2` documentare il pattern di override — `examples/scripts/11-command-override.arksh` con esempi per `cd`, `pwd` e `builtin` diretto
+- `[x]` `E3-S5-T3` test: `arksh_builtin_cd_override` (directory cambia), `arksh_builtin_pwd_override` (funzione prende priorità), `arksh_builtin_escape` (`builtin` bypassa la funzione); 132/132 pass
 
 ---
 
@@ -276,8 +276,8 @@ Stato story: `[x]`
 Stato story: `[x]`
 
 - `[x]` `E4-S2-T1` introdurre built-in `wait` (già presente in `command_wait`; attende uno o più job per ID `%n`)
-- `[x]` `E4-S2-T2` tracciare status finali e segnali: aggiunto campo `termination_signal` in `OoshJob`; `oosh_shell_refresh_jobs` e `wait_for_job_at` lo valorizzano a `exit_code - 128` se `exit_code > 128`; `command_jobs` mostra `exit=N` / `signal=NAME`; helper `signal_name()` restituisce nome POSIX breve (HUP, INT, KILL, TERM, TSTP …); marcatori `+`/`-` per job corrente/precedente; `wait_for_job_at` produce messaggio `[n] done ...` con dettaglio exit/segnale
-- `[x]` `E4-S2-T3` aggiunti 2 test CTest: `oosh_wait_done_message` (controlla che `wait` produca "done"), `oosh_jobs_current_marker` (controlla che `jobs` mostri `+` per il job corrente); 134 test tutti verdi
+- `[x]` `E4-S2-T2` tracciare status finali e segnali: aggiunto campo `termination_signal` in `ArkshJob`; `arksh_shell_refresh_jobs` e `wait_for_job_at` lo valorizzano a `exit_code - 128` se `exit_code > 128`; `command_jobs` mostra `exit=N` / `signal=NAME`; helper `signal_name()` restituisce nome POSIX breve (HUP, INT, KILL, TERM, TSTP …); marcatori `+`/`-` per job corrente/precedente; `wait_for_job_at` produce messaggio `[n] done ...` con dettaglio exit/segnale
+- `[x]` `E4-S2-T3` aggiunti 2 test CTest: `arksh_wait_done_message` (controlla che `wait` produca "done"), `arksh_jobs_current_marker` (controlla che `jobs` mostri `+` per il job corrente); 134 test tutti verdi
 
 ### E4-S3. TTY e segnali affidabili
 
@@ -288,15 +288,15 @@ Stato story: `[x]`
   - aggiunto `signal(SIGPIPE, SIG_DFL)` esplicito nel figlio — garantisce che SIGPIPE non sia ereditata come SIG_IGN dalla shell
   - `waitpid` della pipeline foreground ora usa loop EINTR (`do { wpid = waitpid(...); } while (wpid < 0 && errno == EINTR)`) — un segnale spurio (es. SIGCHLD di un job background) non salta più silenziosamente l'attesa di un processo figlio
 - `[x]` `E4-S3-T2` verificare `Ctrl-C` e `Ctrl-Z` in scenari annidati: testato manualmente — Ctrl-C su pipeline foreground termina i processi senza toccare la shell; Ctrl-Z ferma la pipeline e la aggiunge a `jobs` come `stopped`; le correzioni T1 chiudono le race condition teoriche
-- `[x]` `E4-S3-T3` aggiunti 2 smoke test CTest: `oosh_pipeline_three_stage` (emit | echo | count → "3") e `oosh_pipeline_sigpipe_safe` (emit | count → "3") — verificano che pipeline multi-stadio completino senza crash; 136 test tutti verdi
+- `[x]` `E4-S3-T3` aggiunti 2 smoke test CTest: `arksh_pipeline_three_stage` (emit | echo | count → "3") e `arksh_pipeline_sigpipe_safe` (emit | count → "3") — verificano che pipeline multi-stadio completino senza crash; 136 test tutti verdi
 
 ### E4-S4. Comportamento equivalente su Windows
 
 Stato story: `[x]`
 
-- `[x]` `E4-S4-T1` documentare i limiti POSIX-non-portabili — blocco commento in `platform.c` prima della sezione Windows di `oosh_platform_run_process_pipeline`; elenca setpgid/tcsetpgrp/WUNTRACED/SIGTSTP come non portabili e descrive le alternative Windows disponibili (`_isatty`, `CREATE_NEW_PROCESS_GROUP` per background, `pgid_leader` come equivalente informativo)
+- `[x]` `E4-S4-T1` documentare i limiti POSIX-non-portabili — blocco commento in `platform.c` prima della sezione Windows di `arksh_platform_run_process_pipeline`; elenca setpgid/tcsetpgrp/WUNTRACED/SIGTSTP come non portabili e descrive le alternative Windows disponibili (`_isatty`, `CREATE_NEW_PROCESS_GROUP` per background, `pgid_leader` come equivalente informativo)
 - `[x]` `E4-S4-T2` implementare il miglior equivalente possibile per Windows — (a) `interactive = _isatty(0)` mirrors POSIX `isatty(STDIN_FILENO)`; (b) `should_capture_output` ora condizionato a `(!interactive || force_capture)` come su POSIX, così in modalità interattiva l'output va direttamente alla console; (c) `pgid_leader` traccia il PID del primo processo per coerenza con il job-table
-- `[x]` `E4-S4-T3` aggiungere test su runner Windows reale — aggiunti `oosh_capture_text_first` e `oosh_capture_text_count` in CMakeLists.txt; esercitano il path `force_capture=1` (usato da `capture()` e `capture_lines()`) su tutte le piattaforme; 138 test tutti verdi
+- `[x]` `E4-S4-T3` aggiungere test su runner Windows reale — aggiunti `arksh_capture_text_first` e `arksh_capture_text_count` in CMakeLists.txt; esercitano il path `force_capture=1` (usato da `capture()` e `capture_lines()`) su tutte le piattaforme; 138 test tutti verdi
 
 ---
 
@@ -340,23 +340,23 @@ La completion (in `line_editor.c`) gestisce le seguenti sorgenti:
 - `collect_binding_matches` — binding typed `let` (`shell->bindings`), in contesto non-comando
 - `collect_stage_matches` — stage built-in + stage plugin, attivata dopo `|>`
 
-- `[x]` `E5-S4-T1` `collect_function_matches` — già inclusa in `collect_registered_command_matches` che itera `shell->functions`; kind `OOSH_CMATCH_FN`, mostrato come `(fn)` nell'elenco multi-match
-- `[x]` `E5-S4-T2` `collect_alias_matches` — già inclusa; kind `OOSH_CMATCH_ALIAS`, mostrato come `(@)`
+- `[x]` `E5-S4-T1` `collect_function_matches` — già inclusa in `collect_registered_command_matches` che itera `shell->functions`; kind `ARKSH_CMATCH_FN`, mostrato come `(fn)` nell'elenco multi-match
+- `[x]` `E5-S4-T2` `collect_alias_matches` — già inclusa; kind `ARKSH_CMATCH_ALIAS`, mostrato come `(@)`
 - `[x]` `E5-S4-T3` `collect_env_var_matches` — nuova; itera `shell->vars`, prefisso `$`; attivata quando il token inizia con `$`
-- `[x]` `E5-S4-T4` `collect_binding_matches` — nuova; itera `shell->bindings`; attivata in contesto non-comando e non-stage; kind `OOSH_CMATCH_BINDING`, mostrato come `(let)`
+- `[x]` `E5-S4-T4` `collect_binding_matches` — nuova; itera `shell->bindings`; attivata in contesto non-comando e non-stage; kind `ARKSH_CMATCH_BINDING`, mostrato come `(let)`
 - `[x]` `E5-S4-T5` `collect_stage_matches` — nuova; array statico dei 16 stage built-in + iterazione `shell->pipeline_stages`; attivata da `is_pipeline_stage_position` (token preceduto da `|>`)
-- `[x]` `E5-S4-T6` `OoshCompletionKind` enum + campo `kinds[]` in `OoshCompletionMatches`; `print_completion_matches` mostra suffisso tipo quando ci sono più match: `(fn)`, `(@)`, `(let)`; file, dir, var, stage e comandi non hanno suffisso (contesto già chiaro)
+- `[x]` `E5-S4-T6` `ArkshCompletionKind` enum + campo `kinds[]` in `ArkshCompletionMatches`; `print_completion_matches` mostra suffisso tipo quando ci sono più match: `(fn)`, `(@)`, `(let)`; file, dir, var, stage e comandi non hanno suffisso (contesto già chiaro)
 
 ### E5-S5. Migliorie opzionali di UX
 
 Stato story: `[x]`
 
 Entrambe le funzionalità implementate nel core (in `line_editor.c`), attive solo quando
-`oosh_line_editor_is_interactive()` è vero. Nessun plugin necessario.
+`arksh_line_editor_is_interactive()` è vero. Nessun plugin necessario.
 
 - `[x]` `E5-S5-T1` **Syntax highlighting** — `highlight_line()`: state machine (S_NORMAL / S_COMMENT / S_SQ / S_DQ / S_VAR) con ANSI codes: keyword bold (`\033[1m`), stringhe verde (`\033[32m`), `$var` cyan (`\033[36m`), commenti grigio (`\033[90m`), operatori (`|>`, `->`, `|`, `&&`, `;`, `>>`) giallo (`\033[33m`). Lista keyword: `if then else elif fi while until do done for in case esac function endfunction return break continue true false`.
 - `[x]` `E5-S5-T2` **Autosuggestion** — `find_autosuggestion()`: cerca nella history (dal più recente) la prima entry che inizia con il buffer corrente; mostra il suffisso in grigio (`\033[90m`) dopo il cursore quando `cursor == length`; il cursore viene riposizionato correttamente contando anche i caratteri visibili del ghost text.
-- `[x]` `E5-S5-T3` **Decisione architetturale**: nel core — `redraw_line()` ora accetta `OoshShell *shell`; passa `NULL` nei contesti senza UX (search mode); entrambe le feature disabilitate automaticamente in modalità non-interattiva (pipe/script).
+- `[x]` `E5-S5-T3` **Decisione architetturale**: nel core — `redraw_line()` ora accetta `ArkshShell *shell`; passa `NULL` nei contesti senza UX (search mode); entrambe le feature disabilitate automaticamente in modalità non-interattiva (pipe/script).
 
 ### E5-S6. Tab completion di livello avanzato
 
@@ -367,8 +367,8 @@ filtrata per operatore di redirection, con double-TAB intelligente e fuzzy match
 Ogni task è indipendente; i task T1–T3 sono prerequisiti naturali per T4–T6.
 
 - `[ ]` `E5-S6-T1` `(tab-advance)` completion path-aware dopo redirection — dopo `>`, `>>`, `<`, `<&`, `>&` attivare `collect_file_matches` invece del match generico; dopo `2>` e `2>>` stesso comportamento; il contesto di redirection è già rilevabile dal token precedente nel buffer
-- `[ ]` `E5-S6-T2` `(tab-advance)` completion filtrata per tipo di argomento — dopo `cd ` proporre solo directory; dopo `source ` solo file `.oosh`/`.sh`; dopo `plugin load ` solo `.dylib`/`.so`/`.dll`; meccanismo: tabella statica `command → argument_filter_fn` in `line_editor.c`
-- `[ ]` `E5-S6-T3` `(tab-advance)` completion delle opzioni (`--flag`) — quando il token inizia con `-` in posizione argomento, cercare nel registry un descrittore di opzioni per il comando corrente; struttura `OoshCommandOptionSpec { char name[]; char description[]; }` aggiunta opzionalmente alla `OoshCommandDef`; i comandi built-in principali (`ls`, `cd`, `set`, `trap`, `read`, `printf`) espongono le proprie opzioni
+- `[ ]` `E5-S6-T2` `(tab-advance)` completion filtrata per tipo di argomento — dopo `cd ` proporre solo directory; dopo `source ` solo file `.arksh`/`.sh`; dopo `plugin load ` solo `.dylib`/`.so`/`.dll`; meccanismo: tabella statica `command → argument_filter_fn` in `line_editor.c`
+- `[ ]` `E5-S6-T3` `(tab-advance)` completion delle opzioni (`--flag`) — quando il token inizia con `-` in posizione argomento, cercare nel registry un descrittore di opzioni per il comando corrente; struttura `ArkshCommandOptionSpec { char name[]; char description[]; }` aggiunta opzionalmente alla `ArkshCommandDef`; i comandi built-in principali (`ls`, `cd`, `set`, `trap`, `read`, `printf`) espongono le proprie opzioni
 - `[ ]` `E5-S6-T4` `(tab-advance)` completion proprietà e metodi dopo `->` — quando il buffer contiene `expr ->` e `expr` è un binding il cui tipo è noto, proporre le proprietà/metodi registrati per quel tipo (da `shell->extensions` filtrando per `target_name`); fallback a lista generica se il tipo non è determinabile staticamente
 - `[ ]` `E5-S6-T5` `(tab-advance)` double-TAB per listare tutti i match — se si preme TAB su un prefisso vuoto (o se i match superano una soglia configurabile), mostrare la lista completa dei candidati invece di non fare nulla; comportamento coerente con bash/zsh: primo TAB completa il prefisso comune, secondo TAB lista tutti
 - `[ ]` `E5-S6-T6` `(tab-advance)` fuzzy / substring matching — se il matching esatto per prefisso non trova candidati, tentare un matching per sottostringa (`strstr`); opzionalmente un matching abbreviato (`gi` completa `git init`); configurabile via opzione shell `set completion_mode fuzzy|prefix`
@@ -423,8 +423,8 @@ separando la semantica di intero, floating-point a precisione singola/doppia e n
 immaginario. L'attuale tipo `number` copre solo double implicito; questa story lo rende
 esplicito e affiancabile con precisioni diverse.
 
-- `[ ]` `E6-S5-T1` aggiungere i value kind `OOSH_VALUE_INTEGER`, `OOSH_VALUE_FLOAT`, `OOSH_VALUE_DOUBLE`, `OOSH_VALUE_IMAGINARY` all'enum `OoshValueKind` in `object.h`; aggiornare `oosh_value_render`, `oosh_value_free` e `value_is_truthy` per i nuovi kind
-- `[ ]` `E6-S5-T2` implementare i resolver `Integer(x)`, `Float(x)`, `Double(x)`, `Imaginary(x)` in `executor.c` (o `object.c`): parsano l'argomento, eseguono la conversione numerica e restituiscono un `OoshValue` del kind corretto
+- `[ ]` `E6-S5-T1` aggiungere i value kind `ARKSH_VALUE_INTEGER`, `ARKSH_VALUE_FLOAT`, `ARKSH_VALUE_DOUBLE`, `ARKSH_VALUE_IMAGINARY` all'enum `ArkshValueKind` in `object.h`; aggiornare `arksh_value_render`, `arksh_value_free` e `value_is_truthy` per i nuovi kind
+- `[ ]` `E6-S5-T2` implementare i resolver `Integer(x)`, `Float(x)`, `Double(x)`, `Imaginary(x)` in `executor.c` (o `object.c`): parsano l'argomento, eseguono la conversione numerica e restituiscono un `ArkshValue` del kind corretto
 - `[ ]` `E6-S5-T3` esporre su ogni tipo le proprietà `value`, `type`, `bits` e i metodi `-> to_integer`, `-> to_float`, `-> to_double` per conversioni incrociate
 - `[ ]` `E6-S5-T4` aritmetica mista: definire le regole di promozione quando operandi di kind diversi entrano in un `BINARY_OP` (es. `Integer + Float` → `Float`; qualsiasi operando `Imaginary` → `Imaginary`)
 - `[ ]` `E6-S5-T5` test: `Integer("42") -> value` → `42`, `Float("3.14") -> type` → `float`, `Imaginary("2") -> value` → `2i`, conversioni incrociate, promozione in espressioni miste
@@ -440,9 +440,9 @@ se si vuole un tipo complex di prima classe, si rimanda a E6-S2 (plugin typed).
 
 | Espressione | Risultato | Kind |
 |---|---|---|
-| `Imaginary(3)` | `3i` | `OOSH_VALUE_IMAGINARY` |
-| `Imaginary(-1)` | `-1i` | `OOSH_VALUE_IMAGINARY` |
-| `Imaginary(0)` | `0i` | `OOSH_VALUE_IMAGINARY` |
+| `Imaginary(3)` | `3i` | `ARKSH_VALUE_IMAGINARY` |
+| `Imaginary(-1)` | `-1i` | `ARKSH_VALUE_IMAGINARY` |
+| `Imaginary(0)` | `0i` | `ARKSH_VALUE_IMAGINARY` |
 
 **Addizione e sottrazione**
 
@@ -495,17 +495,17 @@ Esempi: `Integer(2) + Float(1.5)` → `Float(3.5)`; `Float(1) * Double(2)` → `
 
 Stato story: `[ ]`
 
-Introduce `Dict()` come tipo di primo livello nell'object model di oosh: un array associativo
-con chiavi stringa e valori di qualsiasi `OoshValue`. Supporta getter, setter, cancellazione di
+Introduce `Dict()` come tipo di primo livello nell'object model di arksh: un array associativo
+con chiavi stringa e valori di qualsiasi `ArkshValue`. Supporta getter, setter, cancellazione di
 chiavi e round-trip JSON (import da stringa JSON, export verso stringa JSON).
 
 Il tipo è immutabile per default — ogni operazione di scrittura restituisce una nuova istanza —
-coerentemente con la filosofia degli altri tipi oosh. Non esiste aliasing né condivisione di
+coerentemente con la filosofia degli altri tipi arksh. Non esiste aliasing né condivisione di
 stato interno tra istanze.
 
 **Interfaccia prevista**
 
-```oosh
+```arksh
 let d = Dict()                        # dizionario vuoto
 let d2 = d -> set("nome", "alice")    # nuovo dict con "nome"="alice"
 let v = d2 -> get("nome")             # "alice"
@@ -520,11 +520,11 @@ let d4 = Dict() -> from_json(j)       # importa da stringa JSON
 
 **Task**
 
-- `[ ]` `E6-S6-T1` **Struttura interna** — aggiungere `OOSH_VALUE_DICT` a `OoshValueKind` in `object.h`; definire `OoshDict` come array di `{char key[OOSH_MAX_TOKEN]; OoshValue value;}` con un campo `count` e limite `OOSH_MAX_DICT_ENTRIES` (es. 128); aggiornare `oosh_value_free` (ricorsivo sulle entry), `oosh_value_copy` (deep copy), `oosh_value_render` (formato `{k1: v1, k2: v2}`) e `value_is_truthy` (`count > 0`)
+- `[ ]` `E6-S6-T1` **Struttura interna** — aggiungere `ARKSH_VALUE_DICT` a `ArkshValueKind` in `object.h`; definire `ArkshDict` come array di `{char key[ARKSH_MAX_TOKEN]; ArkshValue value;}` con un campo `count` e limite `ARKSH_MAX_DICT_ENTRIES` (es. 128); aggiornare `arksh_value_free` (ricorsivo sulle entry), `arksh_value_copy` (deep copy), `arksh_value_render` (formato `{k1: v1, k2: v2}`) e `value_is_truthy` (`count > 0`)
 - `[ ]` `E6-S6-T2` **Resolver `Dict()`** — registrare il resolver in `executor.c`; senza argomenti restituisce un dict vuoto; con argomenti a coppie `"chiave", valore` (argc pari) costruisce il dict inline; errore se argc dispari o una chiave non è stringa
 - `[ ]` `E6-S6-T3` **Metodi di scrittura** — implementare come pipeline-method o class-method in `executor.c`/`shell.c`: `set(key, value)` → nuovo dict con entry aggiunta o sovrascritta; `delete(key)` → nuovo dict senza quella chiave (no-op se assente); i metodi non mutano il receiver
-- `[ ]` `E6-S6-T4` **Metodi e proprietà di lettura** — `get(key)` → valore o stringa vuota se assente; `has(key)` → `true`/`false`; proprietà `keys` → `OoshValue` lista di stringhe; `values` → `OoshValue` lista dei valori; `count` → numero intero; `type` → `"dict"`
-- `[ ]` `E6-S6-T5` **Bridge JSON** — `-> to_json` serializza il dict come oggetto JSON (usando l'infrastruttura esistente in `object.c`/`oosh_value_to_json`); `-> from_json(str)` parsa una stringa JSON-object e costruisce un `OOSH_VALUE_DICT` (usa il parser JSON esistente); errore chiaro se la stringa non è un oggetto JSON (`"from_json: expected JSON object"`)
+- `[ ]` `E6-S6-T4` **Metodi e proprietà di lettura** — `get(key)` → valore o stringa vuota se assente; `has(key)` → `true`/`false`; proprietà `keys` → `ArkshValue` lista di stringhe; `values` → `ArkshValue` lista dei valori; `count` → numero intero; `type` → `"dict"`
+- `[ ]` `E6-S6-T5` **Bridge JSON** — `-> to_json` serializza il dict come oggetto JSON (usando l'infrastruttura esistente in `object.c`/`arksh_value_to_json`); `-> from_json(str)` parsa una stringa JSON-object e costruisce un `ARKSH_VALUE_DICT` (usa il parser JSON esistente); errore chiaro se la stringa non è un oggetto JSON (`"from_json: expected JSON object"`)
 - `[ ]` `E6-S6-T6` **Test** — `Dict() -> count` → `0`; `Dict() -> set("x", 1) -> get("x")` → `1`; `Dict() -> has("y")` → `false`; `-> keys` e `-> values` su dict con 2 entry; `-> delete` su chiave esistente e inesistente; round-trip `-> to_json | Dict() -> from_json -> get("k")` restituisce il valore originale
 
 ---
@@ -576,7 +576,7 @@ Stato story: `[ ]`
 
 Stato story: `[ ]`
 
-- `[ ]` `E8-S2-T1` creare golden test per script `.oosh`
+- `[ ]` `E8-S2-T1` creare golden test per script `.arksh`
 - `[ ]` `E8-S2-T2` aggiungere PTY test per REPL e line editor
 - `[ ]` `E8-S2-T3` aggiungere job control smoke test ripetibili
 
@@ -712,7 +712,7 @@ Prerequisito naturale per script di automazione e integrazione con API esterne.
 
 1. `E7-S1-T1` (parser JSON completo — gestione escape, unicode, numeri float)
 2. `E7-S1-T2` (serializer con pretty-print opzionale)
-3. `E7-S2-T1` (strutture annidate oltre `OOSH_MAX_COLLECTION_ITEMS`)
+3. `E7-S2-T1` (strutture annidate oltre `ARKSH_MAX_COLLECTION_ITEMS`)
 4. `E7-S3-T1` (stage `jq`-like o `select` per query su valori JSON)
 
 ## Regola finale

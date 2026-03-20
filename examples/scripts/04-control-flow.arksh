@@ -1,4 +1,4 @@
-# oosh example 04
+# arksh example 04
 # Controllo di flusso shell-style con valori object-aware e blocchi multilinea.
 
 if . -> exists
