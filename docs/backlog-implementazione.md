@@ -592,7 +592,7 @@ Stato story: `[ ]`
 
 ## E8. Qualita, test e CI
 
-Stato epoca: `[ ]`
+Stato epoca: `[x]`
 
 ### E8-S1. Test unitari mirati
 
@@ -734,21 +734,15 @@ Stato story: `[ ]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`
-**In corso:** E6 (S1–S4 `[x]`, S5–S7 aperte), E8 (S1 `[x]`, S3 `[x]`, S4 `[x]`, S2 aperta)
-**Aperte:** E6 (S5–S7), E7 (JSON), E8-S2 (golden/PTY), E9 (release), E10 (HTTP plugin)
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E8 `[x]`
+**In corso:** E6 (S1–S4 `[x]`, S5–S7 aperte)
+**Aperte:** E6 (S5–S7), E7 (JSON), E9 (release), E10 (HTTP plugin)
 
 ---
 
-### Percorso A — qualità e CI (E8, raccomandato — sblocca E9)
+### Percorso A — qualità e CI (E8)
 
-~~Quasi completato.~~ Rimane solo E8-S2 (golden test e PTY test).
-
-~~`E8-S1`~~ `[x]`  ~~`E8-S3`~~ `[x]`  ~~`E8-S4`~~ `[x]`
-
-1. `E8-S2-T1` (golden test per script `.arksh`)
-2. `E8-S2-T2` (PTY test per REPL e line editor)
-3. `E8-S2-T3` (job control smoke test ripetibili)
+~~Completato.~~ ~~`E8-S1`~~ `[x]`  ~~`E8-S2`~~ `[x]`  ~~`E8-S3`~~ `[x]`  ~~`E8-S4`~~ `[x]`
 
 ### Percorso B — compatibilità POSIX (E1-S6, E1-S7)
 
