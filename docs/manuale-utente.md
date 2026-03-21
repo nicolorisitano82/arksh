@@ -74,7 +74,12 @@ Versione di riferimento: attuale (marzo 2026)
     - 15.3 [Autosuggestion](#153-autosuggestion)
 16. [Tab completion](#16-tab-completion)
     - 16.1 [Completion per contesto](#161-completion-per-contesto)
-    - 16.2 [Indicatori di tipo](#162-indicatori-di-tipo)
+    - 16.2 [Completion per redirection](#162-completion-per-redirection)
+    - 16.3 [Completion filtrata per comando](#163-completion-filtrata-per-comando)
+    - 16.4 [Completion dei flag](#164-completion-dei-flag)
+    - 16.5 [Doppio Tab — lista con prefisso esteso](#165-doppio-tab--lista-con-prefisso-esteso)
+    - 16.6 [Matching fuzzy / sottostringa](#166-matching-fuzzy--sottostringa)
+    - 16.7 [Indicatori di tipo](#167-indicatori-di-tipo)
 17. [Prompt](#17-prompt)
     - 17.1 [Configurazione](#171-configurazione)
     - 17.2 [Segmenti disponibili](#172-segmenti-disponibili)
@@ -118,22 +123,43 @@ arksh non e uno strato di compatibilita su bash o zsh. E una shell autonoma con 
 Il sorgente di arksh usa un sistema di build basato su CMake. Per compilare:
 
 ```bash
-mkdir build
-cd build
-cmake ..
-make
+cmake -S . -B build
+cmake --build build --parallel
 ```
 
-In alternativa, se si vuole un build con AddressSanitizer (utile per sviluppo e debug):
+Per un build Release (ottimizzato, usato in produzione e in CI):
 
 ```bash
-mkdir build-asan
-cd build-asan
-cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON ..
-make
+cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release
+cmake --build build-rel --config Release --parallel
 ```
 
-L'eseguibile risultante si trova in `build/arksh` (o `build-asan/arksh`).
+Per un build con AddressSanitizer (utile per sviluppo e debug):
+
+```bash
+cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON
+cmake --build build-asan
+```
+
+L'eseguibile risultante si trova in `build/arksh` (o `build-rel/arksh`, `build-asan/arksh`).
+
+### Piattaforme supportate
+
+| Piattaforma | Compilatore | Build type | CI |
+|-------------|-------------|------------|----|
+| Linux (Ubuntu 22.04+) | gcc ≥ 11 | Debug + Release | Ubuntu Latest |
+| macOS (13 Ventura+) | clang ≥ 15 (Xcode) | Debug + Release | macOS Latest |
+| Windows (10/11) | MSVC ≥ 19.38 (VS 2022) | Release | Windows Latest |
+
+Su Windows l'eseguibile si trova in `build-rel\Release\arksh.exe`.
+
+### Eseguire i test
+
+```bash
+ctest --test-dir build --output-on-failure
+# oppure, per build Release su Windows/macOS/Linux:
+ctest --test-dir build-rel --build-config Release --output-on-failure
+```
 
 ### Prima esecuzione
 
@@ -2622,7 +2648,89 @@ describe()   (method)
 read_text(   (method)
 ```
 
-### 16.2 Indicatori di tipo
+### 16.2 Completion per redirection
+
+Quando il cursore si trova immediatamente dopo un operatore di redirection (`>`, `<`, `>>`, `2>`), il completion propone solo file e directory, escludendo comandi ed eseguibili. Questo e il comportamento atteso in tutti i target di redirection:
+
+```
+arksh> comando > <Tab>
+file.txt
+log/
+output.log
+```
+
+### 16.3 Completion filtrata per comando
+
+Alcuni comandi ricevono argomenti di tipo specifico. arksh riconosce i seguenti filtri automatici:
+
+| Comando | Tipo di completion |
+|---------|-------------------|
+| `cd` | Solo directory |
+| `source`, `.` | Solo file `.arksh` e `.osh` |
+| `plugin load` | Solo file `.so` e `.dylib` |
+| `prompt load` | Solo file |
+
+```
+arksh> cd <Tab>
+Desktop/
+Documents/
+Downloads/
+```
+
+```
+arksh> source <Tab>
+init.arksh
+utils.osh
+```
+
+### 16.4 Completion dei flag
+
+Dopo `-` nella posizione degli argomenti di un comando noto, arksh propone i flag supportati da quel comando:
+
+```
+arksh> ls -<Tab>
+-l    -a    -h    -r    -t    -S    -1    -R    -d
+```
+
+```
+arksh> set -<Tab>
+-e    -x    -u    -n    -f
+```
+
+I flag sono disponibili per i comandi piu comuni (`ls`, `set`, `export`, `find`, `grep`, `cat`, `cp`, `mv`, `rm`, `mkdir`, `chmod`, `chown`, `sort`, `uniq`, `head`, `tail`, `wc`, `diff`, `tar`, `curl`, `git`).
+
+### 16.5 Doppio Tab — lista con prefisso esteso
+
+Quando sono disponibili piu corrispondenze, la prima pressione di `Tab` completa fino al prefisso comune. La seconda pressione consecutiva di `Tab` mostra l'elenco completo delle corrispondenze:
+
+```
+arksh> ls Do<Tab>
+# Prima pressione: estende fino al prefisso comune
+arksh> ls Doc
+
+arksh> ls Doc<Tab><Tab>
+# Seconda pressione: mostra l'elenco
+Documents/
+Documenti/
+```
+
+Se la prima pressione non porta a un completamento univoco e il prefisso comune non avanza, il doppio Tab mostra immediatamente la lista.
+
+### 16.6 Matching fuzzy / sottostringa
+
+Se nessuna corrispondenza esatta o per prefisso viene trovata, arksh attiva automaticamente il matching per sottostringa: vengono proposti tutti i candidati che *contengono* il testo digitato, non solo quelli che iniziano con esso.
+
+```
+arksh> ls log<Tab>
+# nessun file inizia con "log", ma alcuni lo contengono:
+syslog
+auth.log
+kern.log
+```
+
+Il matching fuzzy si applica sia ai file che ai comandi.
+
+### 16.7 Indicatori di tipo
 
 Il completion mostra indicatori di tipo accanto a ogni voce per aiutare l'utente a capire la natura del suggerimento:
 

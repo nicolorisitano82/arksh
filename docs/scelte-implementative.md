@@ -111,10 +111,37 @@ Questa separazione resta il punto di aggancio per introdurre in seguito:
 Gestisce la UX interattiva della REPL:
 
 - editing della riga
-- frecce sinistra/destra
-- history locale in memoria
-- completion base con `Tab`
+- frecce sinistra/destra, Ctrl-A/E
+- history locale in memoria e su file
+- syntax highlighting in tempo reale (token colorati per categoria)
+- autosuggestion dalla history (suggerimento grigio, accettabile con Ctrl-E)
+- tab completion contestuale avanzata (vedi sotto)
 - integrazione con il prompt gia renderizzato
+
+#### Tab completion — architettura
+
+Il completion e orchestrato da `handle_completion()`, che:
+
+1. Determina la posizione del cursore nella riga (comando, argomento, redirection, stage `|>`, membro `->`, variabile)
+2. Raccoglie i candidati chiamando `collect_completion_matches()` (o le varianti specializzate)
+3. Se un solo candidato, lo inserisce direttamente
+4. Con doppio Tab consecutivo, stampa la lista completa e avanza fino al prefisso comune (`shared_prefix_length()`)
+
+Il doppio Tab e implementato con un flag `prev_tab` (ultima pressione era `Tab`?) passato a `handle_completion()`.
+
+#### Funzionalita di completion implementate
+
+| Funzione C | Comportamento |
+|------------|---------------|
+| `is_redirection_position()` | Rileva se il cursore segue `>`, `<`, `>>`, `2>` |
+| `get_argument_filter()` | Restituisce un filtro `ArkshArgFilter` in base al comando corrente (`DIR`, `SCRIPT`, `PLUGIN`, `NONE`) |
+| `collect_file_matches_filtered()` | Lista file/directory rispettando il filtro del comando |
+| `collect_flag_matches()` | Propone flag da `s_flag_table[]` per il comando corrente |
+| `is_fuzzy_mode()` | Attiva il matching per sottostringa se la ricerca per prefisso non trova nulla |
+| `collect_file_matches_fuzzy()` | Come `collect_file_matches()` ma con match per sottostringa |
+| `collect_registered_command_matches_fuzzy()` | Come la variante per prefisso ma con sottostringa |
+
+La tabella `s_flag_table[]` e una struttura statica che mappa nomi di comandi noti a elenchi di flag. Aggiungere un comando alla tabella e sufficiente per attivarne il completion dei flag.
 
 ### `src/expand.c`
 
@@ -333,6 +360,46 @@ Regola di dispatch dell'MVP:
 
 Questo permette di mantenere il core piccolo ma estendibile senza cambiare la grammatica base.
 
+## Strategia di test
+
+### Golden test (`.arksh`)
+
+I golden test sono script `.arksh` nella cartella `tests/fixtures/golden/`. CMake li registra come `ctest` entry usando `PASS_REGULAR_EXPRESSION` con un pattern caratteristico dell'output atteso (l'ultima o la piu distintiva riga prodotta dallo script).
+
+Fixture disponibili:
+
+| File | Pattern atteso | Verifica |
+|------|----------------|----------|
+| `pipeline-chain.arksh` | `13` | sort + take + count |
+| `reduce-and-block.arksh` | `\[10,20,30\]` | to_json su lista |
+| `string-transform.arksh` | `alpha beta gamma` | split + count e join |
+| `if-sequence.arksh` | `step_three` | if/else/fi in sequenza |
+| `mixed-shell-and-objects.arksh` | `done` | mix shell e object model |
+
+Motivazione: ogni test usa un singolo pattern per evitare la semantica OR di `PASS_REGULAR_EXPRESSION` con punti e virgola. I pattern sono scelti tra le righe finali per ridurre la dipendenza dall'ordine di esecuzione.
+
+### PTY test (REPL interattiva)
+
+`tests/pty_repl.c` avvia arksh in uno pseudo-terminale con `forkpty()` e verifica il comportamento interattivo. Attivo solo su sistemi POSIX (`if(NOT WIN32)` in CMakeLists).
+
+I 5 test coprono:
+1. Prompt presente all'avvio
+2. Esecuzione di `echo` in sessione interattiva
+3. Continuation prompt su input incompleto
+4. Tab completion su prefisso `histor`
+5. Ctrl-D su riga vuota termina la shell con exit code 0
+
+`forkpty()` richiede `<util.h>` su macOS (senza librerie aggiuntive) e `<pty.h>` + `-lutil` su Linux. Questa differenza e gestita con `#ifdef __APPLE__` nel sorgente e `if(APPLE)` in CMakeLists.
+
+### Job control smoke test
+
+4 test `ctest` che verificano il job control in modalita batch (`-c ...`). Ogni test usa `PASS_REGULAR_EXPRESSION` per verificare un elemento specifico dell'output di `jobs` o `wait`:
+
+- `arksh_jobctrl_two_jobs`: due job in background, `jobs` mostra 2 entry
+- `arksh_jobctrl_wait_all`: `wait` senza argomenti attende tutti i job
+- `arksh_jobctrl_done_then_cmd`: messaggio `done` dopo il completamento + comando successivo
+- `arksh_jobctrl_current_marker2`: il marcatore `+` identifica il job corrente
+
 ## Strategia cross-platform
 
 ### Linux e macOS
@@ -359,6 +426,16 @@ Nota sullo stato attuale:
 - Linux, macOS e Windows condividono lo stesso contract per process execution, redirection e shell pipeline multi-stage
 - il globbing degli argomenti comando passa dal platform layer, cosi il comportamento resta definito anche sui build Windows
 - i built-in dentro pipeline shell multi-stage restano invece un limite del livello executor, non del layer OS-specifico
+- i PTY test (`tests/pty_repl.c`) sono esclusi dalla build Windows con `if(NOT WIN32)` in CMakeLists, perche `forkpty()` non e disponibile su quel sistema
+
+### CI multiplatform
+
+Il workflow `.github/workflows/ci.yml` esegue:
+
+1. **Job ASan + UBSan** (Linux, macOS): build Debug con sanitizers abilitati, esecuzione di tutti i test
+2. **Job Release** (Linux, macOS, Windows): matrix su `[ubuntu-latest, macos-latest, windows-latest]`, build Release, esecuzione di tutti i test con `--build-config Release`
+
+Il job Release usa `fail-fast: false` per raccogliere risultati su tutte le piattaforme indipendentemente dai fallimenti. Su Windows, CMake rileva MSVC automaticamente; il flag `--config Release` e necessario perche MSVC usa multi-config generator.
 
 ### Regola importante
 
@@ -430,13 +507,22 @@ Definito come direzione futura, ma non ancora implementato:
 
 ## Roadmap suggerita per una implementazione piena
 
-1. Estendere il linguaggio shell verso funzioni, grouping, subshell, heredoc completi e special built-in restanti.
-2. Espandere i namespace object-aware oltre a `env()`, `proc()` e `shell()`.
-3. Implementare tab completion con introspezione dei metodi.
-4. Separare renderer testuale e renderer strutturato.
-5. Espandere ulteriormente l'ABI plugin oltre a comandi, estensioni, resolver e stage.
-6. Aggiungere test cross-platform.
-7. Introdurre pipeline miste tra processi esterni e valori object-aware.
+Elementi gia realizzati (non ripetere):
+
+- linguaggio shell: funzioni, classi, estensioni, heredoc, case/esac, break/continue con argomento numerico, until
+- object model: `env()`, `proc()`, `shell()`, `path()`, pipeline oggetti completa con tutti gli stage (where, sort, take, first, count, lines, trim, split, join, reduce, each, render, from_json, to_json, grep, map, filter)
+- tab completion: contestuale, redirection-aware, filtrata per comando, flag, doppio Tab, fuzzy/sottostringa
+- testing: golden test, PTY test REPL, job control smoke test, unit test lexer/parser/executor/object model, sanitizers, fuzzing
+- CI: Linux + macOS + Windows in GitHub Actions
+
+Elementi aperti per una versione piu avanzata:
+
+1. Tipi numerici espliciti (`Integer`, `Float`, `Double`) con regole di promozione (E6-S5)
+2. Tipo `Dict` nativo con bridge JSON completo (E6-S6)
+3. Stage di encoding (`base64_encode`, `base64_decode`) (E6-S7)
+4. JSON parser robusto: posizione errori, unicode, pretty-print (E7)
+5. Plugin HTTP/HTTPS con libcurl: resolver `http()`, request builder, response typed-map (E10)
+6. Packaging: installazione standard, formula Homebrew, tarball release (E9)
 
 ## Contratto da preservare se un'altra AI continua il lavoro
 
