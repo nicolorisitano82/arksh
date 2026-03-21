@@ -1004,12 +1004,17 @@ if(BUILD_TESTING)
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/mixed-shell-and-objects.arksh"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_golden_numeric_types
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/numeric-types.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   set_tests_properties(
     arksh_golden_pipeline_chain
     arksh_golden_reduce_block
     arksh_golden_string_transform
     arksh_golden_if_sequence
     arksh_golden_mixed_shell
+    arksh_golden_numeric_types
     PROPERTIES TIMEOUT 15
   )
   # Each test checks a distinctive output string that only appears when the script ran fully.
@@ -1018,6 +1023,7 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_golden_string_transform PROPERTIES PASS_REGULAR_EXPRESSION "alpha beta gamma")
   set_tests_properties(arksh_golden_if_sequence      PROPERTIES PASS_REGULAR_EXPRESSION "step_three")
   set_tests_properties(arksh_golden_mixed_shell      PROPERTIES PASS_REGULAR_EXPRESSION "done")
+  set_tests_properties(arksh_golden_numeric_types    PROPERTIES PASS_REGULAR_EXPRESSION "3i")
 
   # ── E8-S2-T2: PTY REPL tests — interactive features via pseudo-terminal ──
 

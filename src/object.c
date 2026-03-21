@@ -49,6 +49,34 @@ static void format_number(double number, char *out, size_t out_size) {
   snprintf(out, out_size, "%.15g", number);
 }
 
+/* E6-S5: render a numeric value according to its explicit kind */
+static void format_number_by_kind(ArkshValueKind kind, double number, char *out, size_t out_size) {
+  if (out == NULL || out_size == 0) {
+    return;
+  }
+
+  switch (kind) {
+    case ARKSH_VALUE_INTEGER:
+      snprintf(out, out_size, "%lld", (long long) number);
+      break;
+    case ARKSH_VALUE_FLOAT:
+      snprintf(out, out_size, "%.7g", (double)(float) number);
+      break;
+    case ARKSH_VALUE_DOUBLE:
+      snprintf(out, out_size, "%.15g", number);
+      break;
+    case ARKSH_VALUE_IMAGINARY: {
+      char buf[64];
+      snprintf(buf, sizeof(buf), "%.15g", number);
+      snprintf(out, out_size, "%si", buf);
+      break;
+    }
+    default:
+      format_number(number, out, out_size);
+      break;
+  }
+}
+
 static int append_char(char *out, size_t out_size, size_t *length, char c) {
   if (out == NULL || length == NULL || out_size == 0) {
     return 1;
@@ -315,6 +343,17 @@ static int value_item_to_json_text(const ArkshValueItem *item, char *out, size_t
         return 1;
       }
       return arksh_value_to_json(item->nested, out, out_size);
+    /* E6-S5: explicit numeric sub-kinds → JSON number (imaginary as string) */
+    case ARKSH_VALUE_INTEGER:
+    case ARKSH_VALUE_FLOAT:
+    case ARKSH_VALUE_DOUBLE:
+      format_number_by_kind(item->kind, item->number, out, out_size);
+      return 0;
+    case ARKSH_VALUE_IMAGINARY: {
+      char imag_buf[64];
+      format_number_by_kind(ARKSH_VALUE_IMAGINARY, item->number, imag_buf, sizeof(imag_buf));
+      return append_json_escaped_string(out, out_size, imag_buf);
+    }
     default:
       return 1;
   }
@@ -394,6 +433,17 @@ static int value_to_json_text(const ArkshValue *value, char *out, size_t out_siz
         }
       }
       return append_char(out, out_size, &length, '}');
+    /* E6-S5: explicit numeric sub-kinds */
+    case ARKSH_VALUE_INTEGER:
+    case ARKSH_VALUE_FLOAT:
+    case ARKSH_VALUE_DOUBLE:
+      format_number_by_kind(value->kind, value->number, out, out_size);
+      return 0;
+    case ARKSH_VALUE_IMAGINARY: {
+      char imag_buf[64];
+      format_number_by_kind(ARKSH_VALUE_IMAGINARY, value->number, imag_buf, sizeof(imag_buf));
+      return append_json_escaped_string(out, out_size, imag_buf);
+    }
     default:
       return 1;
   }
@@ -724,6 +774,13 @@ static int render_list_item_brief(const ArkshValueItem *item, char *out, size_t 
       }
       snprintf(out, out_size, "<unsupported nested item>");
       return 1;
+    /* E6-S5: explicit numeric sub-kinds */
+    case ARKSH_VALUE_INTEGER:
+    case ARKSH_VALUE_FLOAT:
+    case ARKSH_VALUE_DOUBLE:
+    case ARKSH_VALUE_IMAGINARY:
+      format_number_by_kind(item->kind, item->number, out, out_size);
+      return 0;
     default:
       snprintf(out, out_size, "<unsupported list item>");
       return 1;
@@ -768,6 +825,14 @@ const char *arksh_value_kind_name(ArkshValueKind kind) {
       return "class";
     case ARKSH_VALUE_INSTANCE:
       return "instance";
+    case ARKSH_VALUE_INTEGER:
+      return "integer";
+    case ARKSH_VALUE_FLOAT:
+      return "float";
+    case ARKSH_VALUE_DOUBLE:
+      return "double";
+    case ARKSH_VALUE_IMAGINARY:
+      return "imaginary";
     case ARKSH_VALUE_EMPTY:
     default:
       return "empty";
@@ -809,6 +874,35 @@ void arksh_value_set_number(ArkshValue *value, double number) {
 
   arksh_value_init(value);
   value->kind = ARKSH_VALUE_NUMBER;
+  value->number = number;
+}
+
+/* E6-S5: explicit numeric sub-kind setters */
+void arksh_value_set_integer(ArkshValue *value, double number) {
+  if (value == NULL) { return; }
+  arksh_value_init(value);
+  value->kind = ARKSH_VALUE_INTEGER;
+  value->number = (double)(long long) number;
+}
+
+void arksh_value_set_float(ArkshValue *value, double number) {
+  if (value == NULL) { return; }
+  arksh_value_init(value);
+  value->kind = ARKSH_VALUE_FLOAT;
+  value->number = (double)(float) number;
+}
+
+void arksh_value_set_double(ArkshValue *value, double number) {
+  if (value == NULL) { return; }
+  arksh_value_init(value);
+  value->kind = ARKSH_VALUE_DOUBLE;
+  value->number = number;
+}
+
+void arksh_value_set_imaginary(ArkshValue *value, double number) {
+  if (value == NULL) { return; }
+  arksh_value_init(value);
+  value->kind = ARKSH_VALUE_IMAGINARY;
   value->number = number;
 }
 
@@ -1048,6 +1142,13 @@ int arksh_value_item_render(const ArkshValueItem *item, char *out, size_t out_si
       }
       snprintf(out, out_size, "unsupported value item");
       return 1;
+    /* E6-S5: explicit numeric sub-kinds */
+    case ARKSH_VALUE_INTEGER:
+    case ARKSH_VALUE_FLOAT:
+    case ARKSH_VALUE_DOUBLE:
+    case ARKSH_VALUE_IMAGINARY:
+      format_number_by_kind(item->kind, item->number, out, out_size);
+      return 0;
     default:
       snprintf(out, out_size, "unsupported value item");
       return 1;
@@ -1114,6 +1215,13 @@ int arksh_value_render(const ArkshValue *value, char *out, size_t out_size) {
         snprintf(line, sizeof(line), "%s=%s", value->map.entries[i].key, rendered);
         append_line(out, out_size, line);
       }
+      return 0;
+    /* E6-S5: explicit numeric sub-kinds */
+    case ARKSH_VALUE_INTEGER:
+    case ARKSH_VALUE_FLOAT:
+    case ARKSH_VALUE_DOUBLE:
+    case ARKSH_VALUE_IMAGINARY:
+      format_number_by_kind(value->kind, value->number, out, out_size);
       return 0;
     case ARKSH_VALUE_EMPTY:
     default:
@@ -1217,7 +1325,88 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
         arksh_value_set_number(out_value, value->number);
         return 0;
       }
+      /* E6-S5: conversion from plain number */
+      if (strcmp(property, "to_integer") == 0) {
+        arksh_value_set_integer(out_value, value->number);
+        return 0;
+      }
+      if (strcmp(property, "to_float") == 0) {
+        arksh_value_set_float(out_value, value->number);
+        return 0;
+      }
+      if (strcmp(property, "to_double") == 0) {
+        arksh_value_set_double(out_value, value->number);
+        return 0;
+      }
       break;
+    /* E6-S5: Integer, Float, Double */
+    case ARKSH_VALUE_INTEGER:
+    case ARKSH_VALUE_FLOAT:
+    case ARKSH_VALUE_DOUBLE: {
+      if (strcmp(property, "bits") == 0) {
+        int bits = (value->kind == ARKSH_VALUE_INTEGER) ? 64
+                 : (value->kind == ARKSH_VALUE_FLOAT)   ? 32
+                 :                                        64;
+        arksh_value_set_number(out_value, (double) bits);
+        return 0;
+      }
+      if (strcmp(property, "to_integer") == 0) {
+        arksh_value_set_integer(out_value, value->number);
+        return 0;
+      }
+      if (strcmp(property, "to_float") == 0) {
+        arksh_value_set_float(out_value, value->number);
+        return 0;
+      }
+      if (strcmp(property, "to_double") == 0) {
+        arksh_value_set_double(out_value, value->number);
+        return 0;
+      }
+      /* numeric alias */
+      if (strcmp(property, "number") == 0) {
+        arksh_value_set_number(out_value, value->number);
+        return 0;
+      }
+      break;
+    }
+    /* E6-S5: Imaginary */
+    case ARKSH_VALUE_IMAGINARY: {
+      if (strcmp(property, "real") == 0) {
+        arksh_value_set_double(out_value, 0.0);
+        return 0;
+      }
+      if (strcmp(property, "imag") == 0) {
+        arksh_value_set_double(out_value, value->number);
+        return 0;
+      }
+      if (strcmp(property, "conjugate") == 0) {
+        arksh_value_set_imaginary(out_value, -value->number);
+        return 0;
+      }
+      if (strcmp(property, "magnitude") == 0) {
+        double mag = value->number < 0.0 ? -value->number : value->number;
+        arksh_value_set_double(out_value, mag);
+        return 0;
+      }
+      if (strcmp(property, "bits") == 0) {
+        arksh_value_set_number(out_value, 64.0);
+        return 0;
+      }
+      if (strcmp(property, "to_integer") == 0) {
+        /* imaginary part discarded, return 0 (real part) */
+        arksh_value_set_integer(out_value, 0.0);
+        return 0;
+      }
+      if (strcmp(property, "to_float") == 0) {
+        arksh_value_set_float(out_value, 0.0);
+        return 0;
+      }
+      if (strcmp(property, "to_double") == 0) {
+        arksh_value_set_double(out_value, 0.0);
+        return 0;
+      }
+      break;
+    }
     case ARKSH_VALUE_BOOLEAN:
       if (strcmp(property, "bool") == 0) {
         arksh_value_set_boolean(out_value, value->boolean);

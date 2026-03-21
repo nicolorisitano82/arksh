@@ -433,18 +433,18 @@ Stato story: `[x]`
 
 ### E6-S5. Tipi numerici espliciti: Integer, Float, Double, Imaginary
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
 Aggiunge costruttori di tipo numerico esplicito come resolver o funzioni di conversione,
 separando la semantica di intero, floating-point a precisione singola/doppia e numero
 immaginario. L'attuale tipo `number` copre solo double implicito; questa story lo rende
 esplicito e affiancabile con precisioni diverse.
 
-- `[ ]` `E6-S5-T1` aggiungere i value kind `ARKSH_VALUE_INTEGER`, `ARKSH_VALUE_FLOAT`, `ARKSH_VALUE_DOUBLE`, `ARKSH_VALUE_IMAGINARY` all'enum `ArkshValueKind` in `object.h`; aggiornare `arksh_value_render`, `arksh_value_free` e `value_is_truthy` per i nuovi kind
-- `[ ]` `E6-S5-T2` implementare i resolver `Integer(x)`, `Float(x)`, `Double(x)`, `Imaginary(x)` in `executor.c` (o `object.c`): parsano l'argomento, eseguono la conversione numerica e restituiscono un `ArkshValue` del kind corretto
-- `[ ]` `E6-S5-T3` esporre su ogni tipo le proprietà `value`, `type`, `bits` e i metodi `-> to_integer`, `-> to_float`, `-> to_double` per conversioni incrociate
-- `[ ]` `E6-S5-T4` aritmetica mista: definire le regole di promozione quando operandi di kind diversi entrano in un `BINARY_OP` (es. `Integer + Float` → `Float`; qualsiasi operando `Imaginary` → `Imaginary`)
-- `[ ]` `E6-S5-T5` test: `Integer("42") -> value` → `42`, `Float("3.14") -> type` → `float`, `Imaginary("2") -> value` → `2i`, conversioni incrociate, promozione in espressioni miste
+- `[x]` `E6-S5-T1` aggiungere i value kind `ARKSH_VALUE_INTEGER`, `ARKSH_VALUE_FLOAT`, `ARKSH_VALUE_DOUBLE`, `ARKSH_VALUE_IMAGINARY` all'enum `ArkshValueKind` in `object.h`; aggiornare `arksh_value_render`, `arksh_value_free` e `value_is_truthy` per i nuovi kind
+- `[x]` `E6-S5-T2` implementare i resolver `Integer(x)`, `Float(x)`, `Double(x)`, `Imaginary(x)` in `executor.c` (o `object.c`): parsano l'argomento, eseguono la conversione numerica e restituiscono un `ArkshValue` del kind corretto
+- `[x]` `E6-S5-T3` esporre su ogni tipo le proprietà `value`, `type`, `bits` e i metodi `-> to_integer`, `-> to_float`, `-> to_double` per conversioni incrociate
+- `[x]` `E6-S5-T4` aritmetica mista: definire le regole di promozione quando operandi di kind diversi entrano in un `BINARY_OP` (es. `Integer + Float` → `Float`; qualsiasi operando `Imaginary` → `Imaginary`)
+- `[x]` `E6-S5-T5` test: `Integer("42") -> value` → `42`, `Float("3.14") -> type` → `float`, `Imaginary("2") -> value` → `2i`, conversioni incrociate, promozione in espressioni miste
 
 #### Regole aritmetiche per Imaginary()
 
@@ -735,8 +735,8 @@ Stato story: `[ ]`
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E8 `[x]`
-**In corso:** E6 (S1–S4 `[x]`, S5–S7 aperte)
-**Aperte:** E6 (S5–S7), E7 (JSON), E9 (release), E10 (HTTP plugin)
+**In corso:** E6 (S1–S5 `[x]`, S6–S7 aperte)
+**Aperte:** E6 (S6–S7), E7 (JSON), E9 (release), E10 (HTTP plugin)
 
 ---
 
@@ -758,13 +758,7 @@ Stato story: `[ ]`
 
 ### Percorso E — tipi numerici espliciti (E6-S5)
 
-Impatto visibile nell'aritmetica e nei confronti tipizzati.
-
-1. `E6-S5-T1` (aggiungere i value kind `INTEGER`, `FLOAT`, `DOUBLE`, `IMAGINARY` all'enum)
-2. `E6-S5-T2` (implementare resolver `Integer()`, `Float()`, `Double()`, `Imaginary()`)
-3. `E6-S5-T3` (proprietà e metodi di conversione)
-4. `E6-S5-T4` (regole di promozione in espressioni miste)
-5. `E6-S5-T5` (test)
+~~Completato.~~ ~~`E6-S5-T1`~~ `[x]`  ~~`E6-S5-T2`~~ `[x]`  ~~`E6-S5-T3`~~ `[x]`  ~~`E6-S5-T4`~~ `[x]`  ~~`E6-S5-T5`~~ `[x]`
 
 ### Percorso F — tipo Dict (E6-S6)
 

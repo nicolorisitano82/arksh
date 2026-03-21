@@ -495,6 +495,10 @@ static int value_is_truthy(const ArkshValue *value) {
     case ARKSH_VALUE_BOOLEAN:
       return value->boolean != 0;
     case ARKSH_VALUE_NUMBER:
+    case ARKSH_VALUE_INTEGER:
+    case ARKSH_VALUE_FLOAT:
+    case ARKSH_VALUE_DOUBLE:
+    case ARKSH_VALUE_IMAGINARY:
       return value->number != 0.0;
     case ARKSH_VALUE_STRING:
       return value->text[0] != '\0' && strcmp(value->text, "false") != 0 && strcmp(value->text, "0") != 0;
@@ -5326,6 +5330,29 @@ static int collect_top_level_binary_ops(const char *text, size_t *out_pos, char 
 
 /* Apply a binary operator between two ArkshValues in-place (result → *lv).
    Returns 0 on success.  On error writes to out and returns 1. */
+/* E6-S5: return true if this kind participates in the numeric promotion system */
+static int is_numeric_kind(ArkshValueKind k) {
+  return k == ARKSH_VALUE_NUMBER   ||
+         k == ARKSH_VALUE_INTEGER  ||
+         k == ARKSH_VALUE_FLOAT    ||
+         k == ARKSH_VALUE_DOUBLE   ||
+         k == ARKSH_VALUE_IMAGINARY;
+}
+
+/* E6-S5: promotion hierarchy — INTEGER < FLOAT < DOUBLE <= NUMBER; IMAGINARY wins */
+static ArkshValueKind promote_kinds(ArkshValueKind a, ArkshValueKind b) {
+  if (a == ARKSH_VALUE_IMAGINARY || b == ARKSH_VALUE_IMAGINARY) {
+    return ARKSH_VALUE_IMAGINARY; /* handled specially by caller */
+  }
+  /* NUMBER is equivalent to DOUBLE */
+  if (a == ARKSH_VALUE_NUMBER) a = ARKSH_VALUE_DOUBLE;
+  if (b == ARKSH_VALUE_NUMBER) b = ARKSH_VALUE_DOUBLE;
+
+  if (a == ARKSH_VALUE_DOUBLE || b == ARKSH_VALUE_DOUBLE) return ARKSH_VALUE_DOUBLE;
+  if (a == ARKSH_VALUE_FLOAT  || b == ARKSH_VALUE_FLOAT)  return ARKSH_VALUE_FLOAT;
+  return ARKSH_VALUE_INTEGER;
+}
+
 static int apply_binary_op(ArkshShell *shell, ArkshValue *lv, char op, ArkshValue *rv, char *out, size_t out_size) {
   if (lv->kind == ARKSH_VALUE_NUMBER && rv->kind == ARKSH_VALUE_NUMBER) {
     double result;
@@ -5341,6 +5368,85 @@ static int apply_binary_op(ArkshShell *shell, ArkshValue *lv, char op, ArkshValu
     }
     arksh_value_free(lv);
     arksh_value_set_number(lv, result);
+    return 0;
+  }
+
+  /* E6-S5: explicit numeric kinds with promotion and imaginary arithmetic */
+  if (is_numeric_kind(lv->kind) && is_numeric_kind(rv->kind)) {
+    ArkshValueKind lk = lv->kind, rk = rv->kind;
+    double la = lv->number, ra = rv->number;
+    ArkshValueKind result_kind;
+    double result;
+
+    /* ---- Imaginary special cases ---- */
+    if (lk == ARKSH_VALUE_IMAGINARY && rk == ARKSH_VALUE_IMAGINARY) {
+      switch (op) {
+        case '+': result = la + ra; result_kind = ARKSH_VALUE_IMAGINARY; break;
+        case '-': result = la - ra; result_kind = ARKSH_VALUE_IMAGINARY; break;
+        case '*': result = -(la * ra); result_kind = ARKSH_VALUE_DOUBLE; break; /* i*i = -1 */
+        case '/':
+          if (ra == 0.0) { snprintf(out, out_size, "division by zero"); return 1; }
+          result = la / ra; result_kind = ARKSH_VALUE_DOUBLE; break; /* i cancels */
+        default: snprintf(out, out_size, "unknown binary operator: %c", op); return 1;
+      }
+    } else if (lk == ARKSH_VALUE_IMAGINARY) {
+      /* Imaginary op Real */
+      switch (op) {
+        case '+': case '-':
+          /* Real + Imaginary or Imaginary - Real: produce string "a±bi" */
+          {
+            char buf[128];
+            if (op == '+') snprintf(buf, sizeof(buf), "%.15g+%.15gi", ra, la);
+            else           snprintf(buf, sizeof(buf), "%.15g%.15gi",  la - ra, 0.0); /* uncommon */
+            arksh_value_free(lv);
+            arksh_value_set_string(lv, buf);
+            return 0;
+          }
+        case '*': result = la * ra; result_kind = ARKSH_VALUE_IMAGINARY; break;
+        case '/':
+          if (ra == 0.0) { snprintf(out, out_size, "division by zero"); return 1; }
+          result = la / ra; result_kind = ARKSH_VALUE_IMAGINARY; break;
+        default: snprintf(out, out_size, "unknown binary operator: %c", op); return 1;
+      }
+    } else if (rk == ARKSH_VALUE_IMAGINARY) {
+      /* Real op Imaginary */
+      switch (op) {
+        case '+': case '-':
+          {
+            char buf[128];
+            if (op == '+') snprintf(buf, sizeof(buf), "%.15g+%.15gi", la, ra);
+            else           snprintf(buf, sizeof(buf), "%.15g-%.15gi", la, ra);
+            arksh_value_free(lv);
+            arksh_value_set_string(lv, buf);
+            return 0;
+          }
+        case '*': result = la * ra; result_kind = ARKSH_VALUE_IMAGINARY; break;
+        case '/':
+          if (ra == 0.0) { snprintf(out, out_size, "division by zero"); return 1; }
+          result = -(la / ra); result_kind = ARKSH_VALUE_IMAGINARY; break; /* r/(bi) = -ri/b */
+        default: snprintf(out, out_size, "unknown binary operator: %c", op); return 1;
+      }
+    } else {
+      /* ---- Standard numeric promotion ---- */
+      result_kind = promote_kinds(lk, rk);
+      switch (op) {
+        case '+': result = la + ra; break;
+        case '-': result = la - ra; break;
+        case '*': result = la * ra; break;
+        case '/':
+          if (ra == 0.0) { snprintf(out, out_size, "division by zero"); return 1; }
+          result = la / ra; break;
+        default: snprintf(out, out_size, "unknown binary operator: %c", op); return 1;
+      }
+    }
+
+    arksh_value_free(lv);
+    switch (result_kind) {
+      case ARKSH_VALUE_INTEGER:   arksh_value_set_integer(lv, result);   break;
+      case ARKSH_VALUE_FLOAT:     arksh_value_set_float(lv, result);     break;
+      case ARKSH_VALUE_IMAGINARY: arksh_value_set_imaginary(lv, result); break;
+      default:                    arksh_value_set_double(lv, result);    break;
+    }
     return 0;
   }
 

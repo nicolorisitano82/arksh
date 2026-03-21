@@ -59,7 +59,12 @@ typedef enum {
   ARKSH_VALUE_LIST,
   ARKSH_VALUE_MAP,
   ARKSH_VALUE_CLASS,
-  ARKSH_VALUE_INSTANCE
+  ARKSH_VALUE_INSTANCE,
+  /* E6-S5: explicit numeric sub-kinds */
+  ARKSH_VALUE_INTEGER,
+  ARKSH_VALUE_FLOAT,
+  ARKSH_VALUE_DOUBLE,
+  ARKSH_VALUE_IMAGINARY
 } ArkshValueKind;
 
 typedef struct ArkshValue ArkshValue;
@@ -110,6 +115,11 @@ int arksh_value_copy(ArkshValue *dest, const ArkshValue *src);
 int arksh_value_item_copy(ArkshValueItem *dest, const ArkshValueItem *src);
 void arksh_value_set_string(ArkshValue *value, const char *text);
 void arksh_value_set_number(ArkshValue *value, double number);
+/* E6-S5: explicit numeric sub-kind setters */
+void arksh_value_set_integer(ArkshValue *value, double number);
+void arksh_value_set_float(ArkshValue *value, double number);
+void arksh_value_set_double(ArkshValue *value, double number);
+void arksh_value_set_imaginary(ArkshValue *value, double number);
 void arksh_value_set_boolean(ArkshValue *value, int boolean);
 void arksh_value_set_object(ArkshValue *value, const ArkshObject *object);
 void arksh_value_set_block(ArkshValue *value, const ArkshBlock *block);

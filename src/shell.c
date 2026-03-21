@@ -4049,6 +4049,124 @@ static int map_method_has(
   return 0;
 }
 
+/* path() resolver: creates a filesystem path value from a string argument */
+static int resolver_path(ArkshShell *shell, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  char path_text[ARKSH_MAX_PATH];
+  ArkshObject object;
+
+  if (argc != 1 || args == NULL) {
+    snprintf(out, out_size, "path() expects exactly one argument");
+    return 1;
+  }
+
+  if (args[0].kind == ARKSH_VALUE_STRING) {
+    copy_string(path_text, sizeof(path_text), args[0].text);
+  } else if (args[0].kind == ARKSH_VALUE_NUMBER || args[0].kind == ARKSH_VALUE_INTEGER ||
+             args[0].kind == ARKSH_VALUE_FLOAT   || args[0].kind == ARKSH_VALUE_DOUBLE) {
+    if (arksh_value_render(&args[0], path_text, sizeof(path_text)) != 0) {
+      snprintf(out, out_size, "path() unable to render argument");
+      return 1;
+    }
+  } else if (args[0].kind == ARKSH_VALUE_OBJECT) {
+    copy_string(path_text, sizeof(path_text), args[0].object.path);
+  } else {
+    snprintf(out, out_size, "path() expects a string argument");
+    return 1;
+  }
+
+  if (path_text[0] == '\0') {
+    snprintf(out, out_size, "path() argument must not be empty");
+    return 1;
+  }
+
+  if (arksh_object_resolve(shell->cwd, path_text, &object) != 0) {
+    snprintf(out, out_size, "path() unable to resolve: %s", path_text);
+    return 1;
+  }
+
+  arksh_value_set_object(out_value, &object);
+  return 0;
+}
+
+/* E6-S5-T2: explicit numeric type resolvers */
+static int parse_numeric_arg(int argc, const ArkshValue *args, double *out, char *out_err, size_t out_err_size) {
+  char text[ARKSH_MAX_TOKEN];
+
+  if (argc != 1) {
+    snprintf(out_err, out_err_size, "expects exactly one argument");
+    return 1;
+  }
+  /* accept string, number, integer, float, double, or imaginary argument */
+  if (args[0].kind == ARKSH_VALUE_STRING) {
+    double v;
+    char *end;
+    copy_string(text, sizeof(text), args[0].text);
+    v = strtod(text, &end);
+    if (end == text || (*end != '\0' && *end != 'i')) {
+      snprintf(out_err, out_err_size, "invalid numeric argument: %s", text);
+      return 1;
+    }
+    *out = v;
+    return 0;
+  }
+  if (args[0].kind == ARKSH_VALUE_NUMBER  ||
+      args[0].kind == ARKSH_VALUE_INTEGER ||
+      args[0].kind == ARKSH_VALUE_FLOAT   ||
+      args[0].kind == ARKSH_VALUE_DOUBLE  ||
+      args[0].kind == ARKSH_VALUE_IMAGINARY) {
+    *out = args[0].number;
+    return 0;
+  }
+  /* try to render and parse */
+  if (arksh_value_render(&args[0], text, sizeof(text)) != 0) {
+    snprintf(out_err, out_err_size, "cannot convert argument to number");
+    return 1;
+  }
+  {
+    double v;
+    char *end;
+    v = strtod(text, &end);
+    if (end == text) {
+      snprintf(out_err, out_err_size, "invalid numeric argument: %s", text);
+      return 1;
+    }
+    *out = v;
+    return 0;
+  }
+}
+
+static int resolver_integer(ArkshShell *shell, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  double v;
+  (void) shell;
+  if (parse_numeric_arg(argc, args, &v, out, out_size) != 0) { return 1; }
+  arksh_value_set_integer(out_value, v);
+  return 0;
+}
+
+static int resolver_float(ArkshShell *shell, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  double v;
+  (void) shell;
+  if (parse_numeric_arg(argc, args, &v, out, out_size) != 0) { return 1; }
+  arksh_value_set_float(out_value, v);
+  return 0;
+}
+
+static int resolver_double(ArkshShell *shell, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  double v;
+  (void) shell;
+  if (parse_numeric_arg(argc, args, &v, out, out_size) != 0) { return 1; }
+  arksh_value_set_double(out_value, v);
+  return 0;
+}
+
+static int resolver_imaginary(ArkshShell *shell, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  double v;
+  (void) shell;
+  if (parse_numeric_arg(argc, args, &v, out, out_size) != 0) { return 1; }
+  arksh_value_set_imaginary(out_value, v);
+  return 0;
+}
+
 static int register_builtin_value_resolvers(ArkshShell *shell) {
   if (shell == NULL) {
     return 1;
@@ -4077,6 +4195,23 @@ static int register_builtin_value_resolvers(ArkshShell *shell) {
     return 1;
   }
   if (arksh_shell_register_value_resolver(shell, "time", "current time (epoch, year, month, day, hour, minute, second, iso)", resolver_time, 0) != 0) {
+    return 1;
+  }
+  /* path() resolver */
+  if (arksh_shell_register_value_resolver(shell, "path", "create a path value from a string", resolver_path, 0) != 0) {
+    return 1;
+  }
+  /* E6-S5: explicit numeric sub-kinds */
+  if (arksh_shell_register_value_resolver(shell, "Integer",   "64-bit integer value", resolver_integer, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_value_resolver(shell, "Float",     "32-bit floating-point value", resolver_float, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_value_resolver(shell, "Double",    "64-bit floating-point value", resolver_double, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_value_resolver(shell, "Imaginary", "purely imaginary number b·i", resolver_imaginary, 0) != 0) {
     return 1;
   }
 

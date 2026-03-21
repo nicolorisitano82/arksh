@@ -204,11 +204,10 @@ cwd_obj -> describe()
 
 # Lista tutti i file non nascosti nella directory corrente
 let files = path(".") -> children()
-files |> where(hidden == false) |> sort(name asc) |> each(:it | it -> name) |> render()
+files |> where(hidden == false) |> sort(name asc) |> each(name)
 
 # Cattura l'output di un comando e lo elabora
-let righe = capture_lines("ls /usr/bin")
-righe |> grep("ssh") |> count()
+capture("ls /bin") |> lines() |> grep("sh") |> count()
 ```
 
 Eseguirlo:

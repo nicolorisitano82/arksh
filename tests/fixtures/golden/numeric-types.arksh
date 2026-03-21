@@ -1,0 +1,41 @@
+# golden: Integer renders without decimal point
+Integer(42) -> print()
+
+# golden: Float renders with float precision
+Float(3.14) -> print()
+
+# golden: Double renders with double precision
+Double(2.71828) -> print()
+
+# golden: Imaginary renders with i suffix
+Imaginary(3) -> print()
+
+# golden: Integer type name
+let t1 = Integer(42) -> type ; t1 -> print()
+
+# golden: Float type name
+let t2 = Float(3.14) -> type ; t2 -> print()
+
+# golden: Integer arithmetic stays Integer
+let r1 = Integer(10) + Integer(5) ; r1 -> print()
+
+# golden: Integer + Float promotes to Float
+let r2 = Integer(3) + Float(1.5) ; r2 -> print()
+
+# golden: Imaginary * Imaginary produces negative real (2i * 3i = -6)
+Imaginary(2) * Imaginary(3) -> print()
+
+# golden: Imaginary imag part equals coefficient
+let im = Imaginary(5) -> imag ; im -> print()
+
+# golden: Imaginary conjugate negates coefficient
+let cj = Imaginary(4) -> conjugate ; cj -> print()
+
+# golden: Integer bits is 64
+let b1 = Integer(1) -> bits ; b1 -> print()
+
+# golden: Double -> to_integer truncates
+let ti = Double(9.9) -> to_integer ; ti -> print()
+
+# golden: JSON serialization of typed integer list
+list(Integer(10), Integer(20), Integer(30)) |> to_json() -> print()
