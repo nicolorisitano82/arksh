@@ -28,7 +28,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 | Tipo di dato nativo               | Stringa| Stringa| Stringa| Strutturato | Stringa | Object-aware |
 | Interi nativi                     | Si (`$((...))`) | Si | No | Si | No | Si (`Integer`, `Float`, `Double`, `Imaginary`; aritmetica type-aware con promozione) |
 | Liste native                      | Array indicizzati | Array + hash | Liste | Liste tipizzate | No | `list(...)` object-aware |
-| Dizionari / mappe native          | Array associativi (bash 4+) | Hash | No | Record strutturati | No | `map(...)` typed-map; `Dict()` pianificato (E6-S6); `Matrix` pianificato (E6-S8) |
+| Dizionari / mappe native          | Array associativi (bash 4+) | Hash | No | Record strutturati | No | `map(...)` typed-map; `Dict()` immutabile con API chiara (`set`, `get`, `has`, `delete`, `keys`, `values`, bridge JSON); `Matrix` pianificato (E6-S8) |
 | Booleani come tipo                | No (0/1 o stringhe) | No | No | Si | No | Si (`true`, `false`, `bool(...)`) |
 | Oggetti filesystem come tipo      | No     | No     | No     | Si (LS restituisce tabella) | No | Si (file, directory, device, mount) |
 | Namespace di sistema built-in     | No     | No     | No     | Parziale | No | Si (`fs()`, `user()`, `sys()`, `time()`) |

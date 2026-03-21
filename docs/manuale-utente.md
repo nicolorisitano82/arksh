@@ -27,9 +27,11 @@ Versione di riferimento: attuale (marzo 2026)
    - 6.3 [bool e letterali booleani](#63-bool-e-letterali-booleani)
    - 6.4 [list / array](#64-list--array)
    - 6.5 [map](#65-map)
-   - 6.6 [capture e capture_lines](#66-capture-e-capture_lines)
-   - 6.7 [Block literal](#67-block-literal)
-   - 6.8 [env, proc, shell](#68-env-proc-shell)
+   - 6.6 [Tipi numerici espliciti](#66-tipi-numerici-espliciti)
+   - 6.7 [Dict — dizionario chiave-valore](#67-dict--dizionario-chiave-valore)
+   - 6.8 [capture e capture_lines](#68-capture-e-capture_lines)
+   - 6.9 [Block literal](#69-block-literal)
+   - 6.10 [env, proc, shell](#610-env-proc-shell)
 7. [Pipeline oggetti (|>)](#7-pipeline-oggetti-)
    - 7.1 [Concetto e sintassi](#71-concetto-e-sintassi)
    - 7.2 [Bridge shell/object](#72-bridge-shellobject)
@@ -849,7 +851,125 @@ persona |> to_json() |> render()
 # {"nome":"Mario","eta":30,"attivo":true}
 ```
 
-### 6.6 capture e capture_lines
+### 6.6 Tipi numerici espliciti
+
+arksh espone quattro tipi numerici distinti accanto al tipo generico `number`:
+
+| Costruttore | Tipo | Descrizione |
+|---|---|---|
+| `Integer(n)` | `integer` | Intero a 64 bit (troncamento decimale) |
+| `Float(n)` | `float` | Virgola mobile a 32 bit (precisione singola) |
+| `Double(n)` | `double` | Virgola mobile a 64 bit (precisione doppia) |
+| `Imaginary(n)` | `imaginary` | Immaginario puro `n·i` |
+
+```bash
+let i = Integer(42)
+let f = Float(3.14)
+let d = Double(2.71828)
+let im = Imaginary(3)
+
+let ti = Integer(42) -> type
+ti -> print()
+# integer
+
+let ri = Integer(10) + Integer(5)
+ri -> print()
+# 15
+
+let rf = Integer(3) + Float(1.5)
+rf -> print()
+# 4.5
+
+let rr = Imaginary(2) * Imaginary(3)
+rr -> print()
+# -6
+```
+
+**Promozione di tipo**: nelle espressioni miste la gerarchia è `Integer < Float < Double`; operazioni con `Imaginary` producono `Imaginary` o `Double` (se `i·i` si cancella).
+
+**Proprietà numeriche**
+
+| Proprietà | Descrizione |
+|---|---|
+| `-> type` | Nome del tipo (`"integer"`, `"float"`, ecc.) |
+| `-> bits` | Larghezza in bit (`32` o `64`) |
+| `-> to_integer` | Conversione intera con troncamento |
+| `-> imag` | Parte immaginaria (solo `Imaginary`) |
+| `-> conjugate` | Coniugato `Imaginary(-n)` (solo `Imaginary`) |
+| `-> magnitude` | Valore assoluto della parte immaginaria |
+
+### 6.7 Dict — dizionario chiave-valore
+
+`Dict()` è un dizionario immutabile chiave-stringa / valore-qualsiasi. Ogni operazione di scrittura restituisce un **nuovo** dizionario senza modificare il ricevente.
+
+```bash
+# Dizionario vuoto
+let d = Dict()
+
+# Costruzione inline con coppie chiave-valore
+let config = Dict("host", "localhost", "porta", 8080)
+
+# set() — restituisce nuovo dict con la chiave aggiunta o sovrascritta
+let d2 = d -> set("nome", "alice")
+
+# get() — valore per chiave, stringa vuota se assente
+let v = d2 -> get("nome")
+v -> print()
+# alice
+
+# has() — booleano
+let h = d2 -> has("nome")
+h -> print()
+# true
+
+# delete() — restituisce nuovo dict senza la chiave
+let d3 = d2 -> delete("nome")
+let h2 = d3 -> has("nome")
+h2 -> print()
+# false
+```
+
+**Proprietà di sola lettura**
+
+| Accesso | Tipo | Descrizione |
+|---|---|---|
+| `-> count` | number | Numero di coppie |
+| `-> keys` | list | Lista delle chiavi (stringhe) |
+| `-> values` | list | Lista dei valori |
+| `-> type` | string | Sempre `"dict"` |
+
+```bash
+let d4a = Dict() -> set("a", 1)
+let d4 = d4a -> set("b", 2)
+
+let n = d4 -> count
+n -> print()
+# 2
+
+let ks = d4 -> keys
+let kc = ks -> count
+kc -> print()
+# 2
+```
+
+**Bridge JSON**
+
+```bash
+# Serializzazione
+let j = d4 -> to_json()
+j -> print()
+# {"a":1,"b":2}
+
+# Deserializzazione — from_json() prende una stringa JSON-object
+let d5 = Dict() -> from_json(j)
+let va = d5 -> get("a")
+va -> print()
+# 1
+```
+
+Il tipo `Dict` è distinto da `map`: `map()` è un contenitore generico usato anche internamente dai namespace; `Dict()` è il tipo esplicito pensato per lo scripting con semantica immutabile e API chiara.
+
+### 6.8 capture e capture_lines
 
 `capture("cmd ...")` esegue il comando specificato e restituisce l'intero stdout come valore `text` (stringa tipizzata), con il newline finale rimosso.
 
@@ -877,7 +997,7 @@ Differenze rispetto a `$(...)`:
 - `capture(...)` restituisce un valore `text` tipizzato usabile in pipeline oggetti
 - `capture_lines(...)` restituisce direttamente una `list`, evitando uno split manuale
 
-### 6.7 Block literal
+### 6.9 Block literal
 
 Un block literal e una funzione anonima come valore di prima classe. La sintassi e:
 
@@ -933,7 +1053,7 @@ b -> type
 # block
 ```
 
-### 6.8 env, proc, shell
+### 6.10 env, proc, shell
 
 #### env()
 

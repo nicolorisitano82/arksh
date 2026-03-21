@@ -928,14 +928,14 @@ Stato story: `[ ]`
 
 ~~Completato.~~ ~~`E6-S6-T1`~~ `[x]`  ~~`E6-S6-T2`~~ `[x]`  ~~`E6-S6-T3`~~ `[x]`  ~~`E6-S6-T4`~~ `[x]`  ~~`E6-S6-T5`~~ `[x]`  ~~`E6-S6-T6`~~ `[x]`
 
-Abilita strutture dati chiave-valore native; prerequisito naturale per E7 (JSON avanzato).
+~~Abilita strutture dati chiave-valore native; prerequisito naturale per E7 (JSON avanzato).~~
 
-1. `E6-S6-T1` (struttura interna `ARKSH_VALUE_DICT`)
-2. `E6-S6-T2` (resolver `Dict()`)
-3. `E6-S6-T3` (metodi di scrittura: `set`, `delete`)
-4. `E6-S6-T4` (proprietà e metodi di lettura: `get`, `has`, `keys`, `values`, `count`)
-5. `E6-S6-T5` (bridge JSON: `to_json` / `from_json`)
-6. `E6-S6-T6` (test)
+1. ~~`E6-S6-T1` (struttura interna `ARKSH_VALUE_DICT`)~~
+2. ~~`E6-S6-T2` (resolver `Dict()`)~~
+3. ~~`E6-S6-T3` (metodi di scrittura: `set`, `delete`)~~
+4. ~~`E6-S6-T4` (proprietà e metodi di lettura: `get`, `has`, `keys`, `values`, `count`)~~
+5. ~~`E6-S6-T5` (bridge JSON: `to_json` / `from_json`)~~
+6. ~~`E6-S6-T6` (test)~~
 
 ### Percorso G — JSON robusto (E7)
 

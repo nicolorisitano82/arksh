@@ -1,0 +1,163 @@
+# arksh example 12
+# Tipo Dict: dizionario chiave/valore immutabile (E6-S6).
+#
+# Dict e un tipo di prima classe: ogni operazione (set, delete) restituisce
+# un nuovo Dict senza modificare quello originale.
+# Supporta serializzazione JSON e costruzione inline con coppie chiave/valore.
+
+# ── Costruzione ───────────────────────────────────────────────────────────────
+#
+# Dict() crea un dizionario vuoto.
+
+let vuoto = Dict()
+
+# Dict("k1", v1, "k2", v2) costruisce direttamente con coppie inline.
+# I valori possono essere qualsiasi tipo: text, number, bool, ...
+
+let colori = Dict("rosso", text("FF0000"), "verde", text("00FF00"), "blu", text("0000FF"))
+
+# set() e immutabile: restituisce un nuovo Dict con la coppia aggiunta.
+# Il Dict originale rimane invariato.
+
+let d1 = Dict()
+let d2 = d1 -> set("nome", text("arksh"))
+let d3 = d2 -> set("versione", text("1.0"))
+let d4 = d3 -> set("stabile", bool(true))
+
+# ── Lettura ───────────────────────────────────────────────────────────────────
+#
+# get() recupera un valore per chiave.
+
+let nome = d4 -> get("nome")
+nome -> print()
+
+let versione = d4 -> get("versione")
+versione -> print()
+
+let stabile = d4 -> get("stabile")
+stabile -> print()
+
+# has() controlla se una chiave esiste — restituisce un Bool.
+
+let ha_nome = d4 -> has("nome")
+ha_nome -> print()
+
+let ha_autore = d4 -> has("autore")
+ha_autore -> print()
+
+# count restituisce il numero di coppie presenti.
+
+let n = d4 -> count
+n -> print()
+
+# keys restituisce la lista delle chiavi.
+
+let ks = d4 -> keys
+ks -> print()
+
+# values restituisce la lista dei valori.
+
+let vs = d4 -> values
+vs -> print()
+
+# type identifica il tipo dell'oggetto.
+
+let t = d4 -> type
+t -> print()
+
+# ── Cancellazione ─────────────────────────────────────────────────────────────
+#
+# delete() restituisce un nuovo Dict senza la chiave specificata.
+# Il Dict originale rimane immutato.
+
+let d5 = d4 -> delete("stabile")
+
+# La chiave rimossa non e piu presente.
+
+let ancora_stabile = d5 -> has("stabile")
+ancora_stabile -> print()
+
+# Le altre chiavi sono intatte.
+
+let ancora_nome = d5 -> has("nome")
+ancora_nome -> print()
+
+let n2 = d5 -> count
+n2 -> print()
+
+# ── Bridge JSON ───────────────────────────────────────────────────────────────
+#
+# to_json() serializza il Dict in una stringa JSON.
+
+let j = d4 -> to_json()
+j -> print()
+
+# from_json() ricostruisce un Dict da una stringa JSON (round-trip).
+
+let d6 = Dict() -> from_json(j)
+
+# I valori sono recuperabili esattamente come prima.
+
+let nome2 = d6 -> get("nome")
+nome2 -> print()
+
+let versione2 = d6 -> get("versione")
+versione2 -> print()
+
+# Il conteggio coincide con l'originale.
+
+let n3 = d6 -> count
+n3 -> print()
+
+# ── Uso pratico ───────────────────────────────────────────────────────────────
+#
+# Esempio concreto: costruire un dizionario di configurazione,
+# serializzarlo su stdout, e rileggerlo simulando un passaggio esterno.
+#
+# La configurazione descrive i parametri di connessione a un servizio.
+
+let cfg0 = Dict()
+let cfg1 = cfg0 -> set("host", text("localhost"))
+let cfg2 = cfg1 -> set("porta", text("8080"))
+let cfg3 = cfg2 -> set("timeout_sec", text("30"))
+let cfg4 = cfg3 -> set("debug", bool(false))
+let cfg5 = cfg4 -> set("prefisso", text("/api/v1"))
+
+# Verifica rapida dei contenuti prima della serializzazione.
+
+let num_chiavi = cfg5 -> count
+num_chiavi -> print()
+
+let chiavi_cfg = cfg5 -> keys
+chiavi_cfg -> print()
+
+# Serializzazione: in uno scenario reale questo JSON verrebbe scritto su file
+# o inviato a un processo figlio.
+
+let json_cfg = cfg5 -> to_json()
+json_cfg -> print()
+
+# Ricezione: il servizio legge la configurazione dal JSON.
+
+let cfg_letta = Dict() -> from_json(json_cfg)
+
+let host = cfg_letta -> get("host")
+host -> print()
+
+let porta = cfg_letta -> get("porta")
+porta -> print()
+
+let prefisso = cfg_letta -> get("prefisso")
+prefisso -> print()
+
+# Aggiornamento immutabile: override del solo campo debug senza toccare gli altri.
+
+let cfg_debug = cfg_letta -> set("debug", bool(true))
+
+let debug_on = cfg_debug -> get("debug")
+debug_on -> print()
+
+# Il dict originale rimane con debug = false.
+
+let debug_orig = cfg_letta -> get("debug")
+debug_orig -> print()
