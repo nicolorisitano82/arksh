@@ -1,0 +1,8 @@
+# golden: split and count words
+text("alpha beta gamma") |> split(" ") |> count() -> print()
+
+# golden: split and join with different separator (pipeline result is auto-rendered)
+text("alpha,beta,gamma") |> split(",") |> join(" ")
+
+# golden: trim then split and join
+text("  x , y , z  ") |> trim() |> split(",") |> join("|")

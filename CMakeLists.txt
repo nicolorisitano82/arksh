@@ -982,6 +982,101 @@ if(BUILD_TESTING)
     TIMEOUT 10
   )
 
+  # ── E8-S2-T1: golden tests — fixture scripts with deterministic multi-step output ──
+
+  add_test(NAME arksh_golden_pipeline_chain
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/pipeline-chain.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_golden_reduce_block
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/reduce-and-block.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_golden_string_transform
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/string-transform.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_golden_if_sequence
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/if-sequence.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_golden_mixed_shell
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/mixed-shell-and-objects.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  set_tests_properties(
+    arksh_golden_pipeline_chain
+    arksh_golden_reduce_block
+    arksh_golden_string_transform
+    arksh_golden_if_sequence
+    arksh_golden_mixed_shell
+    PROPERTIES TIMEOUT 15
+  )
+  # Each test checks a distinctive output string that only appears when the script ran fully.
+  set_tests_properties(arksh_golden_pipeline_chain   PROPERTIES PASS_REGULAR_EXPRESSION "13")
+  set_tests_properties(arksh_golden_reduce_block     PROPERTIES PASS_REGULAR_EXPRESSION "\\[10,20,30\\]")
+  set_tests_properties(arksh_golden_string_transform PROPERTIES PASS_REGULAR_EXPRESSION "alpha beta gamma")
+  set_tests_properties(arksh_golden_if_sequence      PROPERTIES PASS_REGULAR_EXPRESSION "step_three")
+  set_tests_properties(arksh_golden_mixed_shell      PROPERTIES PASS_REGULAR_EXPRESSION "done")
+
+  # ── E8-S2-T2: PTY REPL tests — interactive features via pseudo-terminal ──
+
+  if(NOT WIN32)
+    add_executable(arksh_pty_repl tests/pty_repl.c)
+    if(APPLE)
+      # forkpty is in libSystem on macOS; no extra library needed.
+    else()
+      target_link_libraries(arksh_pty_repl PRIVATE util)
+    endif()
+
+    add_test(NAME arksh_pty_repl COMMAND arksh_pty_repl)
+    set_tests_properties(arksh_pty_repl PROPERTIES
+      PASS_REGULAR_EXPRESSION "all tests passed"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+      TIMEOUT 20
+    )
+  endif()
+
+  # ── E8-S2-T3: job control smoke tests — repeatable, no timing dependencies ──
+
+  # Two background jobs started concurrently; jobs lists both entries.
+  add_test(NAME arksh_jobctrl_two_jobs
+    COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 0 & \"${ARKSH_TEST_PAUSE}\" 0 & jobs"
+  )
+  set_tests_properties(arksh_jobctrl_two_jobs PROPERTIES
+    PASS_REGULAR_EXPRESSION "\\[1\\]"
+    TIMEOUT 10
+  )
+
+  # wait without arguments blocks until all background jobs complete.
+  add_test(NAME arksh_jobctrl_wait_all
+    COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 0 & wait ; echo wait_all_done"
+  )
+  set_tests_properties(arksh_jobctrl_wait_all PROPERTIES
+    PASS_REGULAR_EXPRESSION "wait_all_done"
+    TIMEOUT 10
+  )
+
+  # Background job completes; done message appears, then a subsequent command runs.
+  add_test(NAME arksh_jobctrl_done_then_cmd
+    COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 0 & wait %1 ; echo after_wait"
+  )
+  set_tests_properties(arksh_jobctrl_done_then_cmd PROPERTIES
+    PASS_REGULAR_EXPRESSION "done;after_wait"
+    TIMEOUT 10
+  )
+
+  # Jobs command shows current-job marker '+' when a job is running.
+  add_test(NAME arksh_jobctrl_current_marker2
+    COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 0 & \"${ARKSH_TEST_PAUSE}\" 0 & jobs"
+  )
+  set_tests_properties(arksh_jobctrl_current_marker2 PROPERTIES
+    PASS_REGULAR_EXPRESSION "\\+"
+    TIMEOUT 10
+  )
+
+  # ────────────────────────────────────────────────────────────────────────────
+
   # E6-S4: introspection and typed help
   add_test(NAME arksh_help_stages
     COMMAND arksh -c "help stages")

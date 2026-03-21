@@ -605,11 +605,11 @@ Stato story: `[x]`
 
 ### E8-S2. Test golden e PTY
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E8-S2-T1` creare golden test per script `.arksh`
-- `[ ]` `E8-S2-T2` aggiungere PTY test per REPL e line editor
-- `[ ]` `E8-S2-T3` aggiungere job control smoke test ripetibili
+- `[x]` `E8-S2-T1` creare golden test per script `.arksh` — 5 fixture in `tests/fixtures/golden/`: `pipeline-chain`, `reduce-and-block`, `string-transform`, `if-sequence`, `mixed-shell-and-objects`; registrate in CMakeLists con `PASS_REGULAR_EXPRESSION` su output caratteristico
+- `[x]` `E8-S2-T2` aggiungere PTY test per REPL e line editor — `tests/pty_repl.c`: usa `forkpty()` (POSIX only, `if(NOT WIN32)`); 5 test: prompt presente, `echo` in sessione interattiva, continuation prompt su input incompleto, tab completion del prefisso `histor`, Ctrl-D per uscita pulita con exit code 0
+- `[x]` `E8-S2-T3` aggiungere job control smoke test ripetibili — 4 ctest: `arksh_jobctrl_two_jobs` (2 job + `jobs`), `arksh_jobctrl_wait_all` (`wait` senza args), `arksh_jobctrl_done_then_cmd` (done message + echo dopo wait), `arksh_jobctrl_current_marker2` (marker `+`)
 
 ### E8-S3. Sanitizers e fuzzing
 

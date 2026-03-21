@@ -1,0 +1,4 @@
+# golden: if/else sequence produces predictable output
+if bool(true) ; then text("step_one") -> print() ; fi
+if bool(false) ; then text("skip") -> print() ; else text("step_two") -> print() ; fi
+if bool(true) ; then text("step_three") -> print() ; fi

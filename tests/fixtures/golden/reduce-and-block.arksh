@@ -1,0 +1,9 @@
+# golden: map with arithmetic in block
+list(5, 10, 15) |> map([:it | it + number(5)]) |> each([:it | it -> print()])
+
+# golden: to_json serializes list correctly
+list(10, 20, 30) |> to_json() -> print()
+
+# golden: filter with literal bool then count
+list(1, 2, 3, 4, 5) |> where([:it | bool(true)]) |> count() -> print()
+list(1, 2, 3, 4, 5) |> where([:it | bool(false)]) |> count() -> print()

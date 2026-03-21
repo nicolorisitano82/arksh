@@ -1,0 +1,10 @@
+# golden: shell variable set and echo
+set COUNT 3
+echo $COUNT
+
+# golden: POSIX standalone assignment + echo
+MSG=hello
+echo $MSG
+
+# golden: object value expression after shell assignments
+text("done") -> print()
