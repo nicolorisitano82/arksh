@@ -1065,6 +1065,24 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_golden_dict_types       PROPERTIES PASS_REGULAR_EXPRESSION "\\{\"nome\":\"alice\"\\}")
   set_tests_properties(arksh_golden_base64_stages    PROPERTIES PASS_REGULAR_EXPRESSION "aGVsbG8=")
 
+  # plugin autoload tests
+  add_test(NAME arksh_plugin_autoload_set
+    COMMAND arksh -c "plugin autoload set /tmp/arksh_test_pal.dylib"
+  )
+  add_test(NAME arksh_plugin_autoload_unset
+    COMMAND arksh -c "plugin autoload set /tmp/arksh_test_pau.dylib ; plugin autoload unset /tmp/arksh_test_pau.dylib"
+  )
+  add_test(NAME arksh_plugin_autoload_duplicate
+    COMMAND arksh -c "plugin autoload set /tmp/arksh_test_dup.dylib ; plugin autoload set /tmp/arksh_test_dup.dylib"
+  )
+  set_tests_properties(
+    arksh_plugin_autoload_set arksh_plugin_autoload_unset arksh_plugin_autoload_duplicate
+    PROPERTIES TIMEOUT 10
+  )
+  set_tests_properties(arksh_plugin_autoload_set       PROPERTIES PASS_REGULAR_EXPRESSION "added to autoload")
+  set_tests_properties(arksh_plugin_autoload_unset     PROPERTIES PASS_REGULAR_EXPRESSION "removed from autoload")
+  set_tests_properties(arksh_plugin_autoload_duplicate PROPERTIES PASS_REGULAR_EXPRESSION "already configured for autoload")
+
   # ── E8-S2-T2: PTY REPL tests — interactive features via pseudo-terminal ──
 
   if(NOT WIN32)

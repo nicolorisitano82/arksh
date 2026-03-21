@@ -32,6 +32,8 @@ Versione di riferimento: attuale (marzo 2026)
    - 6.8 [capture e capture_lines](#68-capture-e-capture_lines)
    - 6.9 [Block literal](#69-block-literal)
    - 6.10 [env, proc, shell](#610-env-proc-shell)
+   - 6.11 [Base64 encoding](#611-base64-encoding)
+   - 6.12 [Cestino di sistema (plugin)](#612-cestino-di-sistema-plugin)
 7. [Pipeline oggetti (|>)](#7-pipeline-oggetti-)
    - 7.1 [Concetto e sintassi](#71-concetto-e-sintassi)
    - 7.2 [Bridge shell/object](#72-bridge-shellobject)
@@ -89,7 +91,9 @@ Versione di riferimento: attuale (marzo 2026)
 18. [Plugin](#18-plugin)
     - 18.1 [Caricare un plugin](#181-caricare-un-plugin)
     - 18.2 [Comandi plugin](#182-comandi-plugin)
-    - 18.3 [Creare un plugin (cenni)](#183-creare-un-plugin-cenni)
+    - 18.3 [Autoload — caricamento automatico all'avvio](#183-autoload--caricamento-automatico-allavvio)
+    - 18.4 [Creare un plugin (cenni)](#184-creare-un-plugin-cenni)
+    - 18.5 [Plugin inclusi](#185-plugin-inclusi)
 19. [Avvio e configurazione](#19-avvio-e-configurazione)
     - 19.1 [File RC](#191-file-rc)
     - 19.2 [History](#192-history)
@@ -1108,6 +1112,116 @@ stato -> get("plugin") -> render()
 stato -> get("binding") -> render()
 ```
 
+### 6.11 Base64 encoding
+
+I pipeline stage `base64_encode` e `base64_decode` codificano e decodificano stringhe in formato Base64 RFC 4648. L'implementazione è in C puro, senza dipendenze esterne.
+
+```bash
+# Codifica una stringa
+let encoded = "hello" |> base64_encode
+encoded -> print()
+# aGVsbG8=
+
+# Decodifica
+let decoded = "aGVsbG8=" |> base64_decode
+decoded -> print()
+# hello
+
+# Round-trip
+let msg = "arksh"
+let rt = msg |> base64_encode |> base64_decode
+rt -> print()
+# arksh
+
+# Stringa vuota → stringa vuota
+let e = "" |> base64_encode
+# ""
+```
+
+In caso di carattere non valido nell'input di `base64_decode`, lo stage restituisce un errore descrittivo:
+
+```
+base64_decode: invalid character at position N
+```
+
+Se la lunghezza dell'input non è multipla di 4, lo stage segnala:
+
+```
+base64_decode: invalid input length (must be multiple of 4)
+```
+
+Gli stage sono visibili in `help stages` rispettivamente come:
+- `base64_encode` — encode a string to Base64 (RFC 4648)
+- `base64_decode` — decode a Base64-encoded string (RFC 4648)
+
+---
+
+### 6.12 Cestino di sistema (plugin)
+
+Il supporto per il cestino del sistema operativo è disponibile tramite il plugin `arksh_trash_plugin`. Il plugin usa le API native di ogni piattaforma e non crea strutture proprie.
+
+**Caricamento**
+
+```bash
+plugin load arksh_trash_plugin
+# oppure nel file ~/.arkshrc per caricare all'avvio
+```
+
+**Cestinare un oggetto**
+
+Il metodo `-> trash()` è disponibile su qualsiasi oggetto filesystem (file, directory, path):
+
+```bash
+let dest = path("file.txt") -> trash()
+dest -> print()
+# path nel cestino, es: /Users/utente/.Trash/file.txt
+```
+
+In caso di errore (path inesistente, permessi insufficienti) viene restituito un messaggio descrittivo.
+
+**Stage pipeline `each_trash`**
+
+Cestina ogni elemento di una lista. Gli errori sui singoli item vengono accumulati e segnalati alla fine senza interrompere gli altri:
+
+```bash
+path(".") -> children()
+  |> where(name ends_with ".tmp")
+  |> each_trash()
+```
+
+**Namespace `trash()`**
+
+Il resolver `trash()` restituisce un typed-map `trash_ns` con accesso allo stato del cestino:
+
+```bash
+let t = trash()
+
+# numero di elementi nel cestino
+let n = t -> count
+n -> print()
+
+# lista dei path nel cestino
+let items = t -> items
+items |> count()
+
+# svuota il cestino
+t -> empty()
+
+# ripristina un elemento per nome (solo Linux)
+t -> restore("vecchio-file.txt")
+```
+
+**Disponibilità per piattaforma**
+
+| Operazione | macOS | Linux | Windows |
+|---|---|---|---|
+| `-> trash()` | Si (NSFileManager) | Si (gio o XDG) | Si (SHFileOperationW) |
+| `|> each_trash` | Si | Si | Si |
+| `trash() -> count` | Si (~/.Trash/) | Si (~/.local/share/Trash/) | Si (SHQueryRecycleBinW) |
+| `trash() -> items` | Si | Si | Solo conteggio |
+| `trash() -> empty()` | Si | Si (rm Trash files+info) | Si (SHEmptyRecycleBinW) |
+| `trash() -> restore(n)` | No | Si (via .trashinfo) | No |
+
 ---
 
 ## 7. Pipeline oggetti (|>)
@@ -1386,6 +1500,46 @@ path("/etc") -> children()
 ```
 
 Per corrispondenze piu complesse (case-insensitive, regex avanzate) usare `where(block)`.
+
+#### base64_encode
+
+Codifica il valore stringa in Base64 (RFC 4648). L'implementazione e in C puro, senza dipendenze esterne.
+
+```bash
+"hello" |> base64_encode |> render()
+# aGVsbG8=
+
+capture("cat /etc/hosts") |> base64_encode |> render()
+```
+
+#### base64_decode
+
+Decodifica una stringa Base64 (RFC 4648) nel testo originale.
+
+```bash
+"aGVsbG8=" |> base64_decode |> render()
+# hello
+
+"aGVsbG8=" |> base64_decode |> base64_encode |> render()
+# aGVsbG8=  (round-trip)
+```
+
+In caso di input non valido, lo stage restituisce un errore descrittivo:
+
+```
+base64_decode: invalid character at position N
+base64_decode: invalid input length (must be multiple of 4)
+```
+
+#### each_trash
+
+Stage fornito dal plugin `arksh_trash_plugin`. Sposta nel cestino ogni elemento della lista (percorsi filesystem). Vedi §6.12.
+
+```bash
+path("/tmp/vecchio") -> children()
+  |> where(name == "cache")
+  |> each_trash
+```
 
 ---
 
@@ -2975,7 +3129,36 @@ plugin enable nome_plugin
 # riabilita un plugin precedentemente disabilitato
 ```
 
-### 18.3 Creare un plugin (cenni)
+### 18.3 Autoload — caricamento automatico all'avvio
+
+arksh supporta un file di configurazione `~/.arksh/plugins.conf` che elenca i plugin da caricare automaticamente all'avvio. Il file e letto prima del file RC (`~/.arkshrc`).
+
+Formato del file: un percorso assoluto per riga; le righe che iniziano con `#` e le righe vuote vengono ignorate.
+
+```
+# ~/.arksh/plugins.conf
+/usr/local/lib/arksh/arksh_trash_plugin.dylib
+/home/utente/.arksh/plugins/mio_plugin.so
+```
+
+Per gestire la lista senza modificare il file manualmente:
+
+```bash
+# aggiungere un plugin all'autoload
+plugin autoload set /percorso/al/plugin.dylib
+
+# rimuovere un plugin dall'autoload
+plugin autoload unset /percorso/al/plugin.dylib
+
+# vedere i plugin configurati per l'autoload
+plugin autoload list
+```
+
+`plugin autoload set` risolve il percorso in assoluto prima di scriverlo. Se il plugin e gia presente, il comando risponde `already configured for autoload` senza aggiungere duplicati.
+
+`plugin autoload unset` accetta sia il percorso assoluto sia il percorso relativo usato in origine (viene risolto prima del confronto).
+
+### 18.4 Creare un plugin (cenni)
 
 Un plugin arksh e una libreria C che esporta una struttura di registrazione. Il template di partenza si trova in `plugins/skeleton/` nel sorgente di arksh.
 
@@ -2987,6 +3170,25 @@ Un plugin puo registrare:
 - **Nuovi stage pipeline**: stage aggiuntivi usabili dopo `|>`
 
 L'ABI e stabile: i plugin compilati per una versione di arksh rimangono compatibili con versioni future (salvo aggiornamenti maggiori dell'ABI documentati nel changelog).
+
+### 18.5 Plugin inclusi
+
+arksh distribuisce alcuni plugin ufficiali come esempi e funzionalita opzionali:
+
+| Plugin | File | Funzionalita |
+|--------|------|--------------|
+| `arksh_trash_plugin` | `plugins/trash/trash_plugin.c` | Integrazione con il cestino di sistema (macOS, Linux XDG, Windows). Aggiunge `-> trash()`, `|> each_trash`, il resolver `trash` e il tipo `trash_ns`. Vedi §6.12. |
+
+Per compilare e caricare il plugin trash:
+
+```bash
+# da CMake — e incluso automaticamente nel build
+cmake --build . --target arksh_trash_plugin
+
+# caricare nella shell
+plugin load ./arksh_trash_plugin.dylib   # macOS
+plugin load ./arksh_trash_plugin.so      # Linux
+```
 
 Struttura minima di un plugin:
 

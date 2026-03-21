@@ -6219,6 +6219,43 @@ static int command_prompt(ArkshShell *shell, int argc, char **argv, char *out, s
   return 1;
 }
 
+static int plugin_autoload_conf_path(ArkshShell *shell, char *out, size_t out_size) {
+  const char *home = arksh_shell_get_var(shell, "HOME");
+  if (home == NULL || home[0] == '\0') {
+    return 1;
+  }
+  snprintf(out, out_size, "%s/.arksh/plugins.conf", home);
+  return 0;
+}
+
+static int try_load_plugin_autoload(ArkshShell *shell) {
+  char conf_path[ARKSH_MAX_PATH];
+  char line[ARKSH_MAX_PATH];
+  char trimmed[ARKSH_MAX_PATH];
+  char plugin_output[ARKSH_MAX_OUTPUT];
+  FILE *fp;
+
+  if (plugin_autoload_conf_path(shell, conf_path, sizeof(conf_path)) != 0) {
+    return 0;
+  }
+
+  fp = fopen(conf_path, "r");
+  if (fp == NULL) {
+    return 0;
+  }
+
+  while (fgets(line, sizeof(line), fp) != NULL) {
+    trim_copy(line, trimmed, sizeof(trimmed));
+    if (trimmed[0] == '\0' || trimmed[0] == '#') {
+      continue;
+    }
+    arksh_shell_load_plugin(shell, trimmed, plugin_output, sizeof(plugin_output));
+  }
+
+  fclose(fp);
+  return 0;
+}
+
 static int command_plugin(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
   ArkshLoadedPlugin *plugin;
 
@@ -6299,6 +6336,166 @@ static int command_plugin(ArkshShell *shell, int argc, char **argv, char *out, s
     plugin->active = 0;
     snprintf(out, out_size, "plugin disabled: %s", plugin->name);
     return 0;
+  }
+
+  if (strcmp(argv[1], "autoload") == 0) {
+    char conf_path[ARKSH_MAX_PATH];
+    char dir_path[ARKSH_MAX_PATH];
+
+    if (plugin_autoload_conf_path(shell, conf_path, sizeof(conf_path)) != 0) {
+      snprintf(out, out_size, "plugin autoload: HOME not set");
+      return 1;
+    }
+
+    /* plugin autoload list */
+    if (argc < 3 || strcmp(argv[2], "list") == 0) {
+      FILE *fp = fopen(conf_path, "r");
+      char line[ARKSH_MAX_PATH];
+      char trimmed[ARKSH_MAX_PATH];
+      int found = 0;
+
+      if (fp == NULL) {
+        snprintf(out, out_size, "no plugins configured for autoload");
+        return 0;
+      }
+
+      out[0] = '\0';
+      while (fgets(line, sizeof(line), fp) != NULL) {
+        trim_copy(line, trimmed, sizeof(trimmed));
+        if (trimmed[0] == '\0' || trimmed[0] == '#') {
+          continue;
+        }
+        if (found) {
+          strncat(out, "\n", out_size - strlen(out) - 1);
+        }
+        strncat(out, trimmed, out_size - strlen(out) - 1);
+        found = 1;
+      }
+      fclose(fp);
+
+      if (!found) {
+        snprintf(out, out_size, "no plugins configured for autoload");
+      }
+      return 0;
+    }
+
+    /* plugin autoload set <path> */
+    if (strcmp(argv[2], "set") == 0) {
+      char resolved[ARKSH_MAX_PATH];
+      char line[ARKSH_MAX_PATH];
+      char trimmed[ARKSH_MAX_PATH];
+      FILE *fp;
+      int already_set = 0;
+
+      if (argc < 4) {
+        snprintf(out, out_size, "usage: plugin autoload set <path>");
+        return 1;
+      }
+
+      if (arksh_platform_resolve_path(shell->cwd, argv[3], resolved, sizeof(resolved)) != 0) {
+        snprintf(out, out_size, "unable to resolve path: %s", argv[3]);
+        return 1;
+      }
+
+      /* ensure ~/.arksh/ directory exists */
+      arksh_platform_dirname(conf_path, dir_path, sizeof(dir_path));
+      arksh_platform_ensure_directory(dir_path);
+
+      /* check if already present */
+      fp = fopen(conf_path, "r");
+      if (fp != NULL) {
+        while (fgets(line, sizeof(line), fp) != NULL) {
+          trim_copy(line, trimmed, sizeof(trimmed));
+          if (strcmp(trimmed, resolved) == 0) {
+            already_set = 1;
+            break;
+          }
+        }
+        fclose(fp);
+      }
+
+      if (already_set) {
+        snprintf(out, out_size, "plugin already configured for autoload: %s", resolved);
+        return 0;
+      }
+
+      fp = fopen(conf_path, "a");
+      if (fp == NULL) {
+        snprintf(out, out_size, "unable to write autoload config: %s", conf_path);
+        return 1;
+      }
+      fprintf(fp, "%s\n", resolved);
+      fclose(fp);
+
+      snprintf(out, out_size, "plugin added to autoload: %s", resolved);
+      return 0;
+    }
+
+    /* plugin autoload unset <path-or-name> */
+    if (strcmp(argv[2], "unset") == 0) {
+      char resolved[ARKSH_MAX_PATH];
+      char tmp_path[ARKSH_MAX_PATH];
+      char line[ARKSH_MAX_PATH];
+      char trimmed[ARKSH_MAX_PATH];
+      FILE *fp;
+      FILE *tmp_fp;
+      int have_resolved;
+      int removed = 0;
+
+      if (argc < 4) {
+        snprintf(out, out_size, "usage: plugin autoload unset <path>");
+        return 1;
+      }
+
+      have_resolved = (arksh_platform_resolve_path(shell->cwd, argv[3], resolved, sizeof(resolved)) == 0);
+
+      fp = fopen(conf_path, "r");
+      if (fp == NULL) {
+        snprintf(out, out_size, "no autoload config found");
+        return 1;
+      }
+
+      snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", conf_path);
+      tmp_fp = fopen(tmp_path, "w");
+      if (tmp_fp == NULL) {
+        fclose(fp);
+        snprintf(out, out_size, "unable to write temporary config: %s", tmp_path);
+        return 1;
+      }
+
+      while (fgets(line, sizeof(line), fp) != NULL) {
+        trim_copy(line, trimmed, sizeof(trimmed));
+        if (trimmed[0] == '\0' || trimmed[0] == '#') {
+          fputs(line, tmp_fp);
+          continue;
+        }
+        if (strcmp(trimmed, argv[3]) == 0 ||
+            (have_resolved && strcmp(trimmed, resolved) == 0)) {
+          removed = 1;
+        } else {
+          fputs(line, tmp_fp);
+        }
+      }
+      fclose(fp);
+      fclose(tmp_fp);
+
+      if (!removed) {
+        remove(tmp_path);
+        snprintf(out, out_size, "plugin not found in autoload: %s", argv[3]);
+        return 1;
+      }
+
+      if (rename(tmp_path, conf_path) != 0) {
+        snprintf(out, out_size, "unable to update autoload config");
+        return 1;
+      }
+
+      snprintf(out, out_size, "plugin removed from autoload: %s", argv[3]);
+      return 0;
+    }
+
+    snprintf(out, out_size, "usage: plugin autoload [list|set <path>|unset <path>]");
+    return 1;
   }
 
   snprintf(out, out_size, "unknown plugin command: %s", argv[1]);
@@ -8611,6 +8808,10 @@ int arksh_shell_init(ArkshShell *shell) {
   }
 
   if (try_load_default_config(shell) != 0) {
+    return 1;
+  }
+
+  if (try_load_plugin_autoload(shell) != 0) {
     return 1;
   }
 

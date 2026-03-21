@@ -1,0 +1,100 @@
+# E8-S3-T2 / E8-S4: CI multipiattaforma.
+#
+# Job indipendenti:
+#   build-linux    — Ubuntu, gcc, ASan+UBSan, Debug
+#   build-macos    — macOS, clang, UBSan, Debug
+#   build-release  — matrice Release: Linux · macOS · Windows (MSVC)
+#
+# Piattaforme certificate:
+#   Linux   — ubuntu-latest (gcc, Debug+Release)
+#   macOS   — macos-latest  (clang, Debug+Release)
+#   Windows — windows-latest (MSVC, Release)
+
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  # ------------------------------------------------------------------ Linux ASan+UBSan
+  build-linux:
+    name: Linux (ASan + UBSan)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y cmake gcc
+
+      - name: Configure (ASan + UBSan)
+        run: |
+          cmake -S . -B build-san \
+            -DARKSH_SANITIZE=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=gcc
+
+      - name: Build
+        run: cmake --build build-san --parallel
+
+      - name: Test
+        run: ctest --test-dir build-san --output-on-failure --timeout 60
+        env:
+          ASAN_OPTIONS: abort_on_error=1:detect_leaks=1
+          UBSAN_OPTIONS: abort_on_error=1:print_stacktrace=1
+
+  # ------------------------------------------------------------------ macOS UBSan
+  build-macos:
+    name: macOS (UBSan)
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (UBSan)
+        run: |
+          cmake -S . -B build-ubsan \
+            -DARKSH_UBSAN=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang
+
+      - name: Build
+        run: cmake --build build-ubsan --parallel
+
+      - name: Test
+        run: ctest --test-dir build-ubsan --output-on-failure --timeout 60
+        env:
+          UBSAN_OPTIONS: abort_on_error=1:print_stacktrace=1
+
+  # ------------------------------------------------------------------ Release (matrice multipiattaforma)
+  build-release:
+    name: Release (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y cmake gcc
+
+      - name: Configure (Release)
+        run: cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build-rel --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build-rel --build-config Release --output-on-failure --timeout 60

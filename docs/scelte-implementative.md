@@ -51,6 +51,8 @@ Runtime principale. Contiene:
 - alias expansion prima del parse
 - rendering del prompt
 - caricamento config e plugin
+- plugin autoload da `~/.arksh/plugins.conf`
+- comandi `plugin autoload set/unset/list`
 
 ### `src/lexer.c`
 
@@ -359,6 +361,18 @@ Regola di dispatch dell'MVP:
 3. l'estensione puo essere definita come block nel linguaggio o come callback nativa da plugin
 
 Questo permette di mantenere il core piccolo ma estendibile senza cambiare la grammatica base.
+
+### Plugin autoload
+
+I plugin da caricare automaticamente all'avvio vengono letti da `~/.arksh/plugins.conf`, un file con un percorso assoluto per riga (commenti `#` e righe vuote ignorati). Il caricamento avviene in `try_load_plugin_autoload()`, chiamata da `arksh_shell_init()` dopo `try_load_default_config()` e prima di `try_load_default_rc()`.
+
+La lista viene gestita con i sottocomandi:
+
+- `plugin autoload set <path>` — risolve il percorso, verifica i duplicati, appende al file
+- `plugin autoload unset <path>` — filtra la riga tramite file temporaneo + `rename` (atomico)
+- `plugin autoload list` — stampa le righe attive nel file
+
+**Motivazione della scelta**: usare un file dedicato (`plugins.conf` separato dal `prompt.conf`) mantiene separata la configurazione dei plugin dalla configurazione del prompt. Il formato a percorso assoluto per riga e il piu semplice da scrivere, leggere e gestire in C senza parser aggiuntivi.
 
 ## Strategia di test
 

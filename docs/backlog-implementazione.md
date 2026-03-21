@@ -548,15 +548,15 @@ let d4 = Dict() -> from_json(j)       # importa da stringa JSON
 
 ### E6-S7. Stage di encoding: base64
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
 Due stage simmetrici per codifica e decodifica Base64 RFC 4648, integrati nella pipeline
-oggetti (`|>`). L'implementazione è in C puro senza dipendenze esterne: un encoder
-standard e un decoder con gestione degli errori.
+oggetti (`|>`). Implementazione in C puro in `executor.c` senza dipendenze esterne;
+registrazione in `shell.c`.
 
-- `[ ]` `E6-S7-T1` **`base64_encode` stage** — implementare in `shell.c` lo stage `base64_encode`: riceve un valore stringa (o qualsiasi valore renderizzato come stringa), produce la stringa Base64 corrispondente secondo RFC 4648 §4 (alfabeto `A-Za-z0-9+/`, padding con `=`); la funzione C di encoding è pura e non richiede dipendenze esterne; registrare lo stage con `arksh_shell_register_pipeline_stage` con descrizione `"encode a string to Base64 (RFC 4648)"`; lo stage opera su `ARKSH_VALUE_STRING` e restituisce `ARKSH_VALUE_STRING`
-- `[ ]` `E6-S7-T2` **`base64_decode` stage** — implementare lo stage `base64_decode`: riceve una stringa Base64 valida, produce la stringa decodificata; gestire correttamente il padding (`=`, `==`) e il caso di input vuoto; in caso di carattere non valido nell'alfabeto Base64 ritornare un errore esplicito (`"base64_decode: invalid character at position N"`); registrare con descrizione `"decode a Base64-encoded string (RFC 4648)"`
-- `[ ]` `E6-S7-T3` **Test** — `text("hello") |> base64_encode` → `"aGVsbG8="` ; `text("aGVsbG8=") |> base64_decode` → `"hello"`; round-trip `text("arksh") |> base64_encode |> base64_decode` → `"arksh"`; input vuoto encode → `""`; input vuoto decode → `""`; input non valido decode → errore; verifica che lo stage sia visibile in `help stages`
+- `[x]` `E6-S7-T1` **`base64_encode` stage** — `apply_base64_encode_stage` in `executor.c`; alfabeto RFC 4648 `A-Za-z0-9+/` con padding `=`; registrato con descrizione `"encode a string to Base64 (RFC 4648)"`
+- `[x]` `E6-S7-T2` **`base64_decode` stage** — `apply_base64_decode_stage` con lookup table `signed char[256]`; gestisce padding `=`/`==`; errore `"base64_decode: invalid character at position N"` su carattere non valido; errore su lunghezza non multipla di 4
+- `[x]` `E6-S7-T3` **Test** — golden test `tests/fixtures/golden/base64-stages.arksh` (5 casi: encode hello→`aGVsbG8=`, decode, round-trip arksh, empty encode, empty decode); 208/208 test passano
 
 ---
 
@@ -709,6 +709,19 @@ let r = t -> restore("file.txt")  # ripristina elemento per nome (Linux; errore 
 - `[x]` `E6-S9-T5` **Test** — 3 test CMake: caricamento plugin + tipo `trash_ns`, lettura
   `-> count` (regex `[0-9]+`), presenza del metodo `trash` in `help methods object`; 208/208
   test passano.
+
+### E6-S10. Plugin autoload — caricamento automatico all'avvio
+
+Stato story: `[x]`
+
+Obiettivo: permettere all'utente di configurare quali plugin vengono caricati automaticamente all'avvio di arksh, e di gestire questa lista con un sottocomando dedicato.
+
+- `[x]` `E6-S10-T1` **File di configurazione** — `~/.arksh/plugins.conf`; formato: un percorso assoluto per riga, commenti `#`, righe vuote ignorate. La directory `~/.arksh/` viene creata automaticamente se assente.
+- `[x]` `E6-S10-T2` **Caricamento all'avvio** — `try_load_plugin_autoload()` chiamata da `arksh_shell_init()` dopo `try_load_default_config()`; legge `~/.arksh/plugins.conf` e chiama `arksh_shell_load_plugin()` per ogni riga; errori di caricamento singoli vengono ignorati silenziosamente (plugin non disponibile non blocca il boot).
+- `[x]` `E6-S10-T3` **`plugin autoload set <path>`** — risolve il percorso in assoluto, crea `~/.arksh/` se mancante, controlla duplicati, appende una riga al file; output: `plugin added to autoload: <path>` oppure `already configured for autoload: <path>`.
+- `[x]` `E6-S10-T4` **`plugin autoload unset <path>`** — legge il file, filtra la riga corrispondente (per percorso letterale o risolto), riscrive il file tramite file temporaneo + `rename`; output: `plugin removed from autoload: <path>` oppure errore se non trovato.
+- `[x]` `E6-S10-T5` **`plugin autoload list`** — stampa tutti i percorsi configurati nel file, uno per riga; se il file e assente o vuoto: `no plugins configured for autoload`.
+- `[x]` `E6-S10-T6` **Test CMake** — 3 test: `arksh_plugin_autoload_set` (output `added to autoload`), `arksh_plugin_autoload_unset` (output `removed from autoload`), `arksh_plugin_autoload_duplicate` (output `already configured for autoload`).
 
 ---
 
@@ -884,11 +897,106 @@ Stato story: `[ ]`
 
 ---
 
+## E11. POSIX core — completamento per uso come shell di sistema
+
+Stato epoca: `[ ]`
+
+Obiettivo: permettere ad arksh di eseguire script POSIX di media complessità senza errori, rimuovendo i blocchi principali che impediscono l'uso come shell di sistema. Vedi `docs/arksh-come-shell-di-sistema.md` §2 Fase A.
+
+### E11-S1. Flag di modalità shell
+
+Stato story: `[ ]`
+
+- `[ ]` `E11-S1-T1` **Struttura interna** — aggiungere i flag booleani `errexit`, `nounset`, `pipefail`, `xtrace` a `ArkshShell`; estendere `command_set` per riconoscere `-e`, `-u`, `-o pipefail`, `-x` e le rispettive forme di disabilitazione `+e`, `+u`, ecc.; aggiungere `$PS4` (default `"+ "`) come variabile shell.
+- `[ ]` `E11-S1-T2` **`set -e` (errexit)** — dopo ogni comando non-condizionale in `arksh_shell_execute_line` e nei loop di command list, se `errexit` è attivo e lo status è non-zero, uscire con quello status; casi esclusi secondo POSIX: condizione di `if`/`while`/`until`, LHS di `&&`/`||`, comandi preceduti da `!`.
+- `[ ]` `E11-S1-T3` **`set -u` (nounset)** — in `expand.c` durante l'espansione di `$VAR` e `${VAR}`, se la variabile non è definita e `nounset` è attivo, restituire un errore descrittivo invece di stringa vuota; non applicare a `${VAR:-default}` e simili.
+- `[ ]` `E11-S1-T4` **`set -o pipefail`** — in `platform.c` per pipeline shell multi-stage, conservare l'exit status di ogni segmento; se `pipefail` è attivo, lo status dell'intera pipeline è il più alto status non-zero tra i segmenti (o zero se tutti sono zero).
+- `[ ]` `E11-S1-T5` **`set -x` (xtrace)** — prima di eseguire ogni comando, stampare su stderr `$PS4` seguìto dall'espansione del comando; le expansion vengono tracciate dopo la sostituzione, non prima.
+- `[ ]` `E11-S1-T6` **Test** — golden script che verifica: `set -e` interrompe su errore; `set -u` fallisce su variabile non definita; `set -x` produce output su stderr; `set -o pipefail` cattura il fallimento nel mezzo di una pipeline.
+
+### E11-S2. Aritmetica `$(( ))`
+
+Stato story: `[ ]`
+
+- `[ ]` `E11-S2-T1` **Lexer** — riconoscere `$((` come token `ARITH_OPEN` e `))` come `ARITH_CLOSE` con contatore di nesting per gestire parentesi interne; produrre il contenuto interno come token letterale.
+- `[ ]` `E11-S2-T2` **Parser** — nodo AST `ARITH_EXPANSION`; grammatica ricorsiva con precedenza operatori aritmetici standard: `+`, `-` (unario e binario), `*`, `/`, `%`, `**`; bitwise `<<`, `>>`, `&`, `|`, `^`, `~`; logici `!`, `&&`, `||`; confronti `<`, `>`, `<=`, `>=`, `==`, `!=`; ternario `?:`; riferimenti a variabile con `$VAR` o `VAR` nudo.
+- `[ ]` `E11-S2-T3` **Executor** — valutare il nodo `ARITH_EXPANSION` e restituire la rappresentazione stringa del risultato intero (long long); errore su divisione per zero; se `nounset` è attivo, variabili non definite hanno valore `0` (compatibile con bash).
+- `[ ]` `E11-S2-T4` **Test** — golden script: operazioni base `+`, `-`, `*`, `/`, `%`; nesting `$(( $(( 2+3 )) * 4 ))`; variabili; confronti usati in `if $(( n > 0 ))`.
+
+### E11-S3. Built-in `[ ]` completo
+
+Stato story: `[ ]`
+
+- `[ ]` `E11-S3-T1` **Primari file mancanti** — aggiungere a `command_test`: `-b` (block special), `-c` (char special), `-g` (setgid), `-k` (sticky bit), `-p` (named pipe), `-S` (socket), `-u` (setuid), `-L`/`-h` (symlink), `-t fd` (file descriptor associato a un terminale via `isatty`), `-O` (owned by effective uid), `-G` (owned by effective gid), `-N` (modificato dopo l'ultimo accesso).
+- `[ ]` `E11-S3-T2` **Confronti stringa** — verificare copertura completa di `=`, `!=`, `<`, `>`; correggere eventuali discrepanze rispetto a POSIX.
+- `[ ]` `E11-S3-T3` **Confronti numerici** — `-eq`, `-ne`, `-lt`, `-le`, `-gt`, `-ge`; gestione stringhe non-numeriche con errore descrittivo.
+- `[ ]` `E11-S3-T4` **Operatori logici e raggruppamento** — `!`, `-a`, `-o`, `(`, `)` dentro `[ ]`; precedenza: `!` > `(` `)` > `-a` > `-o`.
+- `[ ]` `E11-S3-T5` **Test** — golden script con tutti i primari; verifica comportamento su file inesistente, symlink, fifo.
+
+### E11-S4. Doppio bracket `[[ ]]`
+
+Stato story: `[ ]`
+
+- `[ ]` `E11-S4-T1` **Lexer** — token `DBLBRACKET_OPEN` (`[[`) e `DBLBRACKET_CLOSE` (`]]`); il contenuto interno non subisce word splitting né globbing.
+- `[ ]` `E11-S4-T2` **Parser** — nodo AST `CONDITIONAL_EXP`; eredita tutti i primari di `[ ]`; aggiunge `=~` (match regex POSIX ERE via `regcomp`/`regexec`, cattura in `$BASH_REMATCH`) e `==` con pattern glob (via `fnmatch`).
+- `[ ]` `E11-S4-T3` **Executor** — valutare il nodo; le variabili non espanse subiscono word splitting solo se non quotate; operatori `&&` e `||` corti-circuitati.
+- `[ ]` `E11-S4-T4` **Test** — golden script: `[[ "$s" == *.txt ]]`, `[[ "$s" =~ ^[0-9]+$ ]]`, operatori logici, variabili non quotate.
+
+### E11-S5. Subshell `( )` e gruppi `{ }`
+
+Stato story: `[ ]`
+
+- `[ ]` `E11-S5-T1` **Lexer/parser subshell** — riconoscere `( cmd_list )` come nodo AST `SUBSHELL`; distinguerlo dall'invocazione di metodo e dai resolver (contesto rilevato dal parser).
+- `[ ]` `E11-S5-T2` **Executor subshell** — eseguire il `cmd_list` in un processo figlio (`fork`); le modifiche a variabili, `cd`, alias e funzioni nel figlio non influenzano il padre; lo status di uscita è lo status dell'ultimo comando del figlio.
+- `[ ]` `E11-S5-T3` **Lexer/parser gruppo** — riconoscere `{ cmd_list; }` come nodo AST `CMD_GROUP`; la `}` richiede un separatore (`;` o newline) prima di sé.
+- `[ ]` `E11-S5-T4` **Executor gruppo** — eseguire `cmd_list` nello stesso processo e scope; utile per raggruppare redirection senza fork.
+- `[ ]` `E11-S5-T5` **Test** — golden script: variabili modificate in subshell non trapelano; `cd` in subshell non cambia la directory del padre; `{ echo a; echo b; } > out.txt` redirige l'intero gruppo.
+
+### E11-S6. `getopts`, `ulimit`, `umask`
+
+Stato story: `[ ]`
+
+- `[ ]` `E11-S6-T1` **`getopts optstring name [args]`** — implementare secondo POSIX; gestire `OPTIND` (reset con `OPTIND=1`), `OPTARG`, `:` nella optstring per argomenti obbligatori mancanti (silenzioso vs. errore); restituire exit status 1 quando gli argomenti sono esauriti.
+- `[ ]` `E11-S6-T2` **`ulimit`** — su POSIX usare `getrlimit`/`setrlimit` per leggere e impostare i limiti di risorsa; flag `-a` stampa tutti i limiti correnti; flag `-c`, `-d`, `-f`, `-l`, `-m`, `-n`, `-s`, `-t`, `-u`, `-v` per risorse specifiche; `-S`/`-H` per soft/hard limit; su Windows implementare come stub che stampa `ulimit: not supported on this platform`.
+- `[ ]` `E11-S6-T3` **`umask [mode]`** — senza argomento stampa la maschera corrente in ottale (es. `022`); con argomento ottale o simbolico imposta la maschera via `umask(2)`; su Windows stub.
+- `[ ]` `E11-S6-T4` **Test** — golden script: `getopts` con loop standard; `umask` legge e imposta; `ulimit -n` stampa un numero.
+
+### E11-S7. `local` nelle funzioni
+
+Stato story: `[ ]`
+
+- `[ ]` `E11-S7-T1` **Parser** — riconoscere `local name[=value]` come statement valido dentro il corpo di una funzione; fuori da una funzione deve restituire errore `local: not in a function`.
+- `[ ]` `E11-S7-T2` **Frame di scope** — introdurre uno stack di frame variabili in `ArkshShell`; all'ingresso in una funzione, creare un nuovo frame; `local` alloca la variabile nel frame corrente; la lookup di variabili scala i frame dall'interno verso l'esterno; al ritorno dalla funzione, distruggere il frame corrente.
+- `[ ]` `E11-S7-T3` **Shadowing** — una variabile `local` con lo stesso nome di una variabile esterna la oscura all'interno della funzione; al ritorno la variabile esterna riprende il valore originale.
+- `[ ]` `E11-S7-T4` **Test** — golden script: variabile locale non trapela fuori; variabile esterna omonima preserva il valore originale dopo la chiamata; `local` con inizializzatore.
+
+### E11-S8. Here-string `<<<`
+
+Stato story: `[ ]`
+
+- `[ ]` `E11-S8-T1` **Lexer** — token `HERE_STRING` (`<<<`); la parola successiva è l'argomento (soggetto a espansione variabili e command substitution).
+- `[ ]` `E11-S8-T2` **Parser** — nodo di redirection `REDIRECT_HERESTRING` con l'espressione destra; può combinarsi con altri redirect sulla stessa riga.
+- `[ ]` `E11-S8-T3` **Executor** — creare una pipe anonima; scrivere la stringa espansa seguita da un newline nel write-end; passare il read-end come stdin al comando target; chiudere il write-end dopo la scrittura.
+- `[ ]` `E11-S8-T4` **Test** — golden script: `cat <<< "hello"` → `hello`; `read line <<< "word"` → `line=word`; espansione variabile `<<< "$HOME"`.
+
+### E11-S9. Sostituzione di processo `<( )` e `>( )`
+
+Stato story: `[ ]`
+
+- `[ ]` `E11-S9-T1` **Lexer** — token `PROC_SUBST_IN` (`<(`) e `PROC_SUBST_OUT` (`>(`); il contenuto fino alla `)` bilanciata è il comando del sotto-processo.
+- `[ ]` `E11-S9-T2` **Parser** — nodo AST `PROC_SUBST` con campo `direction` (`read`/`write`) e `cmd_list` interno; valido come argomento di un comando semplice o come sorgente di redirection.
+- `[ ]` `E11-S9-T3` **Executor POSIX** — creare una pipe o usare `/dev/fd/N` (Linux) / named FIFO su macOS; eseguire `cmd` in background con stdout/stdin collegato al descriptor; sostituire il token `<(...)` con il path del descriptor nella riga di comando espansa; chiudere i descriptor non necessari nel processo padre.
+- `[ ]` `E11-S9-T4` **Test** — golden script: `diff <(echo a) <(echo b)`; `wc -l <(ls)`; verifica che il processo figlio venga atteso correttamente.
+
+---
+
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E8 `[x]`
-**In corso:** E6 (S1–S7 `[x]`, S9 `[x]` come plugin, S8 aperta)
-**Aperte:** E6 (S8), E7 (JSON), E9 (release), E10 (HTTP plugin)
+**In corso:** E6 (S1–S7 `[x]`, S9 `[x]` come plugin, S10 `[x]` autoload, S8 aperta)
+**Aperte:** E6 (S8), E7 (JSON), E9 (release), E10 (HTTP plugin), E11 (POSIX core)
+
+> **Completati in E6:** S1 (path/fs), S2 (custom types), S3 (pipeline stages), S4 (shell integration), S5 (numeric types), S6 (Dict), S7 (base64), S9 (trash plugin), S10 (plugin autoload). Rimane solo S8 (Matrix).
 
 ---
 
@@ -948,13 +1056,13 @@ epoca. Sblocca integrazioni con API esterne direttamente dagli script.
 6. `E10-S1-T6` (errori, timeout, redirect, proxy)
 7. `E10-S1-T7` (test con mock server)
 
-### Percorso I — stage di encoding (E6-S7)
+### ~~Percorso I — stage di encoding (E6-S7)~~ Completato
 
-Basso costo, nessuna dipendenza esterna, utile per automazione e integrazione API.
+~~Basso costo, nessuna dipendenza esterna, utile per automazione e integrazione API.~~
 
-1. `E6-S7-T1` (stage `base64_encode`)
-2. `E6-S7-T2` (stage `base64_decode`)
-3. `E6-S7-T3` (test)
+1. ~~`E6-S7-T1` (stage `base64_encode`)~~
+2. ~~`E6-S7-T2` (stage `base64_decode`)~~
+3. ~~`E6-S7-T3` (test)~~
 
 ### Percorso L — tipo Matrix (E6-S8)
 
@@ -969,6 +1077,12 @@ Prerequisito suggerito: E6-S6 (Dict) per interoperabilità `to_maps`/`from_maps`
 6. `E6-S8-T6` (stage pipeline: `transpose`, `fill_na`)
 7. `E6-S8-T7` (test golden + unit)
 
+### ~~Percorso N — plugin autoload (E6-S10)~~ Completato
+
+~~`E6-S10-T1`~~ ~~`E6-S10-T2`~~ ~~`E6-S10-T3`~~ ~~`E6-S10-T4`~~ ~~`E6-S10-T5`~~ ~~`E6-S10-T6`~~
+
+---
+
 ### ~~Percorso M — cestino di sistema (E6-S9)~~ Completato
 
 ~~Integrazione con il cestino nativo del sistema operativo (Trash macOS, XDG Linux, Recycle Bin Windows).~~
@@ -979,6 +1093,26 @@ Prerequisito suggerito: E6-S6 (Dict) per interoperabilità `to_maps`/`from_maps`
 3. ~~`E6-S9-T3` (stage pipeline `each_trash` per cestinare una lista di oggetti)~~
 4. ~~`E6-S9-T4` (namespace `trash()` con `count`, `items`, `empty()`, `restore(name)`)~~
 5. ~~`E6-S9-T5` (3 test CMake: load, count, method presence — 208/208 pass)~~
+
+### Percorso O — POSIX core (E11)
+
+Prerequisito per usare arksh come shell di sistema. Sblocca la compatibilità con script esistenti e strumenti che assumono `sh`/`bash`. Vedi `docs/arksh-come-shell-di-sistema.md`.
+
+Ordine consigliato:
+
+1. `E11-S1` (flag di modalità: `set -e`, `-u`, `-o pipefail`, `-x`)
+2. `E11-S2` (aritmetica `$(( ))`)
+3. `E11-S3` (`[ ]` completo con tutti i primari POSIX)
+4. `E11-S7` (`local` nelle funzioni — scope isolato)
+5. `E11-S5` (subshell `()` e gruppi `{}`)
+6. `E11-S4` (`[[ ]]` con `=~` e glob)
+7. `E11-S6` (`getopts`, `ulimit`, `umask`)
+8. `E11-S8` (here-string `<<<`)
+9. `E11-S9` (sostituzione di processo `<()` / `>()`)
+
+Note: `E11-S7` prima di `E11-S5` perché l'introduzione dello stack di frame variabili è un prerequisito per il corretto isolamento delle subshell.
+
+---
 
 ## Regola finale
 
