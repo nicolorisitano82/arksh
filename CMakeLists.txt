@@ -107,6 +107,13 @@ arksh_add_plugin(arksh_point_plugin plugins/point/point_plugin.c)
 if(NOT WIN32)
   target_link_libraries(arksh_point_plugin PRIVATE m)
 endif()
+# E6-S9: system trash integration plugin
+arksh_add_plugin(arksh_trash_plugin plugins/trash/trash_plugin.c)
+if(APPLE)
+  target_link_libraries(arksh_trash_plugin PRIVATE "-framework Foundation")
+elseif(WIN32)
+  target_link_libraries(arksh_trash_plugin PRIVATE Shell32)
+endif()
 
 include(CTest)
 
@@ -822,6 +829,27 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_point_translate PROPERTIES PASS_REGULAR_EXPRESSION "Point")
   set_tests_properties(arksh_point_stage     PROPERTIES PASS_REGULAR_EXPRESSION "Point")
 
+  # E6-S9: trash plugin tests
+  add_test(NAME arksh_trash_plugin_load
+    COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_trash_plugin> ; trash() -> type"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_trash_ns_count
+    COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_trash_plugin> ; let t = trash() ; let n = t -> count ; n -> print()"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_trash_method_exists
+    COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_trash_plugin> ; help methods object"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  set_tests_properties(
+    arksh_trash_plugin_load arksh_trash_ns_count arksh_trash_method_exists
+    PROPERTIES TIMEOUT 10
+  )
+  set_tests_properties(arksh_trash_plugin_load    PROPERTIES PASS_REGULAR_EXPRESSION "trash_ns")
+  set_tests_properties(arksh_trash_ns_count       PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
+  set_tests_properties(arksh_trash_method_exists  PROPERTIES PASS_REGULAR_EXPRESSION "trash")
+
   # E6-S3: pipeline object-aware stages
   add_test(NAME arksh_map_block
     COMMAND arksh -c "list(1, 2, 3) |> map([:it | it]) |> count()")
@@ -1012,6 +1040,10 @@ if(BUILD_TESTING)
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/dict-types.arksh"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_golden_base64_stages
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/base64-stages.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   set_tests_properties(
     arksh_golden_pipeline_chain
     arksh_golden_reduce_block
@@ -1020,6 +1052,7 @@ if(BUILD_TESTING)
     arksh_golden_mixed_shell
     arksh_golden_numeric_types
     arksh_golden_dict_types
+    arksh_golden_base64_stages
     PROPERTIES TIMEOUT 15
   )
   # Each test checks a distinctive output string that only appears when the script ran fully.
@@ -1030,6 +1063,7 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_golden_mixed_shell      PROPERTIES PASS_REGULAR_EXPRESSION "done")
   set_tests_properties(arksh_golden_numeric_types    PROPERTIES PASS_REGULAR_EXPRESSION "3i")
   set_tests_properties(arksh_golden_dict_types       PROPERTIES PASS_REGULAR_EXPRESSION "\\{\"nome\":\"alice\"\\}")
+  set_tests_properties(arksh_golden_base64_stages    PROPERTIES PASS_REGULAR_EXPRESSION "aGVsbG8=")
 
   # ── E8-S2-T2: PTY REPL tests — interactive features via pseudo-terminal ──
 

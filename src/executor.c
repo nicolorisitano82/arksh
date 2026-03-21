@@ -4103,6 +4103,166 @@ static int apply_max_stage(ArkshShell *shell, ArkshValue *value, const ArkshPipe
   return 0;
 }
 
+/* E6-S7: Base64 encode/decode stages (RFC 4648, pure C, no external deps) */
+
+static const char base64_alphabet[] =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static int apply_base64_encode_stage(ArkshValue *value, char *out, size_t out_size) {
+  const unsigned char *src;
+  size_t src_len;
+  size_t i;
+  size_t dst_pos = 0;
+  unsigned int b0, b1, b2;
+  /* Max input that fits: every 3 input bytes → 4 output chars.
+   * Output must fit in ARKSH_MAX_OUTPUT - 1 characters. */
+  char encoded[ARKSH_MAX_OUTPUT];
+
+  if (value == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+  if (value->kind != ARKSH_VALUE_STRING) {
+    snprintf(out, out_size, "base64_encode: expects a string");
+    return 1;
+  }
+
+  src = (const unsigned char *) value->text;
+  src_len = strlen(value->text);
+
+  if (src_len == 0) {
+    arksh_value_set_string(value, "");
+    return 0;
+  }
+
+  /* Check that encoded output fits */
+  if (((src_len + 2) / 3) * 4 >= sizeof(encoded)) {
+    snprintf(out, out_size, "base64_encode: input too long");
+    return 1;
+  }
+
+  for (i = 0; i < src_len; i += 3) {
+    b0 = src[i];
+    b1 = (i + 1 < src_len) ? src[i + 1] : 0;
+    b2 = (i + 2 < src_len) ? src[i + 2] : 0;
+
+    encoded[dst_pos++] = base64_alphabet[(b0 >> 2) & 0x3F];
+    encoded[dst_pos++] = base64_alphabet[((b0 << 4) | (b1 >> 4)) & 0x3F];
+    encoded[dst_pos++] = (i + 1 < src_len) ? base64_alphabet[((b1 << 2) | (b2 >> 6)) & 0x3F] : '=';
+    encoded[dst_pos++] = (i + 2 < src_len) ? base64_alphabet[b2 & 0x3F] : '=';
+  }
+  encoded[dst_pos] = '\0';
+
+  arksh_value_set_string(value, encoded);
+  return 0;
+}
+
+static int apply_base64_decode_stage(ArkshValue *value, char *out, size_t out_size) {
+  static const signed char decode_table[256] = {
+    /* Build the reverse lookup for the Base64 alphabet. */
+    /* 0x00-0x2B */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    /* '+' = 0x2B → 62 */
+    62,
+    -1,-1,-1,
+    /* '/' = 0x2F → 63 */
+    63,
+    /* '0'-'9' = 0x30-0x39 → 52-61 */
+    52,53,54,55,56,57,58,59,60,61,
+    -1,-1,-1,
+    /* '=' = 0x3D → padding, -2 */
+    -2,
+    -1,-1,-1,
+    /* 'A'-'Z' = 0x41-0x5A → 0-25 */
+    0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,
+    -1,-1,-1,-1,-1,-1,
+    /* 'a'-'z' = 0x61-0x7A → 26-51 */
+    26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,
+    /* rest */
+    -1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+  };
+
+  const char *src;
+  size_t src_len;
+  size_t i;
+  size_t dst_pos = 0;
+  signed char c0, c1, c2, c3;
+  char decoded[ARKSH_MAX_OUTPUT];
+
+  if (value == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+  if (value->kind != ARKSH_VALUE_STRING) {
+    snprintf(out, out_size, "base64_decode: expects a string");
+    return 1;
+  }
+
+  src = value->text;
+  src_len = strlen(src);
+
+  if (src_len == 0) {
+    arksh_value_set_string(value, "");
+    return 0;
+  }
+
+  if (src_len % 4 != 0) {
+    snprintf(out, out_size, "base64_decode: invalid input length (must be multiple of 4)");
+    return 1;
+  }
+
+  for (i = 0; i < src_len; i += 4) {
+    c0 = decode_table[(unsigned char) src[i]];
+    c1 = decode_table[(unsigned char) src[i + 1]];
+    c2 = decode_table[(unsigned char) src[i + 2]];
+    c3 = decode_table[(unsigned char) src[i + 3]];
+
+    /* c0 and c1 must be real base64 digits (0-63); padding here is invalid */
+    if (c0 < 0) {
+      snprintf(out, out_size, "base64_decode: invalid character at position %d", (int) i);
+      return 1;
+    }
+    if (c1 < 0) {
+      snprintf(out, out_size, "base64_decode: invalid character at position %d", (int)(i + 1));
+      return 1;
+    }
+    /* c2 and c3 may be -2 (padding '=') but not -1 (invalid char) */
+    if (c2 == -1) {
+      snprintf(out, out_size, "base64_decode: invalid character at position %d", (int)(i + 2));
+      return 1;
+    }
+    if (c3 == -1) {
+      snprintf(out, out_size, "base64_decode: invalid character at position %d", (int)(i + 3));
+      return 1;
+    }
+
+    if (dst_pos + 3 >= sizeof(decoded)) {
+      snprintf(out, out_size, "base64_decode: output too long");
+      return 1;
+    }
+
+    decoded[dst_pos++] = (char)(((unsigned char) c0 << 2) | ((unsigned char) c1 >> 4));
+    if (c2 != -2) {
+      decoded[dst_pos++] = (char)((((unsigned char) c1 & 0x0F) << 4) | ((unsigned char) c2 >> 2));
+    }
+    if (c3 != -2) {
+      decoded[dst_pos++] = (char)((((unsigned char) c2 & 0x03) << 6) | (unsigned char) c3);
+    }
+  }
+  decoded[dst_pos] = '\0';
+
+  arksh_value_set_string(value, decoded);
+  return 0;
+}
+
 static int apply_pipeline_stage(ArkshShell *shell, ArkshValue *value, const ArkshPipelineStageNode *stage, char *out, size_t out_size) {
   const ArkshPipelineStageDef *handler;
 
@@ -4193,6 +4353,15 @@ static int apply_pipeline_stage(ArkshShell *shell, ArkshValue *value, const Arks
 
   if (strcmp(stage->name, "max") == 0) {
     return apply_max_stage(shell, value, stage, out, out_size);
+  }
+
+  /* E6-S7: encoding stages */
+  if (strcmp(stage->name, "base64_encode") == 0) {
+    return apply_base64_encode_stage(value, out, out_size);
+  }
+
+  if (strcmp(stage->name, "base64_decode") == 0) {
+    return apply_base64_decode_stage(value, out, out_size);
   }
 
   handler = arksh_shell_find_pipeline_stage(shell, stage->name);

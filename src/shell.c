@@ -4519,8 +4519,11 @@ static int register_builtin_pipeline_stages(ArkshShell *shell) {
     { "split",     "split text at a separator string" },
     { "join",      "join list items into text with a separator" },
     /* JSON */
-    { "to_json",   "serialize value to a JSON string" },
-    { "from_json", "parse a JSON string into a value" },
+    { "to_json",        "serialize value to a JSON string" },
+    { "from_json",      "parse a JSON string into a value" },
+    /* encoding (E6-S7) */
+    { "base64_encode",  "encode a string to Base64 (RFC 4648)" },
+    { "base64_decode",  "decode a Base64-encoded string (RFC 4648)" },
     /* misc */
     { "render",    "render any value to its text representation" },
     { NULL, NULL }

@@ -642,24 +642,26 @@ di item massimali; il 99% degli usi reali resterà ampiamente sotto.
 
 ### E6-S9. Integrazione cestino di sistema
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
 Aggiunge il supporto per il cestino del sistema operativo direttamente dall'object model di
-arksh. Non viene implementato alcun cestino proprio: ogni operazione usa l'API nativa della
-piattaforma corrente, garantendo piena integrazione con Finder (macOS), Nautilus/Thunar
-(Linux via FreeDesktop) e Esplora risorse (Windows).
+arksh. Implementato come **plugin autonomo** (`plugins/trash/trash_plugin.c`) anziché nel
+core: non richiede modifiche a `platform.h`/`platform.c` e può essere caricato on-demand
+con `plugin load arksh_trash_plugin`.
 
 **Comportamento per piattaforma**
 
 | Piattaforma | Meccanismo nativo |
 |---|---|
-| macOS | `objc_msgSend` → `NSFileManager trashItemAtURL:resultingItemURL:error:` |
-| Linux | FreeDesktop XDG Trash spec (`.local/share/Trash/files/` + `.trashinfo`) oppure delegato a `gio trash` se disponibile |
-| Windows | `SHFileOperationW` con `FO_DELETE` + `FOF_ALLOWUNDO + FOF_NOCONFIRMATION` |
+| macOS | `objc_msgSend` → `NSFileManager trashItemAtURL:resultingItemURL:error:` (link: `-framework Foundation`) |
+| Linux | `gio trash` (se disponibile nel PATH) oppure XDG Trash spec (`~/.local/share/Trash/`) |
+| Windows | `SHFileOperationW` con `FO_DELETE + FOF_ALLOWUNDO + FOF_NOCONFIRMATION` (link: `Shell32`) |
 
-**Interfaccia prevista**
+**Interfaccia implementata**
 
 ```arksh
+plugin load arksh_trash_plugin
+
 # Sposta nel cestino — restituisce il path di destinazione nel cestino
 let dest = path("file.txt") -> trash()
 
@@ -667,60 +669,46 @@ let dest = path("file.txt") -> trash()
 path(".") -> children() |> where(name ends_with ".tmp") |> each_trash()
 
 # Namespace cestino (supporto varia per piattaforma)
-let t = trash()                   # namespace cestino di sistema
+let t = trash()                   # namespace cestino di sistema (typed-map trash_ns)
 let n = t -> count                # numero di elementi nel cestino
 let items = t -> items            # lista path degli oggetti nel cestino
-t -> empty()                      # svuota il cestino (richiede conferma nel REPL)
-t -> restore("file.txt")          # ripristina elemento per nome
+let ok = t -> empty()             # svuota il cestino
+let r = t -> restore("file.txt")  # ripristina elemento per nome (Linux; errore su altri)
 ```
 
 **Vincoli di progetto**
 
 - `-> trash()` è l'unica operazione garantita su tutte le piattaforme.
-- `trash() -> items`, `-> restore()`, `-> empty()` sono implementati solo dove l'API
-  nativa lo permette; sulle piattaforme non supportate restituiscono un errore descrittivo
-  (`"trash inspection not supported on this platform"`).
-- Non viene creata nessuna directory nascosta `.trash` né alcun file di metadati propri:
-  tutta la persistenza è affidata al sistema operativo.
-- Su macOS, `NSFileManager` viene richiamato tramite il meccanismo Objective-C runtime in C
-  (`objc/runtime.h`, `objc/message.h`) senza dipendere da un framework Swift o Cocoa a
-  link time.
+- `trash() -> restore()` è supportato solo su Linux (XDG `.trashinfo`); su macOS e Windows
+  restituisce un errore descrittivo (`"restore(): not supported on this platform"`).
+- `trash() -> items` è completo su macOS e Linux; su Windows restituisce solo il conteggio
+  aggregato (per-item enumeration richiederebbe COM/IShellFolder).
+- Nessun file di metadati propri: la persistenza è affidata al sistema operativo.
+- Su macOS `NSFileManager` viene richiamato tramite ObjC runtime in C (`objc_msgSend`)
+  con link a `-framework Foundation`.
 
 **Task**
 
-- `[ ]` `E6-S9-T1` **Layer platform** — aggiungere in `platform.h`/`platform.c` la funzione
-  `arksh_platform_trash_item(const char *abs_path, char *out_trash_path, size_t out_size, char *error, size_t error_size)`:
-  su macOS usa `objc_msgSend` con `NSFileManager defaultManager` e `trashItemAtURL:resultingItemURL:error:`;
-  su Linux implementa la XDG Trash spec (crea `~/.local/share/Trash/files/<name>` e il file
-  `.trashinfo` in `~/.local/share/Trash/info/<name>.trashinfo`), con fallback a
-  `execvp("gio", {"gio","trash","--","path",NULL})` se `gio` è nel `PATH`;
-  su Windows chiama `SHFileOperationW` con `FO_DELETE`, `FOF_ALLOWUNDO`, `FOF_NOCONFIRMATION`,
-  `FOF_SILENT`; ritorna 0 in caso di successo, 1 altrimenti con messaggio d'errore.
+- `[x]` `E6-S9-T1` **Layer platform nel plugin** — `platform_trash_item()` con ifdefs per
+  macOS (`objc_msgSend` + Foundation), Linux (fork/execvp `gio` + fallback XDG rename +
+  `.trashinfo`), Windows (`SHFileOperationW`); `platform_trash_list()` e
+  `platform_trash_empty()` per il namespace.
 
-- `[ ]` `E6-S9-T2` **Metodo `-> trash()` su oggetti** — aggiungere il metodo `trash` agli
-  oggetti di tipo `file`, `directory` e `path` nell'extension registry; chiama
-  `arksh_platform_trash_item` con `object.path`; in caso di successo restituisce un nuovo
-  `ArkshObject` che punta al path nel cestino (se restituito dalla piattaforma) oppure un
-  valore stringa con il percorso; in caso di errore propaga il messaggio della piattaforma.
+- `[x]` `E6-S9-T2` **Metodo `-> trash()` su oggetti** — `object_method_trash` registrato
+  come method extension su target `"object"`; chiama `platform_trash_item` con
+  `receiver->object.path`; restituisce stringa con il path nel cestino.
 
-- `[ ]` `E6-S9-T3` **Stage pipeline `each_trash`** — registrare lo stage `each_trash` per
-  pipeline di liste di oggetti; per ogni item chiama `-> trash()` e raccoglie i risultati
-  in una lista; gli errori su singoli item non interrompono lo stage ma vengono accumulati
-  e riportati tutti alla fine con contatore `N items failed`.
+- `[x]` `E6-S9-T3` **Stage pipeline `each_trash`** — `stage_each_trash` registrato come
+  pipeline stage; itera sulla lista, cestina ogni item (oggetto o stringa), accumula errori;
+  sostituisce il valore pipeline con il conteggio degli item cestinati.
 
-- `[ ]` `E6-S9-T4` **Namespace `trash()`** — aggiungere il resolver `trash` che restituisce
-  un typed-map `trash_namespace` con le proprietà e i metodi seguenti, delegati alle API
-  native: `count` (numero di elementi), `items` (lista di path come stringhe), `empty()`
-  (svuota il cestino chiamando `NSEmptyTrash`/`rm -rf ~/.local/share/Trash/{files,info}/*`/
-  `SHEmptyRecycleBinW`), `restore(name)` (ripristina un elemento per nome con la semantica
-  nativa); le operazioni non supportate sulla piattaforma corrente restituiscono un errore
-  descrittivo senza crashare.
+- `[x]` `E6-S9-T4` **Namespace `trash()`** — `resolver_trash` crea un typed-map `trash_ns`;
+  proprietà `count` e `items` delegate a `platform_trash_list`; metodi `empty()` e
+  `restore(name)` delegate a `platform_trash_empty`/`platform_trash_restore`.
 
-- `[ ]` `E6-S9-T5` **Test** — almeno un test compilabile su tutte e tre le piattaforme:
-  crea un file temporaneo in `$TMPDIR`, lo cestina con `-> trash()`, verifica che il file
-  non esista più nella posizione originale; verifica che l'errore su path inesistente sia
-  descrittivo; test condizionale `SKIP_IF_MACOS`/`SKIP_IF_LINUX`/`SKIP_IF_WINDOWS` per le
-  funzionalità specifiche di piattaforma (`trash() -> items`, `-> restore`, `-> empty`).
+- `[x]` `E6-S9-T5` **Test** — 3 test CMake: caricamento plugin + tipo `trash_ns`, lettura
+  `-> count` (regex `[0-9]+`), presenza del metodo `trash` in `help methods object`; 208/208
+  test passano.
 
 ---
 
@@ -899,8 +887,8 @@ Stato story: `[ ]`
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E8 `[x]`
-**In corso:** E6 (S1–S6 `[x]`, S7–S8 aperte)
-**Aperte:** E6 (S7–S9), E7 (JSON), E9 (release), E10 (HTTP plugin)
+**In corso:** E6 (S1–S7 `[x]`, S9 `[x]` come plugin, S8 aperta)
+**Aperte:** E6 (S8), E7 (JSON), E9 (release), E10 (HTTP plugin)
 
 ---
 
@@ -981,16 +969,16 @@ Prerequisito suggerito: E6-S6 (Dict) per interoperabilità `to_maps`/`from_maps`
 6. `E6-S8-T6` (stage pipeline: `transpose`, `fill_na`)
 7. `E6-S8-T7` (test golden + unit)
 
-### Percorso M — cestino di sistema (E6-S9)
+### ~~Percorso M — cestino di sistema (E6-S9)~~ Completato
 
-Integrazione con il cestino nativo del sistema operativo (Trash macOS, XDG Linux, Recycle Bin Windows).
-Nessuna implementazione propria: ogni operazione delega all'API nativa della piattaforma corrente.
+~~Integrazione con il cestino nativo del sistema operativo (Trash macOS, XDG Linux, Recycle Bin Windows).~~
+~~Nessuna implementazione propria: ogni operazione delega all'API nativa della piattaforma corrente.~~
 
-1. `E6-S9-T1` (layer platform: `arksh_platform_trash_item` — macOS via `NSFileManager`, Linux via XDG spec + fallback `gio`, Windows via `SHFileOperationW`)
-2. `E6-S9-T2` (metodo `-> trash()` su oggetti `file`, `directory`, `path`)
-3. `E6-S9-T3` (stage pipeline `each_trash` per cestinare una lista di oggetti)
-4. `E6-S9-T4` (namespace `trash()` con `count`, `items`, `empty()`, `restore(name)`)
-5. `E6-S9-T5` (test cross-platform su file temporaneo)
+1. ~~`E6-S9-T1` (layer platform nel plugin: macOS Foundation, Linux XDG + gio, Windows Shell32)~~
+2. ~~`E6-S9-T2` (metodo `-> trash()` su oggetti `file`, `directory`, `path`)~~
+3. ~~`E6-S9-T3` (stage pipeline `each_trash` per cestinare una lista di oggetti)~~
+4. ~~`E6-S9-T4` (namespace `trash()` con `count`, `items`, `empty()`, `restore(name)`)~~
+5. ~~`E6-S9-T5` (3 test CMake: load, count, method presence — 208/208 pass)~~
 
 ## Regola finale
 

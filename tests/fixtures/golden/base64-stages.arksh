@@ -1,0 +1,22 @@
+# golden: base64_encode - hello → aGVsbG8=
+let e1 = "hello" |> base64_encode
+e1 -> print()
+
+# golden: base64_decode - aGVsbG8= → hello
+let d2 = "aGVsbG8=" |> base64_decode
+d2 -> print()
+
+# golden: round-trip encode then decode → arksh
+let e3 = "arksh" |> base64_encode
+let d3 = e3 |> base64_decode
+d3 -> print()
+
+# golden: empty string encode → length 0
+let e4 = "" |> base64_encode
+let len4 = e4 -> length
+len4 -> print()
+
+# golden: empty string decode → length 0
+let d5 = "" |> base64_decode
+let len5 = d5 -> length
+len5 -> print()
