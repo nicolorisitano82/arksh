@@ -1008,6 +1008,10 @@ if(BUILD_TESTING)
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/numeric-types.arksh"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_golden_dict_types
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/dict-types.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   set_tests_properties(
     arksh_golden_pipeline_chain
     arksh_golden_reduce_block
@@ -1015,6 +1019,7 @@ if(BUILD_TESTING)
     arksh_golden_if_sequence
     arksh_golden_mixed_shell
     arksh_golden_numeric_types
+    arksh_golden_dict_types
     PROPERTIES TIMEOUT 15
   )
   # Each test checks a distinctive output string that only appears when the script ran fully.
@@ -1024,6 +1029,7 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_golden_if_sequence      PROPERTIES PASS_REGULAR_EXPRESSION "step_three")
   set_tests_properties(arksh_golden_mixed_shell      PROPERTIES PASS_REGULAR_EXPRESSION "done")
   set_tests_properties(arksh_golden_numeric_types    PROPERTIES PASS_REGULAR_EXPRESSION "3i")
+  set_tests_properties(arksh_golden_dict_types       PROPERTIES PASS_REGULAR_EXPRESSION "\\{\"nome\":\"alice\"\\}")
 
   # ── E8-S2-T2: PTY REPL tests — interactive features via pseudo-terminal ──
 

@@ -507,6 +507,9 @@ static int value_is_truthy(const ArkshValue *value) {
       return 1;
     case ARKSH_VALUE_LIST:
       return value->list.count > 0;
+    case ARKSH_VALUE_MAP:
+    case ARKSH_VALUE_DICT:
+      return value->map.count > 0;
     case ARKSH_VALUE_EMPTY:
     default:
       return 0;
@@ -3086,7 +3089,7 @@ static int apply_count_stage(ArkshValue *value, char *out, size_t out_size) {
     return 0;
   }
 
-  if (value->kind == ARKSH_VALUE_MAP) {
+  if (value->kind == ARKSH_VALUE_MAP || value->kind == ARKSH_VALUE_DICT) {
     arksh_value_set_number(value, (double) value->map.count);
     return 0;
   }

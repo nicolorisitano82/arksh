@@ -1067,6 +1067,12 @@ static void collect_builtin_member_completions(
   static const char *map_methods[] = {
     "keys", "values", "entries", "get", "has"
   };
+  static const char *dict_properties[] = {
+    "type", "value_type", "value", "count", "length", "keys", "values"
+  };
+  static const char *dict_methods[] = {
+    "get", "has", "set", "delete", "to_json", "from_json"
+  };
   static const char *class_properties[] = {
     "type", "value_type", "value", "name", "source", "bases", "base_count", "properties", "property_count", "methods", "method_count"
   };
@@ -1127,6 +1133,12 @@ static void collect_builtin_member_completions(
       methods = map_methods;
       method_count = sizeof(map_methods) / sizeof(map_methods[0]);
       break;
+    case ARKSH_VALUE_DICT:
+      properties = dict_properties;
+      property_count = sizeof(dict_properties) / sizeof(dict_properties[0]);
+      methods = dict_methods;
+      method_count = sizeof(dict_methods) / sizeof(dict_methods[0]);
+      break;
     case ARKSH_VALUE_CLASS:
       properties = class_properties;
       property_count = sizeof(class_properties) / sizeof(class_properties[0]);
@@ -1149,7 +1161,7 @@ static void collect_builtin_member_completions(
   for (i = 0; i < property_count; ++i) {
     append_member_completion(properties[i], 0, prefix, matches, max_matches, count);
   }
-  if (receiver->kind == ARKSH_VALUE_MAP) {
+  if (receiver->kind == ARKSH_VALUE_MAP || receiver->kind == ARKSH_VALUE_DICT) {
     for (i = 0; i < receiver->map.count; ++i) {
       append_member_completion(receiver->map.entries[i].key, 0, prefix, matches, max_matches, count);
     }
@@ -1328,9 +1340,15 @@ static int parse_extension_target(
     *out_value_kind = ARKSH_VALUE_LIST;
     return 0;
   }
-  if (strcmp(target, "map") == 0 || strcmp(target, "dict") == 0 || strcmp(target, "object_map") == 0) {
+  if (strcmp(target, "map") == 0 || strcmp(target, "object_map") == 0) {
     *out_kind = ARKSH_EXTENSION_TARGET_VALUE_KIND;
     *out_value_kind = ARKSH_VALUE_MAP;
+    return 0;
+  }
+  /* E6-S6: Dict is a distinct value kind from map */
+  if (strcmp(target, "dict") == 0) {
+    *out_kind = ARKSH_EXTENSION_TARGET_VALUE_KIND;
+    *out_value_kind = ARKSH_VALUE_DICT;
     return 0;
   }
   if (strcmp(target, "class") == 0) {
@@ -4167,6 +4185,254 @@ static int resolver_imaginary(ArkshShell *shell, int argc, const ArkshValue *arg
   return 0;
 }
 
+/* E6-S6: Dict resolver and methods */
+
+static int resolver_dict(ArkshShell *shell, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  int i;
+
+  (void) shell;
+
+  if (out_value == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+  if (argc % 2 != 0) {
+    snprintf(out, out_size, "Dict() expects alternating key/value arguments (got %d)", argc);
+    return 1;
+  }
+
+  arksh_value_set_dict(out_value);
+  for (i = 0; i < argc; i += 2) {
+    char key[ARKSH_MAX_NAME];
+
+    if (args[i].kind != ARKSH_VALUE_STRING) {
+      if (arksh_value_render(&args[i], key, sizeof(key)) != 0) {
+        snprintf(out, out_size, "Dict() key at position %d must be a string", i);
+        return 1;
+      }
+    } else {
+      copy_string(key, sizeof(key), args[i].text);
+    }
+    if (arksh_value_map_set(out_value, key, &args[i + 1]) != 0) {
+      snprintf(out, out_size, "Dict() is too large");
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+static int dict_method_set(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  char key[ARKSH_MAX_NAME];
+
+  (void) shell;
+
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_DICT) {
+    snprintf(out, out_size, "set() is only valid on dict values");
+    return 1;
+  }
+  if (argc != 2) {
+    snprintf(out, out_size, "set() expects exactly two arguments: key and value");
+    return 1;
+  }
+  if (args[0].kind != ARKSH_VALUE_STRING) {
+    snprintf(out, out_size, "set() key must be a string");
+    return 1;
+  }
+  copy_string(key, sizeof(key), args[0].text);
+
+  if (arksh_value_copy(out_value, receiver) != 0) {
+    snprintf(out, out_size, "set() failed to copy dict");
+    return 1;
+  }
+  if (arksh_value_map_set(out_value, key, &args[1]) != 0) {
+    snprintf(out, out_size, "set() dict is full");
+    return 1;
+  }
+  return 0;
+}
+
+static int dict_method_delete(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  char key[ARKSH_MAX_NAME];
+  size_t i;
+
+  (void) shell;
+
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_DICT) {
+    snprintf(out, out_size, "delete() is only valid on dict values");
+    return 1;
+  }
+  if (argc != 1 || args[0].kind != ARKSH_VALUE_STRING) {
+    snprintf(out, out_size, "delete() expects exactly one string key");
+    return 1;
+  }
+  copy_string(key, sizeof(key), args[0].text);
+
+  arksh_value_set_dict(out_value);
+  for (i = 0; i < receiver->map.count; ++i) {
+    ArkshValue entry_val;
+
+    if (strcmp(receiver->map.entries[i].key, key) == 0) {
+      continue;
+    }
+    arksh_value_init(&entry_val);
+    if (arksh_value_set_from_item(&entry_val, &receiver->map.entries[i].value) != 0) {
+      snprintf(out, out_size, "delete() failed to copy entry");
+      return 1;
+    }
+    if (arksh_value_map_set(out_value, receiver->map.entries[i].key, &entry_val) != 0) {
+      arksh_value_free(&entry_val);
+      snprintf(out, out_size, "delete() dict is full");
+      return 1;
+    }
+    arksh_value_free(&entry_val);
+  }
+  return 0;
+}
+
+static int dict_method_get(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  const ArkshValueItem *entry;
+  char key[ARKSH_MAX_NAME];
+
+  (void) shell;
+
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_DICT) {
+    snprintf(out, out_size, "get() is only valid on dict values");
+    return 1;
+  }
+  if (argc != 1 || args[0].kind != ARKSH_VALUE_STRING) {
+    snprintf(out, out_size, "get() expects exactly one string key");
+    return 1;
+  }
+  copy_string(key, sizeof(key), args[0].text);
+
+  entry = arksh_value_map_get_item(receiver, key);
+  if (entry == NULL) {
+    arksh_value_init(out_value);
+    return 0;
+  }
+  return arksh_value_set_from_item(out_value, entry);
+}
+
+static int dict_method_has(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  char key[ARKSH_MAX_NAME];
+
+  (void) shell;
+
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_DICT) {
+    snprintf(out, out_size, "has() is only valid on dict values");
+    return 1;
+  }
+  if (argc != 1 || args[0].kind != ARKSH_VALUE_STRING) {
+    snprintf(out, out_size, "has() expects exactly one string key");
+    return 1;
+  }
+  copy_string(key, sizeof(key), args[0].text);
+  arksh_value_set_boolean(out_value, arksh_value_map_get_item(receiver, key) != NULL);
+  return 0;
+}
+
+static int dict_prop_keys(ArkshShell *shell, const ArkshValue *receiver, ArkshValue *out_value, char *out, size_t out_size) {
+  size_t i;
+
+  (void) shell;
+
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_DICT) {
+    snprintf(out, out_size, "keys is only valid on dict values");
+    return 1;
+  }
+  arksh_value_init(out_value);
+  out_value->kind = ARKSH_VALUE_LIST;
+  for (i = 0; i < receiver->map.count; ++i) {
+    ArkshValue key_val;
+
+    arksh_value_set_string(&key_val, receiver->map.entries[i].key);
+    if (arksh_value_list_append_value(out_value, &key_val) != 0) {
+      arksh_value_free(&key_val);
+      snprintf(out, out_size, "keys: result is too large");
+      return 1;
+    }
+    arksh_value_free(&key_val);
+  }
+  return 0;
+}
+
+static int dict_prop_values(ArkshShell *shell, const ArkshValue *receiver, ArkshValue *out_value, char *out, size_t out_size) {
+  size_t i;
+
+  (void) shell;
+
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_DICT) {
+    snprintf(out, out_size, "values is only valid on dict values");
+    return 1;
+  }
+  arksh_value_init(out_value);
+  out_value->kind = ARKSH_VALUE_LIST;
+  for (i = 0; i < receiver->map.count; ++i) {
+    ArkshValue item_val;
+
+    arksh_value_init(&item_val);
+    if (arksh_value_set_from_item(&item_val, &receiver->map.entries[i].value) != 0) {
+      snprintf(out, out_size, "values: failed to expand item");
+      return 1;
+    }
+    if (arksh_value_list_append_value(out_value, &item_val) != 0) {
+      arksh_value_free(&item_val);
+      snprintf(out, out_size, "values: result is too large");
+      return 1;
+    }
+    arksh_value_free(&item_val);
+  }
+  return 0;
+}
+
+static int dict_method_to_json(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  char json[ARKSH_MAX_OUTPUT];
+
+  (void) shell;
+  (void) args;
+
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_DICT) {
+    snprintf(out, out_size, "to_json is only valid on dict values");
+    return 1;
+  }
+  if (argc != 0) {
+    snprintf(out, out_size, "to_json expects no arguments");
+    return 1;
+  }
+  if (arksh_value_to_json(receiver, json, sizeof(json)) != 0) {
+    snprintf(out, out_size, "to_json: serialization failed");
+    return 1;
+  }
+  arksh_value_set_string(out_value, json);
+  return 0;
+}
+
+static int dict_method_from_json(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  ArkshValue parsed;
+  char error[ARKSH_MAX_OUTPUT];
+
+  (void) shell;
+  (void) receiver;
+
+  if (argc != 1 || args[0].kind != ARKSH_VALUE_STRING) {
+    snprintf(out, out_size, "from_json() expects exactly one string argument");
+    return 1;
+  }
+  arksh_value_init(&parsed);
+  if (arksh_value_parse_json(args[0].text, &parsed, error, sizeof(error)) != 0) {
+    snprintf(out, out_size, "from_json: %s", error);
+    return 1;
+  }
+  if (parsed.kind != ARKSH_VALUE_MAP) {
+    arksh_value_free(&parsed);
+    snprintf(out, out_size, "from_json: expected JSON object");
+    return 1;
+  }
+  parsed.kind = ARKSH_VALUE_DICT;
+  *out_value = parsed;
+  return 0;
+}
+
 static int register_builtin_value_resolvers(ArkshShell *shell) {
   if (shell == NULL) {
     return 1;
@@ -4212,6 +4478,10 @@ static int register_builtin_value_resolvers(ArkshShell *shell) {
     return 1;
   }
   if (arksh_shell_register_value_resolver(shell, "Imaginary", "purely imaginary number b·i", resolver_imaginary, 0) != 0) {
+    return 1;
+  }
+  /* E6-S6: immutable key-value dictionary */
+  if (arksh_shell_register_value_resolver(shell, "Dict", "immutable key-value dictionary", resolver_dict, 0) != 0) {
     return 1;
   }
 
@@ -8208,6 +8478,34 @@ static int register_builtin_extensions(ArkshShell *shell) {
     return 1;
   }
   if (arksh_shell_register_native_method_extension(shell, "path", "write_json", method_write_json, 0) != 0) {
+    return 1;
+  }
+  /* E6-S6: Dict methods and properties */
+  if (arksh_shell_register_native_method_extension(shell, "dict", "get", dict_method_get, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "dict", "has", dict_method_has, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "dict", "set", dict_method_set, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "dict", "delete", dict_method_delete, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "dict", "to_json", dict_method_to_json, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "dict", "from_json", dict_method_from_json, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_property_extension(shell, "dict", "keys", dict_prop_keys, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_property_extension(shell, "dict", "values", dict_prop_values, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_type_descriptor(shell, "dict", "immutable key-value dictionary with string keys") != 0) {
     return 1;
   }
 

@@ -64,7 +64,9 @@ typedef enum {
   ARKSH_VALUE_INTEGER,
   ARKSH_VALUE_FLOAT,
   ARKSH_VALUE_DOUBLE,
-  ARKSH_VALUE_IMAGINARY
+  ARKSH_VALUE_IMAGINARY,
+  /* E6-S6: immutable key-value dictionary */
+  ARKSH_VALUE_DICT
 } ArkshValueKind;
 
 typedef struct ArkshValue ArkshValue;
@@ -126,6 +128,8 @@ void arksh_value_set_block(ArkshValue *value, const ArkshBlock *block);
 void arksh_value_set_class(ArkshValue *value, const char *class_name);
 void arksh_value_set_instance(ArkshValue *value, const char *class_name, int instance_id);
 void arksh_value_set_map(ArkshValue *value);
+/* E6-S6: create an empty Dict value (immutable key-value dictionary). */
+void arksh_value_set_dict(ArkshValue *value);
 /* E6-S2-T1: create a MAP value tagged with a custom type name.
  * The type name is stored as the "__type__" entry in the map and is returned
  * by "-> type".  Extensions registered with this type name as target will

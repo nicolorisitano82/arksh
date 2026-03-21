@@ -1,0 +1,61 @@
+# golden: Dict() empty count
+let d0 = Dict()
+let c0 = d0 -> count
+c0 -> print()
+
+# golden: Dict with inline key-value pairs
+let d1 = Dict("x", 42, "y", "hello")
+let c1 = d1 -> count
+c1 -> print()
+
+# golden: set() returns new dict with added key
+let d2 = Dict() -> set("nome", "alice")
+let v2 = d2 -> get("nome")
+v2 -> print()
+
+# golden: has() returns true for existing key
+let h1 = d2 -> has("nome")
+h1 -> print()
+
+# golden: has() returns false for missing key
+let h2 = d2 -> has("eta")
+h2 -> print()
+
+# golden: delete() removes key
+let d2b = d2 -> set("eta", 30)
+let d3 = d2b -> delete("eta")
+let h3 = d3 -> has("eta")
+h3 -> print()
+
+# golden: keys property returns list with correct count
+let d4a = Dict() -> set("a", 1)
+let d4 = d4a -> set("b", 2)
+let ks = d4 -> keys
+let ks_count = ks -> count
+ks_count -> print()
+
+# golden: values property returns list with correct count
+let vs = d4 -> values
+let vs_count = vs -> count
+vs_count -> print()
+
+# golden: type property
+let dt = Dict() -> type
+dt -> print()
+
+# golden: to_json serializes as JSON object
+let d5 = Dict() -> set("nome", "alice")
+let j5 = d5 -> to_json()
+j5 -> print()
+
+# golden: from_json parses JSON object into dict
+let d6 = Dict() -> from_json("{\"k\":\"v\"}")
+let v6 = d6 -> get("k")
+v6 -> print()
+
+# golden: round-trip to_json / from_json
+let d7 = Dict() -> set("score", 99)
+let j7 = d7 -> to_json()
+let d8 = Dict() -> from_json(j7)
+let v8 = d8 -> get("score")
+v8 -> print()

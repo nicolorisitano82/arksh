@@ -202,7 +202,7 @@ void arksh_value_free(ArkshValue *value) {
     for (i = 0; i < value->list.count; ++i) {
       arksh_value_item_free(&value->list.items[i]);
     }
-  } else if (value->kind == ARKSH_VALUE_MAP) {
+  } else if (value->kind == ARKSH_VALUE_MAP || value->kind == ARKSH_VALUE_DICT) {
     for (i = 0; i < value->map.count; ++i) {
       arksh_value_item_free(&value->map.entries[i].value);
     }
@@ -228,7 +228,7 @@ int arksh_value_item_copy(ArkshValueItem *dest, const ArkshValueItem *src) {
   dest->block = src->block;
   copy_string(dest->text, sizeof(dest->text), src->text);
 
-  if ((src->kind == ARKSH_VALUE_LIST || src->kind == ARKSH_VALUE_MAP) && src->nested != NULL) {
+  if ((src->kind == ARKSH_VALUE_LIST || src->kind == ARKSH_VALUE_MAP || src->kind == ARKSH_VALUE_DICT) && src->nested != NULL) {
     dest->nested = (ArkshValue *) calloc(1, sizeof(*dest->nested));
     if (dest->nested == NULL) {
       arksh_value_item_free(dest);
@@ -266,7 +266,7 @@ int arksh_value_copy(ArkshValue *dest, const ArkshValue *src) {
       }
       dest->list.count++;
     }
-  } else if (src->kind == ARKSH_VALUE_MAP) {
+  } else if (src->kind == ARKSH_VALUE_MAP || src->kind == ARKSH_VALUE_DICT) {
     for (i = 0; i < src->map.count; ++i) {
       copy_string(dest->map.entries[i].key, sizeof(dest->map.entries[i].key), src->map.entries[i].key);
       if (arksh_value_item_copy(&dest->map.entries[i].value, &src->map.entries[i].value) != 0) {
@@ -293,7 +293,7 @@ int arksh_value_item_set_from_value(ArkshValueItem *item, const ArkshValue *valu
   item->block = value->block;
   copy_string(item->text, sizeof(item->text), value->text);
 
-  if (value->kind == ARKSH_VALUE_LIST || value->kind == ARKSH_VALUE_MAP) {
+  if (value->kind == ARKSH_VALUE_LIST || value->kind == ARKSH_VALUE_MAP || value->kind == ARKSH_VALUE_DICT) {
     item->nested = (ArkshValue *) calloc(1, sizeof(*item->nested));
     if (item->nested == NULL) {
       arksh_value_item_free(item);
@@ -339,6 +339,7 @@ static int value_item_to_json_text(const ArkshValueItem *item, char *out, size_t
       return 0;
     case ARKSH_VALUE_LIST:
     case ARKSH_VALUE_MAP:
+    case ARKSH_VALUE_DICT:
       if (item->nested == NULL) {
         return 1;
       }
@@ -411,6 +412,7 @@ static int value_to_json_text(const ArkshValue *value, char *out, size_t out_siz
       }
       return append_char(out, out_size, &length, ']');
     case ARKSH_VALUE_MAP:
+    case ARKSH_VALUE_DICT:
       out[0] = '\0';
       if (append_char(out, out_size, &length, '{') != 0) {
         return 1;
@@ -833,6 +835,8 @@ const char *arksh_value_kind_name(ArkshValueKind kind) {
       return "double";
     case ARKSH_VALUE_IMAGINARY:
       return "imaginary";
+    case ARKSH_VALUE_DICT:
+      return "dict";
     case ARKSH_VALUE_EMPTY:
     default:
       return "empty";
@@ -970,6 +974,16 @@ void arksh_value_set_map(ArkshValue *value) {
   value->kind = ARKSH_VALUE_MAP;
 }
 
+/* E6-S6: Dict — immutable key-value dictionary, stored in the map field. */
+void arksh_value_set_dict(ArkshValue *value) {
+  if (value == NULL) {
+    return;
+  }
+
+  arksh_value_init(value);
+  value->kind = ARKSH_VALUE_DICT;
+}
+
 void arksh_value_set_typed_map(ArkshValue *value, const char *type_name) {
   ArkshValue tag;
 
@@ -1000,7 +1014,7 @@ int arksh_value_set_from_item(ArkshValue *value, const ArkshValueItem *item) {
   value->block = item->block;
   copy_string(value->text, sizeof(value->text), item->text);
 
-  if ((item->kind == ARKSH_VALUE_LIST || item->kind == ARKSH_VALUE_MAP) && item->nested != NULL) {
+  if ((item->kind == ARKSH_VALUE_LIST || item->kind == ARKSH_VALUE_MAP || item->kind == ARKSH_VALUE_DICT) && item->nested != NULL) {
     return arksh_value_copy(value, item->nested);
   }
 
@@ -1061,7 +1075,7 @@ int arksh_value_map_set(ArkshValue *value, const char *key, const ArkshValue *en
   if (value->kind == ARKSH_VALUE_EMPTY) {
     value->kind = ARKSH_VALUE_MAP;
   }
-  if (value->kind != ARKSH_VALUE_MAP) {
+  if (value->kind != ARKSH_VALUE_MAP && value->kind != ARKSH_VALUE_DICT) {
     return 1;
   }
 
@@ -1092,7 +1106,7 @@ int arksh_value_map_set(ArkshValue *value, const char *key, const ArkshValue *en
 const ArkshValueItem *arksh_value_map_get_item(const ArkshValue *value, const char *key) {
   size_t i;
 
-  if (value == NULL || key == NULL || value->kind != ARKSH_VALUE_MAP) {
+  if (value == NULL || key == NULL || (value->kind != ARKSH_VALUE_MAP && value->kind != ARKSH_VALUE_DICT)) {
     return NULL;
   }
 
@@ -1137,6 +1151,7 @@ int arksh_value_item_render(const ArkshValueItem *item, char *out, size_t out_si
       return 0;
     case ARKSH_VALUE_LIST:
     case ARKSH_VALUE_MAP:
+    case ARKSH_VALUE_DICT:
       if (item->nested != NULL) {
         return arksh_value_render(item->nested, out, out_size);
       }
@@ -1216,6 +1231,41 @@ int arksh_value_render(const ArkshValue *value, char *out, size_t out_size) {
         append_line(out, out_size, line);
       }
       return 0;
+    /* E6-S6: Dict renders as {key: value, ...} */
+    case ARKSH_VALUE_DICT: {
+      size_t length = 0;
+
+      if (value->map.count == 0) {
+        copy_string(out, out_size, "{}");
+        return 0;
+      }
+      out[0] = '\0';
+      if (append_char(out, out_size, &length, '{') != 0) {
+        return 1;
+      }
+      for (i = 0; i < value->map.count; ++i) {
+        char item_buf[ARKSH_MAX_OUTPUT];
+
+        if (i > 0) {
+          if (append_char(out, out_size, &length, ',') != 0 ||
+              append_char(out, out_size, &length, ' ') != 0) {
+            return 1;
+          }
+        }
+        if (append_text(out, out_size, &length, value->map.entries[i].key) != 0 ||
+            append_char(out, out_size, &length, ':') != 0 ||
+            append_char(out, out_size, &length, ' ') != 0) {
+          return 1;
+        }
+        if (arksh_value_item_render(&value->map.entries[i].value, item_buf, sizeof(item_buf)) != 0) {
+          return 1;
+        }
+        if (append_text(out, out_size, &length, item_buf) != 0) {
+          return 1;
+        }
+      }
+      return append_char(out, out_size, &length, '}');
+    }
     /* E6-S5: explicit numeric sub-kinds */
     case ARKSH_VALUE_INTEGER:
     case ARKSH_VALUE_FLOAT:
@@ -1491,6 +1541,17 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
       }
       break;
     case ARKSH_VALUE_MAP:
+      if (strcmp(property, "count") == 0 || strcmp(property, "length") == 0) {
+        arksh_value_set_number(out_value, (double) value->map.count);
+        return 0;
+      }
+      entry = arksh_value_map_get_item(value, property);
+      if (entry != NULL) {
+        return arksh_value_set_from_item(out_value, entry);
+      }
+      break;
+    /* E6-S6: Dict — count and direct property access */
+    case ARKSH_VALUE_DICT:
       if (strcmp(property, "count") == 0 || strcmp(property, "length") == 0) {
         arksh_value_set_number(out_value, (double) value->map.count);
         return 0;

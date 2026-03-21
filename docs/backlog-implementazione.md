@@ -510,7 +510,7 @@ Esempi: `Integer(2) + Float(1.5)` → `Float(3.5)`; `Float(1) * Double(2)` → `
 
 ### E6-S6. Tipo Dict — array associativo chiave-valore
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
 Introduce `Dict()` come tipo di primo livello nell'object model di arksh: un array associativo
 con chiavi stringa e valori di qualsiasi `ArkshValue`. Supporta getter, setter, cancellazione di
@@ -537,12 +537,12 @@ let d4 = Dict() -> from_json(j)       # importa da stringa JSON
 
 **Task**
 
-- `[ ]` `E6-S6-T1` **Struttura interna** — aggiungere `ARKSH_VALUE_DICT` a `ArkshValueKind` in `object.h`; definire `ArkshDict` come array di `{char key[ARKSH_MAX_TOKEN]; ArkshValue value;}` con un campo `count` e limite `ARKSH_MAX_DICT_ENTRIES` (es. 128); aggiornare `arksh_value_free` (ricorsivo sulle entry), `arksh_value_copy` (deep copy), `arksh_value_render` (formato `{k1: v1, k2: v2}`) e `value_is_truthy` (`count > 0`)
-- `[ ]` `E6-S6-T2` **Resolver `Dict()`** — registrare il resolver in `executor.c`; senza argomenti restituisce un dict vuoto; con argomenti a coppie `"chiave", valore` (argc pari) costruisce il dict inline; errore se argc dispari o una chiave non è stringa
-- `[ ]` `E6-S6-T3` **Metodi di scrittura** — implementare come pipeline-method o class-method in `executor.c`/`shell.c`: `set(key, value)` → nuovo dict con entry aggiunta o sovrascritta; `delete(key)` → nuovo dict senza quella chiave (no-op se assente); i metodi non mutano il receiver
-- `[ ]` `E6-S6-T4` **Metodi e proprietà di lettura** — `get(key)` → valore o stringa vuota se assente; `has(key)` → `true`/`false`; proprietà `keys` → `ArkshValue` lista di stringhe; `values` → `ArkshValue` lista dei valori; `count` → numero intero; `type` → `"dict"`
-- `[ ]` `E6-S6-T5` **Bridge JSON** — `-> to_json` serializza il dict come oggetto JSON (usando l'infrastruttura esistente in `object.c`/`arksh_value_to_json`); `-> from_json(str)` parsa una stringa JSON-object e costruisce un `ARKSH_VALUE_DICT` (usa il parser JSON esistente); errore chiaro se la stringa non è un oggetto JSON (`"from_json: expected JSON object"`)
-- `[ ]` `E6-S6-T6` **Test** — `Dict() -> count` → `0`; `Dict() -> set("x", 1) -> get("x")` → `1`; `Dict() -> has("y")` → `false`; `-> keys` e `-> values` su dict con 2 entry; `-> delete` su chiave esistente e inesistente; round-trip `-> to_json | Dict() -> from_json -> get("k")` restituisce il valore originale
+- `[x]` `E6-S6-T1` **Struttura interna** — aggiungere `ARKSH_VALUE_DICT` a `ArkshValueKind` in `object.h`; definire `ArkshDict` come array di `{char key[ARKSH_MAX_TOKEN]; ArkshValue value;}` con un campo `count` e limite `ARKSH_MAX_DICT_ENTRIES` (es. 128); aggiornare `arksh_value_free` (ricorsivo sulle entry), `arksh_value_copy` (deep copy), `arksh_value_render` (formato `{k1: v1, k2: v2}`) e `value_is_truthy` (`count > 0`)
+- `[x]` `E6-S6-T2` **Resolver `Dict()`** — registrare il resolver in `executor.c`; senza argomenti restituisce un dict vuoto; con argomenti a coppie `"chiave", valore` (argc pari) costruisce il dict inline; errore se argc dispari o una chiave non è stringa
+- `[x]` `E6-S6-T3` **Metodi di scrittura** — implementare come pipeline-method o class-method in `executor.c`/`shell.c`: `set(key, value)` → nuovo dict con entry aggiunta o sovrascritta; `delete(key)` → nuovo dict senza quella chiave (no-op se assente); i metodi non mutano il receiver
+- `[x]` `E6-S6-T4` **Metodi e proprietà di lettura** — `get(key)` → valore o stringa vuota se assente; `has(key)` → `true`/`false`; proprietà `keys` → `ArkshValue` lista di stringhe; `values` → `ArkshValue` lista dei valori; `count` → numero intero; `type` → `"dict"`
+- `[x]` `E6-S6-T5` **Bridge JSON** — `-> to_json` serializza il dict come oggetto JSON (usando l'infrastruttura esistente in `object.c`/`arksh_value_to_json`); `-> from_json(str)` parsa una stringa JSON-object e costruisce un `ARKSH_VALUE_DICT` (usa il parser JSON esistente); errore chiaro se la stringa non è un oggetto JSON (`"from_json: expected JSON object"`)
+- `[x]` `E6-S6-T6` **Test** — `Dict() -> count` → `0`; `Dict() -> set("x", 1) -> get("x")` → `1`; `Dict() -> has("y")` → `false`; `-> keys` e `-> values` su dict con 2 entry; `-> delete` su chiave esistente e inesistente; round-trip `-> to_json | Dict() -> from_json -> get("k")` restituisce il valore originale
 
 ---
 
@@ -637,6 +637,90 @@ di item massimali; il 99% degli usi reali resterà ampiamente sotto.
 - `[ ]` `E6-S8-T5` **Interoperabilità e serializzazione** — `to_maps` → lista di mappe (usa `ArkshValueMap` esistente, una per riga); `from_maps(list)` → costruisce matrice da lista di mappe omogenee (le chiavi della prima mappa diventano intestazioni, errore se una riga ha chiavi diverse); `to_csv` → stringa CSV RFC 4180 con header; `from_csv(str)` → parsa CSV (prima riga = intestazioni), usa il parser interno; `to_json` → array JSON di oggetti; `type` → `"matrix"`
 - `[ ]` `E6-S8-T6` **Stage pipeline** — aggiungere `|> transpose` (scambia righe e colonne, col_count e row_count si scambiano, i nomi diventano `"row_0"`, `"row_1"`, …); `|> fill_na(col, val)` sostituisce item vuoti/stringa-vuota in una colonna con `val`; entrambi gli stage operano su `ARKSH_VALUE_MATRIX` e restituiscono una nuova matrice
 - `[ ]` `E6-S8-T7` **Test** — matrice 0×0: `Matrix() -> rows` → `0`; matrice 2×3 dopo due `add_row`: `-> cols` → `3`, `-> col("age")` → lista corretta; `-> select("name")` → matrice 2×1; `-> where("age", ">", 26)` → matrice 1×3; `-> to_maps` → lista di 2 mappe; round-trip `-> to_csv |> Matrix() -> from_csv`: uguale alla matrice originale; `-> to_json` → stringa JSON valida; errore su colonna inesistente; test golden con `source`
+
+---
+
+### E6-S9. Integrazione cestino di sistema
+
+Stato story: `[ ]`
+
+Aggiunge il supporto per il cestino del sistema operativo direttamente dall'object model di
+arksh. Non viene implementato alcun cestino proprio: ogni operazione usa l'API nativa della
+piattaforma corrente, garantendo piena integrazione con Finder (macOS), Nautilus/Thunar
+(Linux via FreeDesktop) e Esplora risorse (Windows).
+
+**Comportamento per piattaforma**
+
+| Piattaforma | Meccanismo nativo |
+|---|---|
+| macOS | `objc_msgSend` → `NSFileManager trashItemAtURL:resultingItemURL:error:` |
+| Linux | FreeDesktop XDG Trash spec (`.local/share/Trash/files/` + `.trashinfo`) oppure delegato a `gio trash` se disponibile |
+| Windows | `SHFileOperationW` con `FO_DELETE` + `FOF_ALLOWUNDO + FOF_NOCONFIRMATION` |
+
+**Interfaccia prevista**
+
+```arksh
+# Sposta nel cestino — restituisce il path di destinazione nel cestino
+let dest = path("file.txt") -> trash()
+
+# Uso in pipeline: cestina tutti i file .tmp nella directory corrente
+path(".") -> children() |> where(name ends_with ".tmp") |> each_trash()
+
+# Namespace cestino (supporto varia per piattaforma)
+let t = trash()                   # namespace cestino di sistema
+let n = t -> count                # numero di elementi nel cestino
+let items = t -> items            # lista path degli oggetti nel cestino
+t -> empty()                      # svuota il cestino (richiede conferma nel REPL)
+t -> restore("file.txt")          # ripristina elemento per nome
+```
+
+**Vincoli di progetto**
+
+- `-> trash()` è l'unica operazione garantita su tutte le piattaforme.
+- `trash() -> items`, `-> restore()`, `-> empty()` sono implementati solo dove l'API
+  nativa lo permette; sulle piattaforme non supportate restituiscono un errore descrittivo
+  (`"trash inspection not supported on this platform"`).
+- Non viene creata nessuna directory nascosta `.trash` né alcun file di metadati propri:
+  tutta la persistenza è affidata al sistema operativo.
+- Su macOS, `NSFileManager` viene richiamato tramite il meccanismo Objective-C runtime in C
+  (`objc/runtime.h`, `objc/message.h`) senza dipendere da un framework Swift o Cocoa a
+  link time.
+
+**Task**
+
+- `[ ]` `E6-S9-T1` **Layer platform** — aggiungere in `platform.h`/`platform.c` la funzione
+  `arksh_platform_trash_item(const char *abs_path, char *out_trash_path, size_t out_size, char *error, size_t error_size)`:
+  su macOS usa `objc_msgSend` con `NSFileManager defaultManager` e `trashItemAtURL:resultingItemURL:error:`;
+  su Linux implementa la XDG Trash spec (crea `~/.local/share/Trash/files/<name>` e il file
+  `.trashinfo` in `~/.local/share/Trash/info/<name>.trashinfo`), con fallback a
+  `execvp("gio", {"gio","trash","--","path",NULL})` se `gio` è nel `PATH`;
+  su Windows chiama `SHFileOperationW` con `FO_DELETE`, `FOF_ALLOWUNDO`, `FOF_NOCONFIRMATION`,
+  `FOF_SILENT`; ritorna 0 in caso di successo, 1 altrimenti con messaggio d'errore.
+
+- `[ ]` `E6-S9-T2` **Metodo `-> trash()` su oggetti** — aggiungere il metodo `trash` agli
+  oggetti di tipo `file`, `directory` e `path` nell'extension registry; chiama
+  `arksh_platform_trash_item` con `object.path`; in caso di successo restituisce un nuovo
+  `ArkshObject` che punta al path nel cestino (se restituito dalla piattaforma) oppure un
+  valore stringa con il percorso; in caso di errore propaga il messaggio della piattaforma.
+
+- `[ ]` `E6-S9-T3` **Stage pipeline `each_trash`** — registrare lo stage `each_trash` per
+  pipeline di liste di oggetti; per ogni item chiama `-> trash()` e raccoglie i risultati
+  in una lista; gli errori su singoli item non interrompono lo stage ma vengono accumulati
+  e riportati tutti alla fine con contatore `N items failed`.
+
+- `[ ]` `E6-S9-T4` **Namespace `trash()`** — aggiungere il resolver `trash` che restituisce
+  un typed-map `trash_namespace` con le proprietà e i metodi seguenti, delegati alle API
+  native: `count` (numero di elementi), `items` (lista di path come stringhe), `empty()`
+  (svuota il cestino chiamando `NSEmptyTrash`/`rm -rf ~/.local/share/Trash/{files,info}/*`/
+  `SHEmptyRecycleBinW`), `restore(name)` (ripristina un elemento per nome con la semantica
+  nativa); le operazioni non supportate sulla piattaforma corrente restituiscono un errore
+  descrittivo senza crashare.
+
+- `[ ]` `E6-S9-T5` **Test** — almeno un test compilabile su tutte e tre le piattaforme:
+  crea un file temporaneo in `$TMPDIR`, lo cestina con `-> trash()`, verifica che il file
+  non esista più nella posizione originale; verifica che l'errore su path inesistente sia
+  descrittivo; test condizionale `SKIP_IF_MACOS`/`SKIP_IF_LINUX`/`SKIP_IF_WINDOWS` per le
+  funzionalità specifiche di piattaforma (`trash() -> items`, `-> restore`, `-> empty`).
 
 ---
 
@@ -815,8 +899,8 @@ Stato story: `[ ]`
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E8 `[x]`
-**In corso:** E6 (S1–S5 `[x]`, S6–S8 aperte)
-**Aperte:** E6 (S6–S8), E7 (JSON), E9 (release), E10 (HTTP plugin)
+**In corso:** E6 (S1–S6 `[x]`, S7–S8 aperte)
+**Aperte:** E6 (S7–S9), E7 (JSON), E9 (release), E10 (HTTP plugin)
 
 ---
 
@@ -841,6 +925,8 @@ Stato story: `[ ]`
 ~~Completato.~~ ~~`E6-S5-T1`~~ `[x]`  ~~`E6-S5-T2`~~ `[x]`  ~~`E6-S5-T3`~~ `[x]`  ~~`E6-S5-T4`~~ `[x]`  ~~`E6-S5-T5`~~ `[x]`
 
 ### Percorso F — tipo Dict (E6-S6)
+
+~~Completato.~~ ~~`E6-S6-T1`~~ `[x]`  ~~`E6-S6-T2`~~ `[x]`  ~~`E6-S6-T3`~~ `[x]`  ~~`E6-S6-T4`~~ `[x]`  ~~`E6-S6-T5`~~ `[x]`  ~~`E6-S6-T6`~~ `[x]`
 
 Abilita strutture dati chiave-valore native; prerequisito naturale per E7 (JSON avanzato).
 
@@ -894,6 +980,17 @@ Prerequisito suggerito: E6-S6 (Dict) per interoperabilità `to_maps`/`from_maps`
 5. `E6-S8-T5` (interoperabilità: `to_maps`, `from_maps`, `to_csv`, `from_csv`, `to_json`)
 6. `E6-S8-T6` (stage pipeline: `transpose`, `fill_na`)
 7. `E6-S8-T7` (test golden + unit)
+
+### Percorso M — cestino di sistema (E6-S9)
+
+Integrazione con il cestino nativo del sistema operativo (Trash macOS, XDG Linux, Recycle Bin Windows).
+Nessuna implementazione propria: ogni operazione delega all'API nativa della piattaforma corrente.
+
+1. `E6-S9-T1` (layer platform: `arksh_platform_trash_item` — macOS via `NSFileManager`, Linux via XDG spec + fallback `gio`, Windows via `SHFileOperationW`)
+2. `E6-S9-T2` (metodo `-> trash()` su oggetti `file`, `directory`, `path`)
+3. `E6-S9-T3` (stage pipeline `each_trash` per cestinare una lista di oggetti)
+4. `E6-S9-T4` (namespace `trash()` con `count`, `items`, `empty()`, `restore(name)`)
+5. `E6-S9-T5` (test cross-platform su file temporaneo)
 
 ## Regola finale
 
