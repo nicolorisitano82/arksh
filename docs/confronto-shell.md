@@ -26,9 +26,9 @@ La dimensione più importante per capire il posizionamento di arksh.
 | Caratteristica                    | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |-----------------------------------|--------|--------|--------|---------|--------|--------|
 | Tipo di dato nativo               | Stringa| Stringa| Stringa| Strutturato | Stringa | Object-aware |
-| Interi nativi                     | Si (`$((...))`) | Si | No | Si | No | Parziale (`number`, aritmetica in value expr) |
+| Interi nativi                     | Si (`$((...))`) | Si | No | Si | No | Si (`Integer`, `Float`, `Double`, `Imaginary`; aritmetica type-aware con promozione) |
 | Liste native                      | Array indicizzati | Array + hash | Liste | Liste tipizzate | No | `list(...)` object-aware |
-| Dizionari / mappe native          | Array associativi (bash 4+) | Hash | No | Record strutturati | No | `map(...)` typed-map; `Dict()` in sviluppo |
+| Dizionari / mappe native          | Array associativi (bash 4+) | Hash | No | Record strutturati | No | `map(...)` typed-map; `Dict()` pianificato (E6-S6); `Matrix` pianificato (E6-S8) |
 | Booleani come tipo                | No (0/1 o stringhe) | No | No | Si | No | Si (`true`, `false`, `bool(...)`) |
 | Oggetti filesystem come tipo      | No     | No     | No     | Si (LS restituisce tabella) | No | Si (file, directory, device, mount) |
 | Namespace di sistema built-in     | No     | No     | No     | Parziale | No | Si (`fs()`, `user()`, `sys()`, `time()`) |
@@ -57,7 +57,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 | Slice (`take`, `first`)                | No (head) | No  | No     | Si (`first`, `take`) | No | Si |
 | Aggregazione (`count`, `reduce`, `sum`, `min`, `max`) | No (wc) | No | No | Si | No | Si |
 | Split/join testo                       | No (tr, cut) | No | No  | Si      | No     | Si (`split`, `join`, `trim`, `lines`) |
-| Encoding (`base64_encode`, `base64_decode`) | No (openssl ext.) | No | No | No | No | In sviluppo |
+| Encoding (`base64_encode`, `base64_decode`) | No (openssl ext.) | No | No | No | No | Pianificato (E6-S7) |
 | Bridge output esterno → pipeline oggetti| No   | No     | No     | Parziale| No     | Si (`cmd \|> stage`) |
 | Stage definibili da plugin             | No     | No     | No     | Si (custom commands) | No | Si (con descrizione; visibili in `help stages`) |
 
@@ -175,7 +175,7 @@ Asse 2: Scripting puro                    ←———————————�
 | fish    | UX out-of-the-box eccellente, highlighting nativo  | Rompe POSIX, nessun tipo strutturato           |
 | nushell | Dati strutturati, pipeline tipizzate               | Rottura totale con shell classica, no classi   |
 | dash    | Velocità, POSIX stretto, shell di sistema          | Nessuna funzione interattiva                   |
-| arksh   | Object model + pipeline tipizzate + compatibilità POSIX + UX interattiva | Ancora in sviluppo, ecosistema piccolo |
+| arksh   | Object model + pipeline tipizzate + tipi numerici espliciti + compatibilità POSIX + UX interattiva | Ancora in sviluppo, ecosistema piccolo, non adatto come shell di sistema |
 
 ---
 
