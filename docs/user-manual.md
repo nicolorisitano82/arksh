@@ -1,21 +1,21 @@
-# Manuale Utente di ARKsh
+# ARKsh User Manual
 
-Versione di riferimento: stato attuale del repository (marzo 2026)
+Reference version: current repository state (March 2026)
 
-Versione inglese disponibile in [user-manual.md](user-manual.md).
+Italian version available in [manuale-utente.md](manuale-utente.md).
 
-## 1. Cos'è ARKsh
+## 1. What ARKsh Is
 
-ARKsh è una shell interattiva e linguaggio di scripting scritto in C. Mantiene i flussi classici delle shell Unix per l'esecuzione dei comandi, ma aggiunge un runtime tipizzato e object-aware.
+ARKsh is an interactive shell and scripting language written in C. It keeps familiar shell behavior for ordinary process execution, while adding a typed, object-aware runtime.
 
-Gli obiettivi principali sono:
+Its main goals are:
 
-- mantenere utilizzabili i workflow shell tradizionali
-- rendere interrogabili come oggetti file, directory e risorse di sistema
-- trattare valori, liste, mappe, blocchi e output dei comandi come valori di prima classe
-- permettere estensioni tramite classi, `extend` e plugin nativi
+- keep classic shell workflows usable
+- make filesystem resources queryable as objects
+- treat values, lists, maps, blocks, and command output as first-class runtime values
+- support extension through classes, `extend`, and native plugins
 
-Esempi immediati:
+Typical examples:
 
 ```text
 . -> type
@@ -24,52 +24,52 @@ README.md -> read_text(128)
 capture("ls /usr") |> lines() |> grep("lib") |> count()
 ```
 
-## 2. Compilazione e avvio
+## 2. Build and Run
 
-Compilazione base con CMake:
+Build with CMake:
 
 ```bash
 cmake -S . -B build
 cmake --build build
 ```
 
-Avvio interattivo:
+Run the interactive shell:
 
 ```bash
 ./build/arksh
 ```
 
-Esecuzione di un singolo comando:
+Run a single command:
 
 ```bash
 ./build/arksh -c '. -> type'
 ```
 
-Esecuzione di uno script:
+Run a script:
 
 ```bash
-./build/arksh mio_script.arksh
+./build/arksh my_script.arksh
 ```
 
-Esecuzione di un file nel contesto della shell corrente:
+Execute a file in the current shell context:
 
 ```bash
 ./build/arksh -c 'source examples/scripts/03-shell-session.arksh'
 ```
 
-Esecuzione dei test:
+Run the test suite:
 
 ```bash
 ctest --test-dir build --output-on-failure
 ```
 
-## 3. Modello mentale
+## 3. Mental Model
 
-ARKsh ha due modalità complementari.
+ARKsh has two complementary execution styles.
 
-### 3.1 Comandi shell classici
+### 3.1 Classic shell commands
 
-Questi girano come comandi normali o built-in:
+These run as ordinary commands or built-ins:
 
 ```bash
 ls -la
@@ -77,11 +77,11 @@ grep main src/file.c
 echo hello
 ```
 
-Usa le pipe shell (`|`) quando vuoi stream testuali.
+Use shell pipes (`|`) when you want text streams.
 
-### 3.2 Espressioni di valore tipizzate
+### 3.2 Typed value expressions
 
-Queste producono valori invece di lanciare processi:
+These produce values instead of spawning ordinary commands:
 
 ```text
 text("hello")
@@ -91,11 +91,11 @@ list(1, 2, 3)
 map("name", "arksh")
 ```
 
-Usa le pipeline oggetto (`|>`) quando vuoi trasformazioni strutturate.
+Use object pipelines (`|>`) when you want structured transformations.
 
-### 3.3 Oggetti filesystem
+### 3.3 Filesystem objects
 
-Un path può essere usato come receiver:
+A path can be used as a receiver:
 
 ```text
 . -> type
@@ -104,27 +104,27 @@ README.md -> size
 README.md -> parent()
 ```
 
-## 4. Sintassi di base
+## 4. Core Syntax
 
-### 4.1 Sintassi receiver -> membro
+### 4.1 Receiver -> member syntax
 
-Forma generale:
+General form:
 
 ```text
 receiver -> property
 receiver -> method(arg1, arg2)
 ```
 
-Esempi:
+Examples:
 
 ```text
 . -> type
 README.md -> read_text(64)
 ```
 
-### 4.2 Costruttori di valore
+### 4.2 Value constructors
 
-Costruttori comuni:
+Common constructors:
 
 ```text
 text("hello")
@@ -138,33 +138,33 @@ capture("pwd")
 capture_lines("ls -1")
 ```
 
-### 4.3 Block literal
+### 4.3 Blocks
 
-I block sono valori di prima classe:
+Blocks are first-class values:
 
 ```text
 [:it | it -> name]
 [:acc :n | acc + n]
 ```
 
-Possono essere salvati in binding tipizzati:
+They can be stored in typed bindings:
 
 ```text
 let is_file = [:it | it -> type == "file"]
 let get_name = [:it | it -> name]
 ```
 
-### 4.4 Variabili locali nei block
+### 4.4 Local variables inside blocks
 
-Usa `local` per creare binding locali al block:
+Use `local` to create block-local typed bindings:
 
 ```text
 [:acc :n | local next = acc + n ; next]
 ```
 
-### 4.5 Operatori
+### 4.5 Operators
 
-Operatori supportati nelle value expression:
+Supported value-level operators:
 
 ```text
 +  -  *  /
@@ -172,7 +172,7 @@ Operatori supportati nelle value expression:
 condition ? true_value : false_value
 ```
 
-Esempi:
+Examples:
 
 ```text
 number(3) + number(4)
@@ -180,13 +180,13 @@ number(5) > number(3)
 bool(true) ? "yes" : "no"
 ```
 
-## 5. Pipeline
+## 5. Pipelines
 
-### 5.1 Pipeline oggetti
+### 5.1 Object pipelines
 
-Le pipeline oggetti usano `|>`.
+Object pipelines use `|>`.
 
-Esempi:
+Examples:
 
 ```text
 . -> children() |> where(type == "file") |> sort(size desc)
@@ -195,7 +195,7 @@ text(" a, b , c ") |> trim() |> split(",") |> join(" | ")
 list(1, 2, 3) |> reduce(number(0), [:acc :n | acc + n])
 ```
 
-Stage comuni:
+Common stages:
 
 - `where(...)`
 - `filter(...)`
@@ -220,9 +220,9 @@ Stage comuni:
 - `to_json()`
 - `from_json()`
 
-### 5.2 Pipeline shell
+### 5.2 Shell pipelines
 
-Le pipeline shell usano `|` e lavorano su stream di testo:
+Shell pipelines use `|` and operate on text streams:
 
 ```bash
 ls -1 | wc -l
@@ -230,16 +230,16 @@ cat < README.md | wc -l
 ls missing 2>&1 | wc -l
 ```
 
-### 5.3 Bridge tra comandi e valori tipizzati
+### 5.3 Bridge from commands to typed values
 
-Usa:
+Use:
 
 ```text
 capture("cmd")
 capture_lines("cmd")
 ```
 
-Esempi:
+Examples:
 
 ```text
 capture("pwd")
@@ -247,7 +247,7 @@ capture("ls -1") |> lines() |> first()
 capture_lines("ls /usr") |> grep("lib") |> count()
 ```
 
-## 6. Controllo di flusso
+## 6. Control Flow
 
 ### 6.1 if / elif / else / fi
 
@@ -259,7 +259,7 @@ else
 fi
 ```
 
-### 6.2 while e until
+### 6.2 while and until
 
 ```text
 while false ; do
@@ -292,7 +292,7 @@ text("other") -> print()
 endswitch
 ```
 
-### 6.5 case in stile shell
+### 6.5 Shell-style case
 
 ```text
 case text("demo.txt") in
@@ -303,7 +303,7 @@ esac
 
 ### 6.6 break, continue, return
 
-Si comportano come atteso dentro loop e funzioni:
+These behave as expected inside loops and functions:
 
 ```text
 break
@@ -311,9 +311,9 @@ continue
 return text("done")
 ```
 
-## 7. Funzioni
+## 7. Functions
 
-Definizione:
+Definition:
 
 ```text
 function greet(name) do
@@ -321,13 +321,13 @@ function greet(name) do
 endfunction
 ```
 
-Chiamata shell-style:
+Shell-style call:
 
 ```text
 greet nicolo
 ```
 
-Uso di `local` nelle funzioni:
+Use `local` inside functions:
 
 ```text
 function demo(name) do
@@ -336,15 +336,15 @@ function demo(name) do
 endfunction
 ```
 
-Uso di `builtin` per bypassare un override:
+Use `builtin` to bypass an override:
 
 ```text
 builtin pwd
 ```
 
-## 8. Classi ed estensioni runtime
+## 8. Classes and Runtime Extension
 
-### 8.1 Classi
+### 8.1 Classes
 
 ```text
 class Named do
@@ -356,16 +356,16 @@ class Document extends Named do
 endclass
 ```
 
-Istanziazione:
+Instantiation:
 
 ```text
 let doc = Document(text("manual"))
 doc -> name
 ```
 
-### 8.2 Ereditarietà multipla
+### 8.2 Multiple inheritance
 
-ARKsh supporta ereditarietà multipla con precedenza sinistra:
+ARKsh supports left-to-right multiple inheritance:
 
 ```text
 class Artifact extends Named, Printable do
@@ -375,22 +375,22 @@ endclass
 
 ### 8.3 `extend`
 
-Puoi aggiungere proprietà e metodi a receiver built-in:
+You can add properties and methods to built-in receivers:
 
 ```text
 extend directory property child_count = [:it | it -> children() |> count()]
 extend object method label = [:it :prefix | prefix]
 ```
 
-## 9. Plugin
+## 9. Plugins
 
-Caricamento plugin:
+Load a plugin:
 
 ```text
 plugin load build/arksh_sample_plugin.dylib
 ```
 
-Ispezione e gestione:
+Inspect and manage plugins:
 
 ```text
 plugin list
@@ -400,27 +400,27 @@ plugin enable sample-plugin
 plugin autoload list
 ```
 
-Il sample plugin aggiunge un comando, un resolver, uno stage, una proprietà e un metodo. Il template base è in `plugins/skeleton`.
+The sample plugin adds a command, a resolver, a stage, a property, and a method. The base template lives in `plugins/skeleton`.
 
-## 10. Prompt e startup
+## 10. Prompt and Startup
 
-ARKsh carica lo stato iniziale in questo ordine:
+ARKsh loads startup state in this order:
 
-1. `ARKSH_RC`, se definita
-2. altrimenti `~/.arkshrc`
+1. `ARKSH_RC`, if defined
+2. otherwise `~/.arkshrc`
 
 History:
 
 - `ARKSH_HISTORY`
-- altrimenti `~/.arksh/history`
+- otherwise `~/.arksh/history`
 
-Ricerca config prompt:
+Prompt config lookup:
 
 1. `ARKSH_CONFIG`
-2. `arksh.conf` locale
+2. local `arksh.conf`
 3. `~/.arksh/prompt.conf`
 
-Esempio di config prompt:
+Example prompt configuration:
 
 ```ini
 theme=aurora
@@ -430,24 +430,24 @@ separator= ::
 use_color=1
 ```
 
-Caricamento:
+Load it:
 
 ```text
 prompt load examples/arksh.conf
 ```
 
-## 11. Funzionalità interattive
+## 11. Interactive Features
 
-L'editor interattivo include:
+The interactive editor includes:
 
-- history persistente
+- persistent history
 - syntax highlighting
-- autosuggestion dalla history
-- completion contestuale
-- completion dei membri oggetto dopo `->`
-- completion di stage e resolver
+- autosuggestion from history
+- contextual completion
+- object member completion after `->`
+- stage and resolver completion
 
-Esempi:
+Examples:
 
 ```text
 README.md -> <Tab>
@@ -455,9 +455,9 @@ README.md -> <Tab>
 plugin <Tab>
 ```
 
-## 12. Built-in utili
+## 12. Useful Built-ins
 
-Built-in usati più spesso:
+Common built-ins:
 
 - `help`
 - `pwd`
@@ -485,7 +485,7 @@ Built-in usati più spesso:
 - `plugin`
 - `prompt`
 
-Uso rapido:
+Quick usage:
 
 ```text
 help
@@ -495,33 +495,33 @@ help stages
 help types
 ```
 
-## 13. JSON e dati strutturati
+## 13. JSON and Structured Data
 
-Serializzazione e parse:
+Serialization and parsing:
 
 ```text
 map("a", list(1, 2, map("b", true))) |> to_json()
 text("{\"a\":[1,2,{\"b\":true}]}") |> from_json()
 ```
 
-Helper file-oriented su receiver path-like:
+File-oriented helpers on path-like receivers:
 
 ```text
 data.json -> read_json()
 data.json -> write_json(payload)
 ```
 
-## 14. Diagnostica e problemi comuni
+## 14. Troubleshooting
 
-Problemi tipici:
+Typical issues:
 
-- `unknown property`: il receiver non espone quella proprietà
-- `unknown method`: il receiver non implementa quel metodo
-- `... expects a list`: uno stage è stato applicato al tipo sbagliato
-- `job not found`: non esiste un job attivo con quel `%n`
-- `unable to open source file`: path non risolto o permessi insufficienti
+- `unknown property`: the receiver does not expose that property
+- `unknown method`: the receiver does not implement that method
+- `... expects a list`: a stage was applied to the wrong value type
+- `job not found`: there is no active job matching `%n`
+- `unable to open source file`: path resolution or permissions failed
 
-Diagnostica utile:
+Useful diagnostics:
 
 ```text
 type ls
@@ -558,8 +558,8 @@ jobs
 fg
 ```
 
-## 16. Documenti collegati
+## 16. Related Docs
 
-- [user-manual.md](user-manual.md)
+- [manuale-utente.md](manuale-utente.md)
 - [sintassi-arksh.md](sintassi-arksh.md)
 - [scelte-implementative.md](scelte-implementative.md)

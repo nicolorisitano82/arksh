@@ -1,10 +1,8 @@
-# `ARKsh` è una shell object-oriented in C, pensata per Linux, macOS e Windows.
+# `ARKsh` is an object-oriented shell written in C for Linux, macOS, and Windows.
 
-`ARKsh` è una shell object-oriented in C, pensata per Linux, macOS e Windows.
+`ARKsh` stands for **Archetype Shell**: every resource is an object, and every object has a class.
 
-Archetype Shell - Every resource is an object. Every object has a class.
-
-L'idea di base è che ogni elemento del sistema sia un oggetto interrogabile tramite proprietà e metodi:
+The core idea is that filesystem entities, values, command output, plugins, and structured data can all be queried and transformed in a consistent way:
 
 ```text
 . -> type
@@ -13,47 +11,36 @@ README.md -> read_text(256)
 . -> children() |> where(type == "file") |> sort(size desc)
 ```
 
-## Funzionalità implementate
+## Implemented Features
 
-- REPL interattiva e modalità `-c`
-- Modello oggetti per file, directory, device, mount point e path astratti
-- Lexer, AST ed executor completi per il linguaggio della shell
-- Parser per espressioni `path -> property` e `path -> method(...)`
-- Runtime object-aware per stringhe, numeri, booleani, liste e mappe
-- Letterali booleani `true` e `false` come value expression di prima classe
-- Operatori binari `+`, `-`, `*`, `/`, `==`, `!=`, `<`, `>`, `<=`, `>=` in value expressions
-- Operatore ternario `condizione ? valore : valore`
-- Block literal Smalltalk-style `[:param | body]` come valori di prima classe, assegnabili con `let`
-- Estensioni di oggetti e valori con `extend`, definibili nel linguaggio o da plugin nativi
-- Pipeline oggetti `|>` con `where`, `sort`, `take`, `first`, `count`, `render`, `lines`, `trim`, `split`, `join`, `each`, `reduce`, `grep`, `to_json`, `from_json`
-- Bridge shell/object: `<comando esterno> |> <stage>` usa stdout come sorgente object pipeline
-- Esecuzione nativa di comandi esterni con pipe shell `|`, heredoc `<<` / `<<-` e redirection completa
-- Liste di comandi con `;`, `&&`, `||` e background job con `&`
-- Controllo di flusso `if`, `elif`, `else`, `while`, `until`, `for`, `break`, `continue`, `return`, ternario `?:`, `switch` e `case`
-- Quoting shell con single quote, double quote e backslash
-- Espansioni `~`, variabili shell/ambiente `$VAR` / `${VAR}` / `$?`, command substitution `$(...)` e globbing
-- Stato shell con `set`, `export`, `unset`, `alias`, `unalias`, `source`, `type`, `eval`, `exec`, `wait`, `trap`
-- Funzioni shell dichiarative con parametri named, `return` e scope locale per variabili e binding
-- Override di comandi built-in tramite funzioni omonime; `builtin <nome>` per chiamare il built-in originale
-- Classi custom con `class ... endclass`, istanziazione, proprietà, metodi ed ereditarietà multipla a precedenza sinistra
-- Job control POSIX con process group completi per pipeline foreground: `setpgid`, `tcsetpgrp`, `Ctrl-Z` → `jobs`, `fg` (con cessione del terminale al pgid), `bg`
-- Caricamento automatico di `~/.arkshrc` o del file indicato da `ARKSH_RC`
-- Editor di riga interattivo con syntax highlighting e autosuggestion da history
-- Tab completion contestuale con indicatori di tipo: comandi, funzioni `(fn)`, alias `(@)`, binding `(let)`, variabili `$`, stage pipeline, proprietà e metodi oggetto
-- History persistente su file con built-in `history`
-- Prompt configurabile con segmenti stile theme engine
-- Sistema plugin con ABI C stabile per aggiungere comandi, proprietà, metodi, resolver e stage
-- Documentazione architetturale e reference manual completo
+- Interactive REPL and `-c` command mode
+- Full lexer, AST, and executor for the shell language
+- Filesystem object model for files, directories, devices, mount points, and abstract paths
+- Object/member syntax with `receiver -> property` and `receiver -> method(...)`
+- Typed runtime values: strings, numbers, booleans, lists, maps, dictionaries, blocks, classes, instances, and matrices
+- First-class block literals in Smalltalk-style syntax: `[:param | body]`
+- Object pipelines with `|>`: `where`, `sort`, `take`, `first`, `count`, `sum`, `min`, `max`, `render`, `lines`, `trim`, `split`, `join`, `grep`, `each`, `map`, `flat_map`, `group_by`, `reduce`, `to_json`, `from_json`, `base64_encode`, `base64_decode`, `transpose`, `fill_na`
+- Native execution of external commands with shell pipes, redirections, and heredoc support
+- Shell/object bridge: external command output can become typed pipeline input
+- Control flow: `if`, `elif`, `else`, `while`, `until`, `for`, `break`, `continue`, `return`, ternary `?:`, `switch`, and `case`
+- Shell functions with named parameters, local scope, and `builtin` fallback
+- Custom classes with instantiation, properties, methods, `init`, and left-to-right multiple inheritance
+- Runtime extensions via `extend` and native plugins
+- Job control with `jobs`, `fg`, `bg`, `wait`, foreground process groups, and `Ctrl-Z` handling on POSIX systems
+- Startup files, aliases, shell variables, exported variables, and persistent history
+- Prompt configuration with theme segments
+- Interactive line editor with highlighting, autosuggestion, and contextual completion
+- Stable plugin ABI for commands, properties, methods, value resolvers, pipeline stages, and typed extensions
 
-## Piattaforme supportate
+## Supported Platforms
 
-| Piattaforma | Compilatore | Build type | CI |
-|-------------|-------------|------------|----|
-| Linux (Ubuntu 22.04+) | gcc ≥ 11 | Debug + Release | Ubuntu Latest |
-| macOS (13 Ventura+) | clang ≥ 15 (Xcode) | Debug + Release | macOS Latest |
-| Windows (10/11) | MSVC ≥ 19.38 (VS 2022) | Release | Windows Latest |
+| Platform | Compiler | Build Types | CI |
+| --- | --- | --- | --- |
+| Linux (Ubuntu 22.04+) | gcc >= 11 | Debug + Release | Ubuntu |
+| macOS (13 Ventura+) | clang >= 15 (Xcode) | Debug + Release | macOS |
+| Windows (10/11) | MSVC >= 19.38 (VS 2022) | Release | Windows |
 
-Requisiti minimi: CMake ≥ 3.20, compilatore C11.
+Minimum requirements: CMake >= 3.20 and a C11 compiler.
 
 ## Build
 
@@ -62,7 +49,7 @@ cmake -S . -B build
 cmake --build build
 ```
 
-Fallback manuale verificato su macOS:
+Verified manual fallback on macOS:
 
 ```bash
 mkdir -p build
@@ -76,52 +63,27 @@ cc -std=c11 -Wall -Wextra -pedantic -Iinclude -dynamiclib -undefined dynamic_loo
    plugins/skeleton/skeleton_plugin.c -o build/arksh_skeleton_plugin.dylib
 ```
 
-Su Linux sostituire `-dynamiclib -undefined dynamic_lookup` con `-shared -fPIC`; su Windows usare `.dll`.
+On Linux, replace `-dynamiclib -undefined dynamic_lookup` with `-shared -fPIC`. On Windows, use `.dll`.
 
-## Esecuzione rapida
+## Quick Start
 
 ```bash
-./build/arksh                                         # REPL interattiva
-./build/arksh -c '. -> type'                          # singolo comando
+./build/arksh
+./build/arksh -c '. -> type'
 ./build/arksh -c '. -> children() |> where(type == "file") |> sort(size desc)'
 ./build/arksh -c 'list(1, 20, 3) |> sort(value desc)'
-./build/arksh -c 'capture("pwd") |> lines() |> first()'
 ./build/arksh -c 'text(" a, b , c ") |> trim() |> split(",") |> join(" | ")'
 ./build/arksh -c 'list(1, 2, 3) |> reduce(number(0), [:acc :n | acc + n])'
-./build/arksh -c 'list(1, 2, 3) |> to_json()'
 ./build/arksh -c 'text("{\"a\":[1,2,{\"b\":true}]}") |> from_json() |> to_json()'
-./build/arksh -c 'capture_lines("ls /usr") |> grep("lib") |> count()'
 ./build/arksh -c 'env() -> HOME'
-./build/arksh -c 'proc() -> pid'
 ./build/arksh -c 'shell() -> plugins |> count()'
-./build/arksh -c 'let is_file = [:it | it -> type == "file"] ; . -> children() |> where(is_file) |> each([:it | it -> name]) |> take(5)'
-./build/arksh -c 'extend directory property child_count = [:it | it -> children() |> count()]'
-./build/arksh -c '. -> child_count'
 ./build/arksh -c 'true && text("ok") -> print()'
-./build/arksh -c 'false || text("recovered") -> print()'
-./build/arksh -c 'bool(true) ? "yes" : "no"'
-./build/arksh -c 'number(3) + number(4)'
-./build/arksh -c 'if . -> exists ; then text("yes") -> print() ; else text("no") -> print() ; fi'
-./build/arksh -c 'for n in list(1, 2, 3) ; do n -> value ; done'
-./build/arksh -c 'switch . -> type ; case "directory" ; then text("dir") -> print() ; default ; then text("other") -> print() ; endswitch'
-./build/arksh -c 'eval "text(\"hi\") -> print()"'
-./build/arksh -c 'trap "text(\"bye\") -> print()" EXIT ; text("run") -> print()'
-./build/arksh -c 'ls -1 | wc -l'
-./build/arksh -c 'cat < README.md | wc -l'
-./build/arksh -c 'ls missing 2>&1 | wc -l'
-./build/arksh -c $'./build/arksh_test_count_lines <<EOF\none\ntwo\nEOF'
 ./build/arksh -c 'sleep 1 & jobs'
-./build/arksh -c 'let payload = map("a", list(1, 2, map("b", true))) ; /tmp/arksh.json -> write_json(payload) ; /tmp/arksh.json -> read_json() |> to_json()'
-./build/arksh -c 'plugin load build/arksh_sample_plugin.dylib ; sample() -> name'
-./build/arksh -c 'plugin load build/arksh_sample_plugin.dylib ; text("ciao") |> sample_wrap()'
-./build/arksh -c 'history'
-./build/arksh -c 'type ls'
-./build/arksh -c 'prompt load examples/arksh.conf'
 ```
 
-## Script di esempio
+## Example Scripts
 
-Nel repository sono presenti undici script `.arksh`:
+The repository includes example `.arksh` scripts:
 
 ```bash
 ./build/arksh -c 'source examples/scripts/01-filesystem-tour.arksh'
@@ -137,102 +99,70 @@ Nel repository sono presenti undici script `.arksh`:
 ./build/arksh -c 'source examples/scripts/11-command-override.arksh'
 ```
 
-Coprono:
-
-| Script | Contenuto |
-|--------|-----------|
-| `01` | Object model filesystem e pipeline `\|>` |
-| `02` | Valori tipizzati, `let`, block e `extend` |
-| `03` | Stato della shell, prompt, alias, sourcing e controllo di flusso |
-| `04` | Scripting con `if`, `while`, `until`, `for`, ternario `?:`, `switch`, `case` |
-| `05` | Funzioni shell: definizione, ridefinizione, introspezione e chiamata |
-| `06` | Classi custom con `property`, `method`, `init` ed ereditarietà multipla |
-| `07` | Built-in di scripting: `eval`, `wait`, `trap EXIT` |
-| `08` | Heredoc `<<` / `<<-` e redirection avanzata su file descriptor |
-| `09` | Operatori binari `+`, `-`, `*`, `/`, confronto e ternario |
-| `10` | Bridge shell/object: output comandi esterni come sorgente `\|>` |
-| `11` | Override di built-in tramite funzioni e uso di `builtin` |
-
-## Riferimento rapido di sintassi
+## Language Snapshot
 
 ```text
-# Espressioni oggetto
+# Object expressions
 . -> type
 README.md -> size
-. -> children()
 README.md -> read_text(256)
 
-# Pipeline oggetti
-. -> children() |> where(type == "file") |> sort(size desc)
-list(1, 20, 3) |> sort(value desc)
-capture("pwd") |> lines() |> first()
-text(" a, b , c ") |> trim() |> split(",") |> join(" | ")
-list(1, 2, 3) |> reduce(number(0), [:acc :n | acc + n])
-capture_lines("ls /usr") |> grep("lib")
-
-# Valori tipizzati
-text("ciao")
+# Typed values
+text("hello")
 number(42)
 bool(true)
-true
-false
-list(1, 2, "tre")
-map("chiave", "valore")
-capture("cmd")
+list(1, 2, 3)
+map("name", "arksh")
+Dict()
+Matrix("name", "score")
 
-# Operatori
-number(3) + number(4)
-text("a") + text("b")
-number(5) > number(3)
-true ? "sì" : "no"
+# Pipelines
+. -> children() |> where(type == "file") |> sort(size desc)
+capture("pwd") |> lines() |> first()
+list(1, 2, 3) |> map([:it | it + number(1)])
 
-# Funzioni e classi
-function greet(name) do
-  text("hello %s") -> print(name)
-endfunction
-greet nicolo
-builtin pwd
-
-# Job control
-sleep 5 &
-jobs
-fg
-bg
-
-# Pipeline shell
-ls -1 | wc -l
-cat < README.md | wc -l
-ls > out.txt
-ls missing 2>&1 | wc -l
-
-# Variabili e alias
+# Shell state
 set PROJECT arksh
 export PROJECT_ROOT "$PWD"
 alias ll="ls -1"
 let files = . -> children()
+
+# Functions and classes
+function greet(name) do
+  text("hello %s") -> print(name)
+endfunction
+
+class Named do
+  property name = text("unnamed")
+endclass
 ```
 
-## Documentazione
+## Documentation
 
-- [manuale-utente.md](docs/manuale-utente.md) — reference manual completo
-- [sintassi-arksh.md](docs/sintassi-arksh.md) — specifica della sintassi
-- [scelte-implementative.md](docs/scelte-implementative.md) — note architetturali
-- [roadmap-shell-completa.md](docs/roadmap-shell-completa.md) — visione a lungo termine
-- [backlog-implementazione.md](docs/backlog-implementazione.md) — stato e prossimi passi
-- [parser-dispatch.md](docs/parser-dispatch.md) — albero di dispatch del parser
+- [docs/user-manual.md](docs/user-manual.md) - English user manual
+- [docs/manuale-utente.md](docs/manuale-utente.md) - Italian user manual
+- [docs/sintassi-arksh.md](docs/sintassi-arksh.md) - syntax reference
+- [docs/scelte-implementative.md](docs/scelte-implementative.md) - implementation notes
+- [docs/backlog-implementazione.md](docs/backlog-implementazione.md) - roadmap backlog and remaining work
+- [docs/parser-dispatch.md](docs/parser-dispatch.md) - parser dispatch tree
+- [docs/confronto-shell.md](docs/confronto-shell.md) - shell comparison notes
 
-## Startup e configurazione
+## Startup and Configuration
 
-All'avvio arksh carica in ordine:
+At startup, `arksh` loads:
 
-1. `ARKSH_RC` se definita nell'ambiente
-2. altrimenti `~/.arkshrc`
+1. `ARKSH_RC` if set
+2. otherwise `~/.arkshrc`
 
-La history viene salvata in `ARKSH_HISTORY` o in `~/.arksh/history`.
+History is stored in `ARKSH_HISTORY` or `~/.arksh/history`.
 
-La configurazione del prompt viene cercata in `ARKSH_CONFIG`, poi `arksh.conf` locale, poi `~/.arksh/prompt.conf`.
+Prompt configuration is looked up in:
 
-Esempio di `~/.arkshrc` minimale:
+1. `ARKSH_CONFIG`
+2. local `arksh.conf`
+3. `~/.arksh/prompt.conf`
+
+Minimal `~/.arkshrc`:
 
 ```text
 set PROJECT arksh
@@ -241,32 +171,41 @@ alias ll="ls -1"
 prompt load ~/.arksh/prompt.conf
 ```
 
-## Plugin
+## Plugins
 
-Dopo la build il plugin di esempio è disponibile come libreria dinamica:
+After building, the sample plugin is available as a shared library:
 
 - Linux: `build/arksh_sample_plugin.so`
 - macOS: `build/arksh_sample_plugin.dylib`
 - Windows: `build/arksh_sample_plugin.dll`
 
-Caricamento:
+Load it:
 
 ```bash
-printf 'plugin load build/arksh_sample_plugin.dylib\nhello-plugin Team\nexit\n' | ./build/arksh
+./build/arksh -c 'plugin load build/arksh_sample_plugin.dylib ; plugin list'
 ```
 
-Il plugin registra il comando `hello-plugin`, il resolver `sample()`, lo stage `sample_wrap()`, la proprietà `sample_tag` sui directory object e il metodo `sample_label(...)` sugli object filesystem.
+The sample plugin registers:
+
+- the `hello-plugin` command
+- the `sample()` value resolver
+- the `sample_wrap()` pipeline stage
+- the `sample_tag` property on directory-like receivers
+- the `sample_label(...)` method on filesystem objects
+
+Plugin management commands:
 
 ```text
 plugin list
 plugin info sample-plugin
 plugin disable sample-plugin
 plugin enable sample-plugin
+plugin autoload list
 ```
 
-Il template per un nuovo plugin è in [plugins/skeleton](plugins/skeleton).
+The plugin template is available in [plugins/skeleton](plugins/skeleton).
 
-## Configurazione prompt
+## Prompt Example
 
 ```ini
 theme=aurora
