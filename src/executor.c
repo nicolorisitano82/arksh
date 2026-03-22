@@ -2361,6 +2361,7 @@ static int render_value_in_place(ArkshValue *value, char *out, size_t out_size) 
     return 1;
   }
 
+  arksh_value_free(value);
   arksh_value_set_string(value, rendered);
   return 0;
 }
@@ -2524,7 +2525,7 @@ static int evaluate_object_expression_value(ArkshShell *shell, const ArkshObject
     return 1;
   }
 
-  arksh_value_init(value);
+  arksh_value_free(value);
   if (expression->member_kind == ARKSH_MEMBER_PROPERTY) {
     status = get_property_value_with_shell(shell, receiver, expression->member, value, out, out_size);
     if (status != 0 && error_has_prefix(out, "unknown property:")) {
@@ -2548,7 +2549,7 @@ static int split_text_lines_into_value(const char *text, ArkshValue *out_value) 
     return 1;
   }
 
-  arksh_value_init(out_value);
+  arksh_value_free(out_value);
   out_value->kind = ARKSH_VALUE_LIST;
   cursor = text;
 
@@ -2624,7 +2625,7 @@ static int split_text_whitespace_into_value(const char *text, ArkshValue *out_va
     return 1;
   }
 
-  arksh_value_init(out_value);
+  arksh_value_free(out_value);
   out_value->kind = ARKSH_VALUE_LIST;
   cursor = text;
 
@@ -2669,7 +2670,7 @@ static int split_text_delimiter_into_value(const char *text, const char *separat
     return 1;
   }
 
-  arksh_value_init(out_value);
+  arksh_value_free(out_value);
   out_value->kind = ARKSH_VALUE_LIST;
   cursor = text;
   separator_len = strlen(separator);
@@ -2768,6 +2769,7 @@ static int execute_capture_source(ArkshShell *shell, const char *raw_command, in
     return 0;
   }
 
+  arksh_value_free(value);
   arksh_value_set_string(value, capture_output);
   return 0;
 }
@@ -2840,6 +2842,7 @@ static int evaluate_value_source(ArkshShell *shell, const ArkshValueSourceNode *
 
       if (binding == NULL) {
         if (arksh_shell_find_class(shell, source->binding) != NULL) {
+          arksh_value_free(value);
           arksh_value_set_class(value, source->binding);
           return 0;
         }
@@ -2854,6 +2857,7 @@ static int evaluate_value_source(ArkshShell *shell, const ArkshValueSourceNode *
       if (expand_single_word(shell, source->raw_text, ARKSH_EXPAND_MODE_OBJECT_ARGUMENT, expanded, sizeof(expanded), out, out_size) != 0) {
         return 1;
       }
+      arksh_value_free(value);
       arksh_value_set_string(value, expanded);
       return 0;
     }
@@ -2868,6 +2872,7 @@ static int evaluate_value_source(ArkshShell *shell, const ArkshValueSourceNode *
         snprintf(out, out_size, "invalid numeric source: %s", expanded);
         return 1;
       }
+      arksh_value_free(value);
       arksh_value_set_number(value, number);
       return 0;
     }
@@ -2881,11 +2886,12 @@ static int evaluate_value_source(ArkshShell *shell, const ArkshValueSourceNode *
         snprintf(out, out_size, "bool() expects true or false");
         return 1;
       }
+      arksh_value_free(value);
       arksh_value_set_boolean(value, strcmp(expanded, "true") == 0);
       return 0;
     }
     case ARKSH_VALUE_SOURCE_LIST_LITERAL:
-      arksh_value_init(value);
+      arksh_value_free(value);
       value->kind = ARKSH_VALUE_LIST;
       for (i = 0; i < source->argc; ++i) {
         ArkshValue *item_value = (ArkshValue *) allocate_temp_buffer(1, sizeof(*item_value), "list literal item", out, out_size);
@@ -2934,6 +2940,7 @@ static int evaluate_value_source(ArkshShell *shell, const ArkshValueSourceNode *
         }
         return 1;
       }
+      arksh_value_free(value);
       arksh_value_set_string(value, capture_output);
       return 0;
     }
@@ -2982,6 +2989,28 @@ static int resolve_stage_block_argument(ArkshShell *shell, const char *text, Ark
   return status;
 }
 
+static void discard_list_tail(ArkshValue *value, size_t keep_count) {
+  size_t i;
+
+  if (value == NULL || value->kind != ARKSH_VALUE_LIST || keep_count >= value->list.count) {
+    return;
+  }
+
+  for (i = keep_count; i < value->list.count; ++i) {
+    arksh_value_item_free(&value->list.items[i]);
+  }
+  value->list.count = keep_count;
+}
+
+static void move_list_item(ArkshValue *value, size_t dest_index, size_t src_index) {
+  if (value == NULL || value->kind != ARKSH_VALUE_LIST || dest_index == src_index) {
+    return;
+  }
+
+  value->list.items[dest_index] = value->list.items[src_index];
+  arksh_value_item_init(&value->list.items[src_index]);
+}
+
 static int apply_where_stage(ArkshShell *shell, ArkshValue *value, const ArkshPipelineStageNode *stage, char *out, size_t out_size) {
   char property[ARKSH_MAX_NAME];
   char expected[ARKSH_MAX_TOKEN];
@@ -3022,11 +3051,12 @@ static int apply_where_stage(ArkshShell *shell, ArkshValue *value, const ArkshPi
         return 1;
       }
       if (value_is_truthy(&temp_values[1])) {
-        value->list.items[write_index++] = value->list.items[i];
+        move_list_item(value, write_index, i);
+        write_index++;
       }
     }
 
-    value->list.count = write_index;
+    discard_list_tail(value, write_index);
     free(temp_values);
     return 0;
   }
@@ -3042,12 +3072,13 @@ static int apply_where_stage(ArkshShell *shell, ArkshValue *value, const ArkshPi
       return 1;
     }
 
-      if (strcmp(actual, expected) == 0) {
-        value->list.items[write_index++] = value->list.items[i];
-      }
+    if (strcmp(actual, expected) == 0) {
+      move_list_item(value, write_index, i);
+      write_index++;
+    }
     }
 
-    value->list.count = write_index;
+    discard_list_tail(value, write_index);
   }
   return 0;
 }
@@ -3113,7 +3144,7 @@ static int apply_take_stage(ArkshValue *value, const ArkshPipelineStageNode *sta
   }
 
   if (limit < value->list.count) {
-    value->list.count = limit;
+    discard_list_tail(value, limit);
   }
   return 0;
 }
@@ -3130,10 +3161,18 @@ static int apply_first_stage(ArkshValue *value, char *out, size_t out_size) {
   }
 
   {
-    /* Copy item to stack before arksh_value_set_from_item reinitialises
-     * (memsets) *value — the source item lives inside that same struct. */
-    ArkshValueItem item = value->list.items[0];
-    return arksh_value_set_from_item(value, &item);
+    ArkshValueItem item;
+    int status;
+
+    arksh_value_item_init(&item);
+    if (arksh_value_item_copy(&item, &value->list.items[0]) != 0) {
+      snprintf(out, out_size, "unable to extract first() item");
+      return 1;
+    }
+    arksh_value_free(value);
+    status = arksh_value_set_from_item(value, &item);
+    arksh_value_item_free(&item);
+    return status;
   }
 }
 
@@ -3142,17 +3181,22 @@ static int apply_count_stage(ArkshValue *value, char *out, size_t out_size) {
   (void) out_size;
 
   if (value->kind == ARKSH_VALUE_LIST) {
-    arksh_value_set_number(value, (double) value->list.count);
+    size_t count = value->list.count;
+    arksh_value_free(value);
+    arksh_value_set_number(value, (double) count);
     return 0;
   }
 
   if (value->kind == ARKSH_VALUE_MAP || value->kind == ARKSH_VALUE_DICT) {
-    arksh_value_set_number(value, (double) value->map.count);
+    size_t count = value->map.count;
+    arksh_value_free(value);
+    arksh_value_set_number(value, (double) count);
     return 0;
   }
 
   if (value->kind == ARKSH_VALUE_STRING || value->kind == ARKSH_VALUE_NUMBER ||
       value->kind == ARKSH_VALUE_BOOLEAN || value->kind == ARKSH_VALUE_OBJECT) {
+    arksh_value_free(value);
     arksh_value_set_number(value, 1.0);
     return 0;
   }
@@ -3219,10 +3263,11 @@ static int apply_grep_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
       continue;
     }
     if (strstr(item_text, pattern) != NULL) {
-      value->list.items[write_index++] = value->list.items[i];
+      move_list_item(value, write_index, i);
+      write_index++;
     }
   }
-  value->list.count = write_index;
+  discard_list_tail(value, write_index);
   return 0;
 }
 
@@ -3353,6 +3398,7 @@ static int apply_to_json_stage(ArkshValue *value, char *out, size_t out_size) {
     return 1;
   }
 
+  arksh_value_free(value);
   arksh_value_set_string(value, json);
   return 0;
 }
@@ -4142,6 +4188,7 @@ static int apply_sum_stage(ArkshShell *shell, ArkshValue *value, const ArkshPipe
     }
     total += n;
   }
+  arksh_value_free(value);
   arksh_value_set_number(value, total);
   return 0;
 }
@@ -4172,6 +4219,7 @@ static int apply_min_stage(ArkshShell *shell, ArkshValue *value, const ArkshPipe
       best = n;
     }
   }
+  arksh_value_free(value);
   arksh_value_set_number(value, best);
   return 0;
 }
@@ -4202,6 +4250,7 @@ static int apply_max_stage(ArkshShell *shell, ArkshValue *value, const ArkshPipe
       best = n;
     }
   }
+  arksh_value_free(value);
   arksh_value_set_number(value, best);
   return 0;
 }
@@ -4233,6 +4282,7 @@ static int apply_base64_encode_stage(ArkshValue *value, char *out, size_t out_si
   src_len = strlen(value->text);
 
   if (src_len == 0) {
+    arksh_value_free(value);
     arksh_value_set_string(value, "");
     return 0;
   }
@@ -4255,6 +4305,7 @@ static int apply_base64_encode_stage(ArkshValue *value, char *out, size_t out_si
   }
   encoded[dst_pos] = '\0';
 
+  arksh_value_free(value);
   arksh_value_set_string(value, encoded);
   return 0;
 }
@@ -4313,6 +4364,7 @@ static int apply_base64_decode_stage(ArkshValue *value, char *out, size_t out_si
   src_len = strlen(src);
 
   if (src_len == 0) {
+    arksh_value_free(value);
     arksh_value_set_string(value, "");
     return 0;
   }
@@ -4362,6 +4414,7 @@ static int apply_base64_decode_stage(ArkshValue *value, char *out, size_t out_si
   }
   decoded[dst_pos] = '\0';
 
+  arksh_value_free(value);
   arksh_value_set_string(value, decoded);
   return 0;
 }
@@ -5598,7 +5651,7 @@ static int evaluate_ast_value(ArkshShell *shell, const ArkshAst *ast, ArkshValue
   }
 
   out[0] = '\0';
-  arksh_value_init(value);
+  arksh_value_free(value);
 
   switch (ast->kind) {
     case ARKSH_AST_EMPTY:
@@ -5636,7 +5689,7 @@ static int evaluate_line_value_heap(ArkshShell *shell, const char *line, ArkshVa
   out[0] = '\0';
   copy_string(trimmed, sizeof(trimmed), line);
   trim_in_place(trimmed);
-  arksh_value_init(value);
+  arksh_value_free(value);
 
   if (trimmed[0] == '\0') {
     return 0;
@@ -5647,6 +5700,7 @@ static int evaluate_line_value_heap(ArkshShell *shell, const char *line, ArkshVa
     return arksh_value_copy(value, binding);
   }
   if (arksh_shell_find_class(shell, trimmed) != NULL) {
+    arksh_value_free(value);
     arksh_value_set_class(value, trimmed);
     return 0;
   }

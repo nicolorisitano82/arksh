@@ -43,6 +43,74 @@ static ArkshValueItem *allocate_value_item(char *error, size_t error_size) {
   return item;
 }
 
+static int ensure_list_capacity(ArkshValue *value, size_t min_capacity) {
+  ArkshValueItem *items;
+  size_t new_capacity;
+  size_t old_capacity;
+
+  if (value == NULL) {
+    return 1;
+  }
+
+  if (value->list.capacity >= min_capacity) {
+    return 0;
+  }
+
+  old_capacity = value->list.capacity;
+  new_capacity = old_capacity > 0 ? old_capacity : 8;
+  while (new_capacity < min_capacity) {
+    if (new_capacity > ((size_t) -1) / 2) {
+      return 1;
+    }
+    new_capacity *= 2;
+  }
+
+  items = (ArkshValueItem *) realloc(value->list.items, new_capacity * sizeof(*items));
+  if (items == NULL) {
+    return 1;
+  }
+  if (new_capacity > old_capacity) {
+    memset(items + old_capacity, 0, (new_capacity - old_capacity) * sizeof(*items));
+  }
+  value->list.items = items;
+  value->list.capacity = new_capacity;
+  return 0;
+}
+
+static int ensure_map_capacity(ArkshValue *value, size_t min_capacity) {
+  ArkshValueMapEntry *entries;
+  size_t new_capacity;
+  size_t old_capacity;
+
+  if (value == NULL) {
+    return 1;
+  }
+
+  if (value->map.capacity >= min_capacity) {
+    return 0;
+  }
+
+  old_capacity = value->map.capacity;
+  new_capacity = old_capacity > 0 ? old_capacity : 8;
+  while (new_capacity < min_capacity) {
+    if (new_capacity > ((size_t) -1) / 2) {
+      return 1;
+    }
+    new_capacity *= 2;
+  }
+
+  entries = (ArkshValueMapEntry *) realloc(value->map.entries, new_capacity * sizeof(*entries));
+  if (entries == NULL) {
+    return 1;
+  }
+  if (new_capacity > old_capacity) {
+    memset(entries + old_capacity, 0, (new_capacity - old_capacity) * sizeof(*entries));
+  }
+  value->map.entries = entries;
+  value->map.capacity = new_capacity;
+  return 0;
+}
+
 static int parse_limit(const char *text, size_t *out_limit) {
   char *endptr = NULL;
   unsigned long value;
@@ -235,10 +303,12 @@ void arksh_value_free(ArkshValue *value) {
     for (i = 0; i < value->list.count; ++i) {
       arksh_value_item_free(&value->list.items[i]);
     }
+    free(value->list.items);
   } else if (value->kind == ARKSH_VALUE_MAP || value->kind == ARKSH_VALUE_DICT) {
     for (i = 0; i < value->map.count; ++i) {
       arksh_value_item_free(&value->map.entries[i].value);
     }
+    free(value->map.entries);
   } else if (value->kind == ARKSH_VALUE_MATRIX) {
     free(value->matrix);
   }
@@ -285,7 +355,11 @@ int arksh_value_copy(ArkshValue *dest, const ArkshValue *src) {
     return 1;
   }
 
-  arksh_value_init(dest);
+  if (dest == src) {
+    return 0;
+  }
+
+  arksh_value_free(dest);
   dest->kind = src->kind;
   dest->number = src->number;
   dest->boolean = src->boolean;
@@ -294,6 +368,10 @@ int arksh_value_copy(ArkshValue *dest, const ArkshValue *src) {
   copy_string(dest->text, sizeof(dest->text), src->text);
 
   if (src->kind == ARKSH_VALUE_LIST) {
+    if (src->list.count > 0 && ensure_list_capacity(dest, src->list.count) != 0) {
+      arksh_value_free(dest);
+      return 1;
+    }
     for (i = 0; i < src->list.count; ++i) {
       if (arksh_value_item_copy(&dest->list.items[dest->list.count], &src->list.items[i]) != 0) {
         arksh_value_free(dest);
@@ -302,6 +380,10 @@ int arksh_value_copy(ArkshValue *dest, const ArkshValue *src) {
       dest->list.count++;
     }
   } else if (src->kind == ARKSH_VALUE_MAP || src->kind == ARKSH_VALUE_DICT) {
+    if (src->map.count > 0 && ensure_map_capacity(dest, src->map.count) != 0) {
+      arksh_value_free(dest);
+      return 1;
+    }
     for (i = 0; i < src->map.count; ++i) {
       copy_string(dest->map.entries[i].key, sizeof(dest->map.entries[i].key), src->map.entries[i].key);
       if (arksh_value_item_copy(&dest->map.entries[i].value, &src->map.entries[i].value) != 0) {
@@ -827,7 +909,7 @@ static int json_parse_array(const char **cursor, ArkshValue *out_value, char *er
       arksh_value_free(parsed_value);
       free(parsed_value);
       if (error[0] == '\0') {
-        snprintf(error, error_size, "JSON array is too large");
+        snprintf(error, error_size, "unable to grow JSON array");
       }
       return 1;
     }
@@ -904,7 +986,7 @@ static int json_parse_object(const char **cursor, ArkshValue *out_value, char *e
     if (arksh_value_map_set(out_value, key, parsed_value) != 0) {
       arksh_value_free(parsed_value);
       free(parsed_value);
-      snprintf(error, error_size, "JSON object is too large");
+      snprintf(error, error_size, "unable to grow JSON object");
       return 1;
     }
     arksh_value_free(parsed_value);
@@ -1271,8 +1353,7 @@ void arksh_value_set_typed_map(ArkshValue *value, const char *type_name) {
     return;
   }
 
-  arksh_value_init(value);
-  value->kind = ARKSH_VALUE_MAP;
+  arksh_value_set_map(value);
 
   /* Store the type tag as a string entry; ignore allocation failures here
    * since the caller checks properties independently. */
@@ -1319,7 +1400,7 @@ int arksh_value_list_append_item(ArkshValue *value, const ArkshValueItem *item) 
     return 1;
   }
 
-  if (value->list.count >= ARKSH_MAX_COLLECTION_ITEMS) {
+  if (ensure_list_capacity(value, value->list.count + 1) != 0) {
     return 1;
   }
 
@@ -1390,7 +1471,7 @@ int arksh_value_map_set(ArkshValue *value, const char *key, const ArkshValue *en
     }
   }
 
-  if (value->map.count >= ARKSH_MAX_COLLECTION_ITEMS) {
+  if (ensure_map_capacity(value, value->map.count + 1) != 0) {
     arksh_value_item_free(item);
     free(item);
     return 1;

@@ -739,11 +739,11 @@ Stato story: `[x]`
 
 ### E7-S2. Dati grandi e annidati
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E7-S2-T1` rimuovere o ridurre i limiti fissi piu stretti sui dati JSON
-- `[ ]` `E7-S2-T2` aggiungere test su payload grandi
-- `[ ]` `E7-S2-T3` verificare stabilita memoria e tempi
+- `[x]` `E7-S2-T1` ridotti i limiti fissi piu stretti sui dati JSON — `ArkshValueList` e `ArkshValueMap` ora crescono dinamicamente con capacity raddoppiata invece di fermarsi a `ARKSH_MAX_COLLECTION_ITEMS`; il parser JSON puo quindi accettare array e oggetti ben oltre 128 elementi, mantenendo il depth limit di `E7-S1`
+- `[x]` `E7-S2-T2` aggiunti test su payload grandi — nuovi test unitari in `tests/unit_object.c` coprono array JSON da 384 elementi, oggetti JSON da 320 entry, payload annidati con 192 oggetti e round-trip di liste da 300 elementi
+- `[x]` `E7-S2-T3` verificata stabilita memoria e tempi — l’executor libera correttamente la coda scartata nelle stage che compattano liste (`where`, `grep`, `take`, `first`) e la suite completa passa in build pulita: `216/216` test verdi (`build-e7s2`)
 
 ### E7-S3. Query e trasformazioni
 
@@ -994,7 +994,7 @@ Stato story: `[ ]`
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E8 `[x]`
 **In corso:** E7 `[~]` — S1 completata
-**Aperte:** E7-S2/S3, E9 (release), E10 (HTTP plugin), E11 (POSIX core)
+**Aperte:** E7-S3, E9 (release), E10 (HTTP plugin), E11 (POSIX core)
 
 > **Completati in E6:** S1 (path/fs), S2 (custom types), S3 (pipeline stages), S4 (shell integration), S5 (numeric types), S6 (Dict), S7 (base64), S8 (Matrix), S9 (trash plugin), S10 (plugin autoload). E6 chiusa.
 > **Extra:** esecuzione diretta di script `arksh file.arksh [args]` aggiunta a `main.c`.
@@ -1043,7 +1043,7 @@ Prerequisito naturale per script di automazione e integrazione con API esterne.
 1. ~~`E7-S1-T1` (diagnostica parser con posizione/offset dell'errore)~~ `[x]`
 2. ~~`E7-S1-T2` (casi edge del parser — `\uXXXX`, ctrl chars, leading zeros, depth limit)~~ `[x]`
 3. ~~`E7-S1-T3` (casi edge del serializer — MATRIX→JSON, ctrl→`\uXXXX`, NaN→null)~~ `[x]`
-4. `E7-S2-T1` (strutture annidate oltre `ARKSH_MAX_COLLECTION_ITEMS`)
+4. ~~`E7-S2-T1` (strutture annidate oltre `ARKSH_MAX_COLLECTION_ITEMS`)~~ `[x]`
 5. `E7-S3-T1` (stage `jq`-like o `select` per query su valori JSON)
 
 ### Percorso H — plugin HTTP (E10)

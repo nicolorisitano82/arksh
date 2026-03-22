@@ -7,7 +7,9 @@
  */
 
 #include <math.h>
+#include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "arksh/object.h"
@@ -29,6 +31,121 @@ static const char *render(const ArkshValue *v, char *buf, size_t buf_size) {
   buf[0] = '\0';
   arksh_value_render(v, buf, buf_size);
   return buf;
+}
+
+static int append_snprintf(char **buffer, size_t *capacity, size_t *length, const char *fmt, ...) {
+  int written;
+  va_list args;
+
+  if (buffer == NULL || *buffer == NULL || capacity == NULL || length == NULL || fmt == NULL) {
+    return 1;
+  }
+
+  while (1) {
+    size_t remaining = *capacity - *length;
+
+    va_start(args, fmt);
+    written = vsnprintf(*buffer + *length, remaining, fmt, args);
+    va_end(args);
+    if (written < 0) {
+      return 1;
+    }
+    if ((size_t) written < remaining) {
+      *length += (size_t) written;
+      return 0;
+    }
+    while (*capacity <= *length + (size_t) written) {
+      char *grown;
+      *capacity *= 2;
+      grown = (char *) realloc(*buffer, *capacity);
+      if (grown == NULL) {
+        return 1;
+      }
+      *buffer = grown;
+    }
+  }
+}
+
+static char *build_large_json_array(size_t count) {
+  char *buffer = (char *) calloc(1024, 1);
+  size_t capacity = 1024;
+  size_t length = 0;
+  size_t i;
+
+  if (buffer == NULL) {
+    return NULL;
+  }
+  if (append_snprintf(&buffer, &capacity, &length, "[") != 0) {
+    free(buffer);
+    return NULL;
+  }
+  for (i = 0; i < count; ++i) {
+    if (append_snprintf(&buffer, &capacity, &length, "%s%zu", i == 0 ? "" : ",", i) != 0) {
+      free(buffer);
+      return NULL;
+    }
+  }
+  if (append_snprintf(&buffer, &capacity, &length, "]") != 0) {
+    free(buffer);
+    return NULL;
+  }
+  return buffer;
+}
+
+static char *build_large_json_object(size_t count) {
+  char *buffer = (char *) calloc(1024, 1);
+  size_t capacity = 1024;
+  size_t length = 0;
+  size_t i;
+
+  if (buffer == NULL) {
+    return NULL;
+  }
+  if (append_snprintf(&buffer, &capacity, &length, "{") != 0) {
+    free(buffer);
+    return NULL;
+  }
+  for (i = 0; i < count; ++i) {
+    if (append_snprintf(&buffer, &capacity, &length, "%s\"k%04zu\":%zu", i == 0 ? "" : ",", i, i) != 0) {
+      free(buffer);
+      return NULL;
+    }
+  }
+  if (append_snprintf(&buffer, &capacity, &length, "}") != 0) {
+    free(buffer);
+    return NULL;
+  }
+  return buffer;
+}
+
+static char *build_nested_json_payload(size_t count) {
+  char *buffer = (char *) calloc(1024, 1);
+  size_t capacity = 1024;
+  size_t length = 0;
+  size_t i;
+
+  if (buffer == NULL) {
+    return NULL;
+  }
+  if (append_snprintf(&buffer, &capacity, &length, "{\"rows\":[") != 0) {
+    free(buffer);
+    return NULL;
+  }
+  for (i = 0; i < count; ++i) {
+    if (append_snprintf(&buffer, &capacity, &length,
+                        "%s{\"id\":%zu,\"meta\":{\"even\":%s}}",
+                        i == 0 ? "" : ",",
+                        i,
+                        (i % 2) == 0 ? "true" : "false") != 0) {
+      free(buffer);
+      return NULL;
+    }
+  }
+  if (append_snprintf(&buffer, &capacity, &length, "],\"total\":%zu}", count) != 0) {
+    free(buffer);
+    return NULL;
+  }
+  return buffer;
 }
 
 /* ------------------------------------------------------------------ init / kind names */
@@ -518,6 +635,114 @@ static void test_json_matrix_to_json(void) {
   (void) error;
 }
 
+static void test_json_large_array_parse(void) {
+  ArkshValue parsed;
+  char error[256];
+  char *json = build_large_json_array(384);
+
+  arksh_value_init(&parsed);
+  EXPECT(json != NULL, "json large array: payload allocated");
+  if (json == NULL) {
+    return;
+  }
+
+  EXPECT(arksh_value_parse_json(json, &parsed, error, sizeof(error)) == 0, "json large array: parse rc == 0");
+  EXPECT(parsed.kind == ARKSH_VALUE_LIST, "json large array: kind == LIST");
+  EXPECT(parsed.list.count == 384, "json large array: count == 384");
+  EXPECT(parsed.list.count > 0 && parsed.list.items[0].number == 0.0, "json large array: first item == 0");
+  EXPECT(parsed.list.count == 384 && parsed.list.items[383].number == 383.0, "json large array: last item == 383");
+
+  free(json);
+  arksh_value_free(&parsed);
+}
+
+static void test_json_large_object_parse(void) {
+  ArkshValue parsed;
+  char error[256];
+  char *json = build_large_json_object(320);
+  const ArkshValueItem *entry;
+
+  arksh_value_init(&parsed);
+  EXPECT(json != NULL, "json large object: payload allocated");
+  if (json == NULL) {
+    return;
+  }
+
+  EXPECT(arksh_value_parse_json(json, &parsed, error, sizeof(error)) == 0, "json large object: parse rc == 0");
+  EXPECT(parsed.kind == ARKSH_VALUE_MAP, "json large object: kind == MAP");
+  EXPECT(parsed.map.count == 320, "json large object: count == 320");
+  entry = arksh_value_map_get_item(&parsed, "k0319");
+  EXPECT(entry != NULL, "json large object: last key exists");
+  EXPECT(entry != NULL && entry->number == 319.0, "json large object: last value == 319");
+
+  free(json);
+  arksh_value_free(&parsed);
+}
+
+static void test_json_large_nested_payload(void) {
+  ArkshValue parsed;
+  char error[256];
+  char *json = build_nested_json_payload(192);
+  const ArkshValueItem *rows_item;
+  const ArkshValueItem *first_row;
+  const ArkshValueItem *meta_item;
+  const ArkshValueItem *even_item;
+
+  arksh_value_init(&parsed);
+  EXPECT(json != NULL, "json nested payload: payload allocated");
+  if (json == NULL) {
+    return;
+  }
+
+  EXPECT(arksh_value_parse_json(json, &parsed, error, sizeof(error)) == 0, "json nested payload: parse rc == 0");
+  rows_item = arksh_value_map_get_item(&parsed, "rows");
+  EXPECT(rows_item != NULL && rows_item->nested != NULL, "json nested payload: rows list exists");
+  EXPECT(rows_item != NULL && rows_item->nested != NULL && rows_item->nested->list.count == 192, "json nested payload: rows count == 192");
+  if (rows_item != NULL && rows_item->nested != NULL && rows_item->nested->list.count > 0) {
+    first_row = &rows_item->nested->list.items[0];
+    EXPECT(first_row->nested != NULL, "json nested payload: first row nested object");
+    meta_item = first_row->nested != NULL ? arksh_value_map_get_item(first_row->nested, "meta") : NULL;
+    even_item = meta_item != NULL && meta_item->nested != NULL ? arksh_value_map_get_item(meta_item->nested, "even") : NULL;
+    EXPECT(even_item != NULL && even_item->boolean != 0, "json nested payload: nested boolean preserved");
+  }
+
+  free(json);
+  arksh_value_free(&parsed);
+}
+
+static void test_json_large_roundtrip(void) {
+  ArkshValue list;
+  ArkshValue item;
+  ArkshValue parsed;
+  char *json;
+  size_t i;
+  char error[256];
+
+  arksh_value_init(&list);
+  arksh_value_init(&item);
+  arksh_value_init(&parsed);
+  list.kind = ARKSH_VALUE_LIST;
+
+  for (i = 0; i < 300; ++i) {
+    arksh_value_set_number(&item, (double) i);
+    EXPECT(arksh_value_list_append_value(&list, &item) == 0, "json large roundtrip: append rc == 0");
+  }
+
+  json = (char *) calloc(32768, 1);
+  EXPECT(json != NULL, "json large roundtrip: buffer allocated");
+  if (json != NULL) {
+    EXPECT(arksh_value_to_json(&list, json, 32768) == 0, "json large roundtrip: to_json rc == 0");
+    EXPECT(arksh_value_parse_json(json, &parsed, error, sizeof(error)) == 0, "json large roundtrip: parse rc == 0");
+    EXPECT(parsed.kind == ARKSH_VALUE_LIST, "json large roundtrip: parsed kind == LIST");
+    EXPECT(parsed.list.count == 300, "json large roundtrip: parsed count == 300");
+    free(json);
+  }
+
+  arksh_value_free(&parsed);
+  arksh_value_free(&item);
+  arksh_value_free(&list);
+}
+
 /* ------------------------------------------------------------------ object property */
 
 static void test_object_property_type(void) {
@@ -606,6 +831,10 @@ int main(void) {
   test_json_nan_as_null();
   test_json_control_char_escaped_in_output();
   test_json_matrix_to_json();
+  test_json_large_array_parse();
+  test_json_large_object_parse();
+  test_json_large_nested_payload();
+  test_json_large_roundtrip();
 
   /* object properties */
   test_object_property_type();

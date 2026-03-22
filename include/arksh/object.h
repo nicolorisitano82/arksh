@@ -104,8 +104,9 @@ typedef struct {
 } ArkshValueItem;
 
 typedef struct {
-  ArkshValueItem items[ARKSH_MAX_COLLECTION_ITEMS];
+  ArkshValueItem *items;
   size_t count;
+  size_t capacity;
 } ArkshValueList;
 
 typedef struct {
@@ -114,8 +115,9 @@ typedef struct {
 } ArkshValueMapEntry;
 
 typedef struct {
-  ArkshValueMapEntry entries[ARKSH_MAX_COLLECTION_ITEMS];
+  ArkshValueMapEntry *entries;
   size_t count;
+  size_t capacity;
 } ArkshValueMap;
 
 struct ArkshValue {
