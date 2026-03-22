@@ -1,0 +1,157 @@
+# arksh example 13
+# Tipo Matrix: dati tabulari immutabili (E6-S8).
+#
+# Matrix e un tipo di prima classe che rappresenta una tabella con colonne
+# nominate e righe di valori eterogenei (testo, numero, bool).
+# Come Dict e List, ogni operazione di mutazione restituisce una nuova istanza.
+
+# ── Costruzione ───────────────────────────────────────────────────────────────
+#
+# Matrix("col1", "col2", ...) crea una matrice vuota con le intestazioni indicate.
+
+let vuota = Matrix("nome", "eta", "punteggio")
+
+let r0 = vuota -> rows
+let c0 = vuota -> cols
+r0 -> print()
+c0 -> print()
+
+# add_row() aggiunge una riga e restituisce una nuova Matrix.
+# I valori devono corrispondere per numero alle colonne.
+
+let m1 = vuota -> add_row("alice", 30, 92)
+let m2 = m1   -> add_row("bob",   25, 78)
+let m3 = m2   -> add_row("carol", 35, 85)
+let m4 = m3   -> add_row("dave",  28, 91)
+
+# La matrice stampata direttamente mostra una tabella ASCII.
+
+m4 -> print()
+
+# ── Proprietà ─────────────────────────────────────────────────────────────────
+
+let righe = m4 -> rows
+righe -> print()
+
+let colonne = m4 -> cols
+colonne -> print()
+
+let nomi_col = m4 -> col_names
+nomi_col -> print()
+
+let tipo = m4 -> type
+tipo -> print()
+
+# ── Accesso ───────────────────────────────────────────────────────────────────
+#
+# row(n) restituisce la riga n come Map (zero-based).
+
+let prima = m4 -> row(0)
+prima -> print()
+
+# col(name) restituisce tutti i valori di una colonna come List.
+
+let punteggi = m4 -> col("punteggio")
+punteggi -> print()
+
+# select(c1, c2, ...) proietta solo le colonne indicate.
+
+let nomi_e_punteggi = m4 -> select("nome", "punteggio")
+nomi_e_punteggi -> print()
+
+# ── Filtraggio ────────────────────────────────────────────────────────────────
+#
+# where(col, op, val) filtra le righe che soddisfano la condizione.
+# Operatori supportati: == != < <= > >=
+
+let senior = m4 -> where("eta", ">", 28)
+senior -> print()
+
+let top_score = m4 -> where("punteggio", ">=", 90)
+top_score -> print()
+
+# ── Mutazione immutabile ───────────────────────────────────────────────────────
+#
+# drop_row(n) rimuove la riga n (zero-based) restituendo una nuova Matrix.
+
+let senza_bob = m4 -> drop_row(1)
+let sb_rows = senza_bob -> rows
+sb_rows -> print()
+
+# rename_col(old, new) rinomina una colonna senza toccare i dati.
+
+let m5 = m4 -> rename_col("eta", "age")
+let m5_cols = m5 -> col_names
+m5_cols -> print()
+
+# ── Serializzazione ───────────────────────────────────────────────────────────
+#
+# to_json() produce un array JSON di oggetti (una entry per riga).
+
+let j = m4 -> to_json()
+j -> print()
+
+# to_csv() produce una stringa CSV con intestazioni sulla prima riga.
+
+let csv = m4 -> to_csv()
+csv -> print()
+
+# from_csv() ricostruisce una Matrix da una stringa CSV (round-trip).
+
+let m6 = Matrix() -> from_csv(csv)
+let m6_rows = m6 -> rows
+let m6_cols = m6 -> cols
+m6_rows -> print()
+m6_cols -> print()
+
+# to_maps() converte ogni riga in una Map e le raccoglie in una List.
+
+let maps = m4 -> to_maps()
+let maps_count = maps -> count
+maps_count -> print()
+
+# ── Pipeline stages ───────────────────────────────────────────────────────────
+#
+# transpose scambia righe e colonne: i vecchi nomi riga diventano le colonne
+# con nomi "row_0", "row_1", ... e le colonne originali diventano righe.
+
+let mt = m4 |> transpose
+let mt_rows = mt -> rows
+let mt_cols = mt -> cols
+mt_rows -> print()
+mt_cols -> print()
+
+# fill_na(col, val) sostituisce le celle vuote in una colonna.
+# Qui costruiamo una matrice con alcuni valori mancanti per dimostrarlo.
+
+let base = Matrix("prodotto", "prezzo")
+let b1 = base -> add_row("mela",     "1.20")
+let b2 = b1   -> add_row("banana",   "")
+let b3 = b2   -> add_row("ciliegia", "3.50")
+let b4 = b3   -> add_row("dattero",  "")
+
+let b5 = b4 |> fill_na("prezzo", "N/D")
+let prezzi = b5 -> col("prezzo")
+prezzi -> print()
+
+# ── Uso pratico ───────────────────────────────────────────────────────────────
+#
+# Esempio concreto: carica i dati di vendita, filtra i prodotti con ricavo
+# elevato e serializza il risultato in JSON per un sistema esterno.
+
+let vendite = Matrix("articolo", "vendite", "ricavo")
+let v1 = vendite -> add_row("widget-A",  120,  8)
+let v2 = v1     -> add_row("widget-B",   45,  10)
+let v3 = v2     -> add_row("widget-C",  200,   6)
+let v4 = v3     -> add_row("gadget-X",   30,  15)
+let v5 = v4     -> add_row("gadget-Y",   80,  14)
+
+# Solo gli articoli con ricavo >= 10 (gli altri vengono scartati).
+
+let profittevoli = v5 -> where("ricavo", ">=", 10)
+profittevoli -> print()
+
+# Serializza il sottoinsieme come JSON per invio a un sistema esterno.
+
+let export_json = profittevoli -> to_json()
+export_json -> print()

@@ -394,7 +394,7 @@ Ogni task è indipendente; i task T1–T3 sono prerequisiti naturali per T4–T6
 
 ## E6. Object model avanzato e plugin typed
 
-Stato epoca: `[ ]`
+Stato epoca: `[x]`
 
 ### E6-S1. Namespace object-aware aggiuntivi
 
@@ -731,11 +731,11 @@ Stato epoca: `[ ]`
 
 ### E7-S1. Parser/serializer robusti
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E7-S1-T1` migliorare diagnostica con posizione/offset dell'errore
-- `[ ]` `E7-S1-T2` coprire casi edge del parser
-- `[ ]` `E7-S1-T3` coprire casi edge del serializer
+- `[x]` `E7-S1-T1` **Diagnostica con offset** — `arksh_value_parse_json` calcola `offset = cursor - text` dopo un parse fallito e appende `(at offset N)` al messaggio di errore; stessa info per trailing content
+- `[x]` `E7-S1-T2` **Casi edge del parser** — `\uXXXX` unicode escapes implementati con conversione UTF-8 completa e gestione surrogate pair; caratteri di controllo (< 0x20) non quotati rifiutati con errore; leading zeros nei numeri (`01`) rifiutati per conformità RFC 8259; limite di nesting 128 livelli (`JSON_MAX_DEPTH`) per prevenire stack overflow su JSON molto annidato
+- `[x]` `E7-S1-T3` **Casi edge del serializer** — `ARKSH_VALUE_MATRIX` serializza come array JSON di oggetti (una entry per riga, col_names come chiavi); caratteri di controllo < 0x20 nelle stringhe serializzati come `\uXXXX` invece di errore; NaN e Infinity serializzati come `null` per conformità RFC 8259 (via `format_number_json`); 8 nuovi test unitari in `unit_object.c`; golden `json-edge-cases.arksh` + test CTest `arksh_golden_json_edge_cases`; 213/213 passati
 
 ### E7-S2. Dati grandi e annidati
 
@@ -992,9 +992,9 @@ Stato story: `[ ]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E8 `[x]`
-**In corso:** E6 `[x]` — tutte le story completate
-**Aperte:** E7 (JSON), E9 (release), E10 (HTTP plugin), E11 (POSIX core)
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E8 `[x]`
+**In corso:** E7 `[~]` — S1 completata
+**Aperte:** E7-S2/S3, E9 (release), E10 (HTTP plugin), E11 (POSIX core)
 
 > **Completati in E6:** S1 (path/fs), S2 (custom types), S3 (pipeline stages), S4 (shell integration), S5 (numeric types), S6 (Dict), S7 (base64), S8 (Matrix), S9 (trash plugin), S10 (plugin autoload). E6 chiusa.
 > **Extra:** esecuzione diretta di script `arksh file.arksh [args]` aggiunta a `main.c`.

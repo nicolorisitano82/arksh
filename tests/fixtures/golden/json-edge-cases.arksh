@@ -1,0 +1,16 @@
+# E7-S1: JSON parser/serializer edge cases
+
+# Unicode escape: \u00e9 = é, so "caf\u00e9" = "café"
+let d1 = Dict() -> from_json("{\"drink\":\"caf\\u00e9\"}")
+let s1 = d1 -> get("drink")
+s1 -> print()
+
+# Matrix serializes as JSON array of objects — checks column keys and values
+let m = Matrix("name", "score") -> add_row("alice", 95)
+let mj = m -> to_json()
+mj -> print()
+
+# Empty object round-trip
+let d2 = Dict() -> from_json("{}")
+let c2 = d2 -> count
+echo $c2

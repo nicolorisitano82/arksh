@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -75,6 +76,15 @@ static void format_number_by_kind(ArkshValueKind kind, double number, char *out,
       format_number(number, out, out_size);
       break;
   }
+}
+
+/* JSON-safe number formatter: NaN and Infinity map to null per RFC 8259 */
+static void format_number_json(double number, char *out, size_t out_size) {
+  if (isnan(number) || isinf(number)) {
+    snprintf(out, out_size, "null");
+    return;
+  }
+  format_number(number, out, out_size);
 }
 
 static int append_char(char *out, size_t out_size, size_t *length, char c) {
@@ -164,7 +174,12 @@ static int append_json_escaped_string(char *out, size_t out_size, const char *te
         break;
       default:
         if (c < 0x20) {
-          return 1;
+          char esc[8];
+          snprintf(esc, sizeof(esc), "\\u%04x", (unsigned int) c);
+          if (append_text(out, out_size, &length, esc) != 0) {
+            return 1;
+          }
+          break;
         }
         if (append_char(out, out_size, &length, (char) c) != 0) {
           return 1;
@@ -328,7 +343,7 @@ static int value_item_to_json_text(const ArkshValueItem *item, char *out, size_t
     case ARKSH_VALUE_STRING:
       return append_json_escaped_string(out, out_size, item->text);
     case ARKSH_VALUE_NUMBER:
-      format_number(item->number, out, out_size);
+      format_number_json(item->number, out, out_size);
       return 0;
     case ARKSH_VALUE_BOOLEAN:
       copy_string(out, out_size, item->boolean ? "true" : "false");
@@ -383,7 +398,7 @@ static int value_to_json_text(const ArkshValue *value, char *out, size_t out_siz
     case ARKSH_VALUE_STRING:
       return append_json_escaped_string(out, out_size, value->text);
     case ARKSH_VALUE_NUMBER:
-      format_number(value->number, out, out_size);
+      format_number_json(value->number, out, out_size);
       return 0;
     case ARKSH_VALUE_BOOLEAN:
       copy_string(out, out_size, value->boolean ? "true" : "false");
@@ -457,6 +472,68 @@ static int value_to_json_text(const ArkshValue *value, char *out, size_t out_siz
       format_number_by_kind(ARKSH_VALUE_IMAGINARY, value->number, imag_buf, sizeof(imag_buf));
       return append_json_escaped_string(out, out_size, imag_buf);
     }
+    /* E7-S1-T3: Matrix serializes as JSON array of row-objects */
+    case ARKSH_VALUE_MATRIX: {
+      size_t r, c;
+      if (value->matrix == NULL || value->matrix->row_count == 0) {
+        copy_string(out, out_size, "[]");
+        return 0;
+      }
+      out[0] = '\0';
+      if (append_char(out, out_size, &length, '[') != 0) {
+        return 1;
+      }
+      for (r = 0; r < value->matrix->row_count; ++r) {
+        char obj_buf[ARKSH_MAX_OUTPUT];
+        size_t obj_len = 0;
+
+        if (r > 0 && append_char(out, out_size, &length, ',') != 0) {
+          return 1;
+        }
+        obj_buf[0] = '\0';
+        if (append_char(obj_buf, sizeof(obj_buf), &obj_len, '{') != 0) {
+          return 1;
+        }
+        for (c = 0; c < value->matrix->col_count; ++c) {
+          const ArkshMatrixCell *cell = &value->matrix->rows[r][c];
+          char key_json[ARKSH_MAX_NAME + 4];
+          char cell_json[ARKSH_MAX_MATRIX_CELL_TEXT + 8];
+
+          if (append_json_escaped_string(key_json, sizeof(key_json), value->matrix->col_names[c]) != 0) {
+            return 1;
+          }
+          switch (cell->kind) {
+            case ARKSH_VALUE_NUMBER:
+              format_number_json(cell->number, cell_json, sizeof(cell_json));
+              break;
+            case ARKSH_VALUE_BOOLEAN:
+              copy_string(cell_json, sizeof(cell_json), cell->boolean ? "true" : "false");
+              break;
+            case ARKSH_VALUE_EMPTY:
+              copy_string(cell_json, sizeof(cell_json), "null");
+              break;
+            default:
+              if (append_json_escaped_string(cell_json, sizeof(cell_json), cell->text) != 0) {
+                return 1;
+              }
+              break;
+          }
+          if (c > 0 && append_char(obj_buf, sizeof(obj_buf), &obj_len, ',') != 0) {
+            return 1;
+          }
+          if (append_text(obj_buf, sizeof(obj_buf), &obj_len, key_json) != 0 ||
+              append_char(obj_buf, sizeof(obj_buf), &obj_len, ':') != 0 ||
+              append_text(obj_buf, sizeof(obj_buf), &obj_len, cell_json) != 0) {
+            return 1;
+          }
+        }
+        if (append_char(obj_buf, sizeof(obj_buf), &obj_len, '}') != 0 ||
+            append_text(out, out_size, &length, obj_buf) != 0) {
+          return 1;
+        }
+      }
+      return append_char(out, out_size, &length, ']');
+    }
     default:
       return 1;
   }
@@ -488,6 +565,8 @@ static int json_parse_literal(const char **cursor, const char *literal) {
   return 0;
 }
 
+static int json_parse_unicode_escape(const char **cursor, char *out, size_t out_size, size_t *length, char *error, size_t error_size);
+
 static int json_parse_string(const char **cursor, char *out, size_t out_size, char *error, size_t error_size) {
   size_t length = 0;
 
@@ -504,49 +583,92 @@ static int json_parse_string(const char **cursor, char *out, size_t out_size, ch
   out[0] = '\0';
 
   while (**cursor != '\0' && **cursor != '"') {
-    char c = **cursor;
+    unsigned char c = (unsigned char) **cursor;
 
-    if (c == '\\') {
-      (*cursor)++;
-      c = **cursor;
-      if (c == '\0') {
-        snprintf(error, error_size, "unterminated JSON escape");
-        return 1;
-      }
-      switch (c) {
-        case '"':
-        case '\\':
-        case '/':
-          break;
-        case 'b':
-          c = '\b';
-          break;
-        case 'f':
-          c = '\f';
-          break;
-        case 'n':
-          c = '\n';
-          break;
-        case 'r':
-          c = '\r';
-          break;
-        case 't':
-          c = '\t';
-          break;
-        case 'u':
-          snprintf(error, error_size, "unicode escapes are not supported yet");
-          return 1;
-        default:
-          snprintf(error, error_size, "invalid JSON escape");
-          return 1;
-      }
-    }
-
-    if (append_char(out, out_size, &length, c) != 0) {
-      snprintf(error, error_size, "JSON string is too large");
+    /* RFC 8259: unescaped control characters (U+0000-U+001F) are not allowed */
+    if (c < 0x20 && c != '\\') {
+      snprintf(error, error_size, "invalid JSON string: unescaped control character (0x%02x)", (unsigned int) c);
       return 1;
     }
+
+    if (c != '\\') {
+      if (append_char(out, out_size, &length, (char) c) != 0) {
+        snprintf(error, error_size, "JSON string is too large");
+        return 1;
+      }
+      (*cursor)++;
+      continue;
+    }
+
+    /* backslash escape: consume '\' then the escape character */
     (*cursor)++;
+    c = (unsigned char) **cursor;
+    if (c == '\0') {
+      snprintf(error, error_size, "unterminated JSON escape");
+      return 1;
+    }
+    (*cursor)++; /* consume escape character */
+
+    switch (c) {
+      case '"':
+        if (append_char(out, out_size, &length, '"') != 0) {
+          snprintf(error, error_size, "JSON string is too large");
+          return 1;
+        }
+        break;
+      case '\\':
+        if (append_char(out, out_size, &length, '\\') != 0) {
+          snprintf(error, error_size, "JSON string is too large");
+          return 1;
+        }
+        break;
+      case '/':
+        if (append_char(out, out_size, &length, '/') != 0) {
+          snprintf(error, error_size, "JSON string is too large");
+          return 1;
+        }
+        break;
+      case 'b':
+        if (append_char(out, out_size, &length, '\b') != 0) {
+          snprintf(error, error_size, "JSON string is too large");
+          return 1;
+        }
+        break;
+      case 'f':
+        if (append_char(out, out_size, &length, '\f') != 0) {
+          snprintf(error, error_size, "JSON string is too large");
+          return 1;
+        }
+        break;
+      case 'n':
+        if (append_char(out, out_size, &length, '\n') != 0) {
+          snprintf(error, error_size, "JSON string is too large");
+          return 1;
+        }
+        break;
+      case 'r':
+        if (append_char(out, out_size, &length, '\r') != 0) {
+          snprintf(error, error_size, "JSON string is too large");
+          return 1;
+        }
+        break;
+      case 't':
+        if (append_char(out, out_size, &length, '\t') != 0) {
+          snprintf(error, error_size, "JSON string is too large");
+          return 1;
+        }
+        break;
+      case 'u':
+        /* cursor already advanced past 'u'; points at first hex digit */
+        if (json_parse_unicode_escape(cursor, out, out_size, &length, error, error_size) != 0) {
+          return 1;
+        }
+        /* cursor already advanced past 4 (or 8) hex digits by the helper */
+        continue; /* skip the extra (*cursor)++ that non-unicode cases rely on */
+      default:
+        snprintf(error, error_size, "invalid JSON escape: '\\%c'", (char) c);
+        return 1;
+    }
   }
 
   if (**cursor != '"') {
@@ -579,10 +701,82 @@ static int json_parse_number(const char **cursor, double *out_number, char *erro
   return 0;
 }
 
-static int json_parse_value_internal(const char **cursor, ArkshValue *out_value, char *error, size_t error_size);
-static int json_parse_object(const char **cursor, ArkshValue *out_value, char *error, size_t error_size);
+#define JSON_MAX_DEPTH 128
 
-static int json_parse_array(const char **cursor, ArkshValue *out_value, char *error, size_t error_size) {
+static int json_parse_value_internal(const char **cursor, ArkshValue *out_value, char *error, size_t error_size, int depth);
+static int json_parse_object(const char **cursor, ArkshValue *out_value, char *error, size_t error_size, int depth);
+
+/* Decode a \uXXXX (or \uXXXX\uXXXX surrogate pair) escape into UTF-8.
+   Called with *cursor pointing at the first hex digit (i.e. after 'u'). */
+static int json_parse_unicode_escape(const char **cursor, char *out, size_t out_size, size_t *length, char *error, size_t error_size) {
+  unsigned int cp = 0;
+  int i;
+  char hex[5];
+
+  for (i = 0; i < 4; ++i) {
+    char h = **cursor;
+    if ((h >= '0' && h <= '9') || (h >= 'a' && h <= 'f') || (h >= 'A' && h <= 'F')) {
+      hex[i] = h;
+      (*cursor)++;
+    } else {
+      snprintf(error, error_size, "invalid \\u escape: expected 4 hex digits");
+      return 1;
+    }
+  }
+  hex[4] = '\0';
+  cp = (unsigned int) strtoul(hex, NULL, 16);
+
+  /* high surrogate: D800-DBFF must be followed by low surrogate DC00-DFFF */
+  if (cp >= 0xD800 && cp <= 0xDBFF) {
+    unsigned int high = cp;
+    unsigned int low;
+
+    if ((*cursor)[0] != '\\' || (*cursor)[1] != 'u') {
+      snprintf(error, error_size, "invalid \\u escape: high surrogate not followed by \\uXXXX");
+      return 1;
+    }
+    *cursor += 2;
+    for (i = 0; i < 4; ++i) {
+      char h = **cursor;
+      if ((h >= '0' && h <= '9') || (h >= 'a' && h <= 'f') || (h >= 'A' && h <= 'F')) {
+        hex[i] = h;
+        (*cursor)++;
+      } else {
+        snprintf(error, error_size, "invalid \\u escape: expected 4 hex digits in low surrogate");
+        return 1;
+      }
+    }
+    hex[4] = '\0';
+    low = (unsigned int) strtoul(hex, NULL, 16);
+    if (low < 0xDC00 || low > 0xDFFF) {
+      snprintf(error, error_size, "invalid \\u escape: expected low surrogate (DC00-DFFF)");
+      return 1;
+    }
+    cp = 0x10000u + (high - 0xD800u) * 0x400u + (low - 0xDC00u);
+  } else if (cp >= 0xDC00 && cp <= 0xDFFF) {
+    snprintf(error, error_size, "invalid \\u escape: unexpected low surrogate");
+    return 1;
+  }
+
+  /* encode codepoint as UTF-8 */
+  if (cp <= 0x7F) {
+    return append_char(out, out_size, length, (char) cp);
+  } else if (cp <= 0x7FF) {
+    if (append_char(out, out_size, length, (char) (0xC0u | (cp >> 6))) != 0) return 1;
+    return append_char(out, out_size, length, (char) (0x80u | (cp & 0x3Fu)));
+  } else if (cp <= 0xFFFF) {
+    if (append_char(out, out_size, length, (char) (0xE0u | (cp >> 12))) != 0) return 1;
+    if (append_char(out, out_size, length, (char) (0x80u | ((cp >> 6) & 0x3Fu))) != 0) return 1;
+    return append_char(out, out_size, length, (char) (0x80u | (cp & 0x3Fu)));
+  } else {
+    if (append_char(out, out_size, length, (char) (0xF0u | (cp >> 18))) != 0) return 1;
+    if (append_char(out, out_size, length, (char) (0x80u | ((cp >> 12) & 0x3Fu))) != 0) return 1;
+    if (append_char(out, out_size, length, (char) (0x80u | ((cp >> 6) & 0x3Fu))) != 0) return 1;
+    return append_char(out, out_size, length, (char) (0x80u | (cp & 0x3Fu)));
+  }
+}
+
+static int json_parse_array(const char **cursor, ArkshValue *out_value, char *error, size_t error_size, int depth) {
   if (cursor == NULL || *cursor == NULL || out_value == NULL || error == NULL || error_size == 0) {
     return 1;
   }
@@ -604,7 +798,7 @@ static int json_parse_array(const char **cursor, ArkshValue *out_value, char *er
   while (**cursor != '\0') {
     ArkshValue parsed_value;
 
-    if (json_parse_value_internal(cursor, &parsed_value, error, error_size) != 0) {
+    if (json_parse_value_internal(cursor, &parsed_value, error, error_size, depth) != 0) {
       return 1;
     }
     if (arksh_value_list_append_value(out_value, &parsed_value) != 0) {
@@ -633,7 +827,7 @@ static int json_parse_array(const char **cursor, ArkshValue *out_value, char *er
   return 1;
 }
 
-static int json_parse_object(const char **cursor, ArkshValue *out_value, char *error, size_t error_size) {
+static int json_parse_object(const char **cursor, ArkshValue *out_value, char *error, size_t error_size, int depth) {
   if (cursor == NULL || *cursor == NULL || out_value == NULL || error == NULL || error_size == 0) {
     return 1;
   }
@@ -672,7 +866,7 @@ static int json_parse_object(const char **cursor, ArkshValue *out_value, char *e
     (*cursor)++;
     json_skip_ws(cursor);
 
-    if (json_parse_value_internal(cursor, &parsed_value, error, error_size) != 0) {
+    if (json_parse_value_internal(cursor, &parsed_value, error, error_size, depth) != 0) {
       return 1;
     }
     if (arksh_value_map_set(out_value, key, &parsed_value) != 0) {
@@ -699,8 +893,13 @@ static int json_parse_object(const char **cursor, ArkshValue *out_value, char *e
   return 1;
 }
 
-static int json_parse_value_internal(const char **cursor, ArkshValue *out_value, char *error, size_t error_size) {
+static int json_parse_value_internal(const char **cursor, ArkshValue *out_value, char *error, size_t error_size, int depth) {
   if (cursor == NULL || *cursor == NULL || out_value == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+
+  if (depth > JSON_MAX_DEPTH) {
+    snprintf(error, error_size, "JSON nesting too deep (max %d levels)", JSON_MAX_DEPTH);
     return 1;
   }
 
@@ -714,10 +913,10 @@ static int json_parse_value_internal(const char **cursor, ArkshValue *out_value,
     return 0;
   }
   if (**cursor == '[') {
-    return json_parse_array(cursor, out_value, error, error_size);
+    return json_parse_array(cursor, out_value, error, error_size, depth + 1);
   }
   if (**cursor == '{') {
-    return json_parse_object(cursor, out_value, error, error_size);
+    return json_parse_object(cursor, out_value, error, error_size, depth + 1);
   }
   if (strncmp(*cursor, "true", 4) == 0) {
     if (json_parse_literal(cursor, "true") != 0) {
@@ -743,7 +942,13 @@ static int json_parse_value_internal(const char **cursor, ArkshValue *out_value,
 
   if (**cursor == '-' || (**cursor >= '0' && **cursor <= '9')) {
     double number;
-
+    const char *num_start = *cursor;
+    /* RFC 8259: leading zeros are not allowed (e.g. 01, -01) */
+    if (*num_start == '-') num_start++;
+    if (num_start[0] == '0' && num_start[1] >= '0' && num_start[1] <= '9') {
+      snprintf(error, error_size, "invalid JSON number: leading zero not allowed");
+      return 1;
+    }
     if (json_parse_number(cursor, &number, error, error_size) != 0) {
       return 1;
     }
@@ -1415,6 +1620,8 @@ int arksh_value_to_json(const ArkshValue *value, char *out, size_t out_size) {
 
 int arksh_value_parse_json(const char *text, ArkshValue *out_value, char *error, size_t error_size) {
   const char *cursor;
+  size_t offset;
+  size_t msg_len;
 
   if (text == NULL || out_value == NULL || error == NULL || error_size == 0) {
     return 1;
@@ -1423,13 +1630,20 @@ int arksh_value_parse_json(const char *text, ArkshValue *out_value, char *error,
   error[0] = '\0';
   arksh_value_init(out_value);
   cursor = text;
-  if (json_parse_value_internal(&cursor, out_value, error, error_size) != 0) {
+  if (json_parse_value_internal(&cursor, out_value, error, error_size, 0) != 0) {
+    /* append byte offset so callers can pinpoint the error location */
+    offset = (size_t) (cursor - text);
+    msg_len = strlen(error);
+    if (msg_len > 0 && msg_len + 24 < error_size) {
+      snprintf(error + msg_len, error_size - msg_len, " (at offset %zu)", offset);
+    }
     return 1;
   }
 
   json_skip_ws(&cursor);
   if (*cursor != '\0') {
-    snprintf(error, error_size, "unexpected trailing JSON content");
+    offset = (size_t) (cursor - text);
+    snprintf(error, error_size, "unexpected trailing JSON content (at offset %zu)", offset);
     return 1;
   }
 

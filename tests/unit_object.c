@@ -411,6 +411,113 @@ static void test_json_parse_error(void) {
   arksh_value_free(&parsed);
 }
 
+/* ------------------------------------------------------------------ JSON edge cases (E7-S1) */
+
+static void test_json_error_offset(void) {
+  ArkshValue parsed;
+  char error[256];
+  arksh_value_init(&parsed);
+  /* offset 1: '{' then 'i' is invalid key */
+  int rc = arksh_value_parse_json("{invalid}", &parsed, error, sizeof(error));
+  EXPECT(rc != 0, "json offset: rc != 0");
+  EXPECT(strstr(error, "at offset") != NULL, "json offset: error contains 'at offset'");
+  arksh_value_free(&parsed);
+}
+
+static void test_json_unicode_ascii(void) {
+  ArkshValue v;
+  char error[256];
+  arksh_value_init(&v);
+  /* \u0041 = 'A' */
+  int rc = arksh_value_parse_json("\"\\u0041\"", &v, error, sizeof(error));
+  EXPECT(rc == 0, "json unicode ascii: rc == 0");
+  EXPECT(v.kind == ARKSH_VALUE_STRING, "json unicode ascii: kind == STRING");
+  EXPECT(strcmp(v.text, "A") == 0, "json unicode ascii: text == 'A'");
+  arksh_value_free(&v);
+}
+
+static void test_json_unicode_multibyte(void) {
+  ArkshValue v;
+  char error[256];
+  arksh_value_init(&v);
+  /* \u00e9 = 'é' UTF-8: 0xC3 0xA9 */
+  int rc = arksh_value_parse_json("\"\\u00e9\"", &v, error, sizeof(error));
+  EXPECT(rc == 0, "json unicode multibyte: rc == 0");
+  EXPECT(v.kind == ARKSH_VALUE_STRING, "json unicode multibyte: kind == STRING");
+  EXPECT((unsigned char) v.text[0] == 0xC3, "json unicode multibyte: byte 0 == 0xC3");
+  EXPECT((unsigned char) v.text[1] == 0xA9, "json unicode multibyte: byte 1 == 0xA9");
+  arksh_value_free(&v);
+}
+
+static void test_json_control_char_rejected(void) {
+  ArkshValue v;
+  char error[256];
+  char input[16];
+  arksh_value_init(&v);
+  /* embed a raw 0x01 control character inside a JSON string */
+  input[0] = '"'; input[1] = 'a'; input[2] = '\x01'; input[3] = '"'; input[4] = '\0';
+  int rc = arksh_value_parse_json(input, &v, error, sizeof(error));
+  EXPECT(rc != 0, "json control char: rc != 0 on unescaped control char");
+  EXPECT(error[0] != '\0', "json control char: error message non-empty");
+  arksh_value_free(&v);
+}
+
+static void test_json_leading_zero_rejected(void) {
+  ArkshValue v;
+  char error[256];
+  arksh_value_init(&v);
+  int rc = arksh_value_parse_json("01", &v, error, sizeof(error));
+  EXPECT(rc != 0, "json leading zero: rc != 0");
+  EXPECT(error[0] != '\0', "json leading zero: error message non-empty");
+  arksh_value_free(&v);
+}
+
+static void test_json_nan_as_null(void) {
+  ArkshValue v;
+  char json[64];
+  arksh_value_init(&v);
+  arksh_value_set_number(&v, 0.0 / 0.0); /* NaN */
+  int rc = arksh_value_to_json(&v, json, sizeof(json));
+  EXPECT(rc == 0, "json NaN: to_json rc == 0");
+  EXPECT(strcmp(json, "null") == 0, "json NaN: serializes as 'null'");
+  arksh_value_free(&v);
+}
+
+static void test_json_control_char_escaped_in_output(void) {
+  ArkshValue v;
+  char json[64];
+  arksh_value_init(&v);
+  /* string containing a tab (0x09) and a raw 0x01 */
+  v.kind = ARKSH_VALUE_STRING;
+  v.text[0] = '\x01'; v.text[1] = '\0';
+  int rc = arksh_value_to_json(&v, json, sizeof(json));
+  EXPECT(rc == 0, "json ctrl escaped: to_json rc == 0");
+  EXPECT(strstr(json, "\\u0001") != NULL, "json ctrl escaped: contains \\u0001");
+  arksh_value_free(&v);
+}
+
+static void test_json_matrix_to_json(void) {
+  ArkshValue v;
+  char json[ARKSH_MAX_OUTPUT];
+  char error[256];
+  const char *cols[] = {"name", "score"};
+  arksh_value_init(&v);
+  arksh_value_set_matrix(&v, cols, 2);
+  /* add one row: name="alice", score=95 */
+  v.matrix->rows[0][0].kind = ARKSH_VALUE_STRING;
+  snprintf(v.matrix->rows[0][0].text, sizeof(v.matrix->rows[0][0].text), "alice");
+  v.matrix->rows[0][1].kind = ARKSH_VALUE_NUMBER;
+  v.matrix->rows[0][1].number = 95.0;
+  v.matrix->row_count = 1;
+  int rc = arksh_value_to_json(&v, json, sizeof(json));
+  EXPECT(rc == 0, "json matrix: to_json rc == 0");
+  EXPECT(strstr(json, "\"name\"") != NULL, "json matrix: contains key 'name'");
+  EXPECT(strstr(json, "\"alice\"") != NULL, "json matrix: contains 'alice'");
+  EXPECT(strstr(json, "95") != NULL, "json matrix: contains score 95");
+  arksh_value_free(&v);
+  (void) error;
+}
+
 /* ------------------------------------------------------------------ object property */
 
 static void test_object_property_type(void) {
@@ -489,6 +596,16 @@ int main(void) {
   test_json_number_roundtrip();
   test_json_boolean_roundtrip();
   test_json_parse_error();
+
+  /* JSON edge cases (E7-S1) */
+  test_json_error_offset();
+  test_json_unicode_ascii();
+  test_json_unicode_multibyte();
+  test_json_control_char_rejected();
+  test_json_leading_zero_rejected();
+  test_json_nan_as_null();
+  test_json_control_char_escaped_in_output();
+  test_json_matrix_to_json();
 
   /* object properties */
   test_object_property_type();
