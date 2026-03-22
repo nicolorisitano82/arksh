@@ -184,6 +184,7 @@ if(BUILD_TESTING)
   add_test(NAME arksh_block_local_scope_restore COMMAND arksh -c "let next = 99 ; let sum = list(1, 2) |> reduce(number(0), [:acc :n | local next = acc + n ; next]) ; text(\"%v\") -> print(next)")
   add_test(NAME arksh_background_job COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 1 & jobs")
   add_test(NAME arksh_source_file COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/examples/arkshrc")
+  add_test(NAME arksh_source_fg COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/control/source-fg.arksh")
   add_test(NAME arksh_control_flow_script COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/examples/scripts/04-control-flow.arksh")
   add_test(NAME arksh_function_script COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/examples/scripts/05-shell-functions.arksh")
   add_test(NAME arksh_case_builtins_script COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/examples/scripts/07-case-and-builtins.arksh")
@@ -208,6 +209,10 @@ if(BUILD_TESTING)
   add_test(NAME arksh_wait_builtin COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 0 & wait %1")
   add_test(NAME arksh_wait_done_message COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 0 & wait %1")
   add_test(NAME arksh_jobs_current_marker COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 1 & jobs")
+  set_tests_properties(arksh_source_fg PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    PASS_REGULAR_EXPRESSION "\\[1\\].*running pid="
+  )
   add_test(NAME arksh_pipeline_three_stage COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" a b c | \"${ARKSH_TEST_ECHO}\" | \"${ARKSH_TEST_COUNT}\"")
   add_test(NAME arksh_pipeline_sigpipe_safe COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" x y z | \"${ARKSH_TEST_COUNT}\"")
   add_test(NAME arksh_bridge_capture_lines COMMAND arksh -c "capture_lines(\"${ARKSH_TEST_EMIT} a b c\") |> count()")

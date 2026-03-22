@@ -1,0 +1,3 @@
+"./arksh_test_pause" 0 &
+jobs
+fg

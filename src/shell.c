@@ -5561,11 +5561,13 @@ void arksh_shell_set_program_path(ArkshShell *shell, const char *path) {
 
   if (strchr(path, '/') != NULL || strchr(path, '\\') != NULL) {
     if (arksh_platform_resolve_path(shell->cwd, path, shell->program_path, sizeof(shell->program_path)) == 0) {
+      copy_string(shell->executable_path, sizeof(shell->executable_path), shell->program_path);
       return;
     }
   }
 
   copy_string(shell->program_path, sizeof(shell->program_path), path);
+  copy_string(shell->executable_path, sizeof(shell->executable_path), shell->program_path);
 }
 
 int arksh_shell_start_background_job(ArkshShell *shell, const char *command_text, char *out, size_t out_size) {
@@ -5587,12 +5589,12 @@ int arksh_shell_start_background_job(ArkshShell *shell, const char *command_text
     return 1;
   }
 
-  if (shell->program_path[0] == '\0') {
+  if (shell->executable_path[0] == '\0') {
     snprintf(out, out_size, "background jobs unavailable: shell executable path not set");
     return 1;
   }
 
-  argv[0] = shell->program_path;
+  argv[0] = shell->executable_path;
   argv[1] = "-c";
   argv[2] = (char *) command_text;
   argv[3] = NULL;

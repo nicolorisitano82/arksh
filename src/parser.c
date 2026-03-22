@@ -1343,7 +1343,7 @@ static int parse_value_source_text_ex(const char *line, ArkshValueSourceNode *ou
            3. Single single-quoted string literal: same, with '\''.
            4. Bare number literal: starts with a digit and has no spaces.
          This rejects shell commands like:
-           '"./prog" tests/fixtures/glob/*.fixture' (starts with '"' but
+           '"./prog" tests/fixtures/glob/<star>.fixture' (starts with '"' but
            does NOT end with '"') and plain shell words like "source". */
       {
         int left_is_value = 0;

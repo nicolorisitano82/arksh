@@ -227,6 +227,7 @@ typedef struct ArkshShell {
   int last_status;
   char cwd[ARKSH_MAX_PATH];
   char program_path[ARKSH_MAX_PATH];
+  char executable_path[ARKSH_MAX_PATH];
   int inherited_input_active;
   ArkshRedirectionNode inherited_input_redirection;
   ArkshPromptConfig prompt;
