@@ -1,0 +1,10 @@
+class Doc do
+property label = text("outer")
+endclass
+
+set MODE outer
+set sample_info "$(plugin load sample-plugin ; set MODE inner ; pwd)"
+sample_info -> print()
+Doc() -> label
+text("%s") -> print("$MODE")
+plugin list

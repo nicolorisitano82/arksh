@@ -2578,6 +2578,483 @@ static void free_class_definition_contents(ArkshClassDef *class_def) {
   memset(class_def, 0, sizeof(*class_def));
 }
 
+static int copy_class_definition_for_subshell(ArkshClassDef *dest, const ArkshClassDef *src) {
+  size_t i;
+
+  if (dest == NULL || src == NULL) {
+    return 1;
+  }
+
+  memset(dest, 0, sizeof(*dest));
+  copy_string(dest->name, sizeof(dest->name), src->name);
+  copy_string(dest->source, sizeof(dest->source), src->source);
+  dest->base_count = src->base_count;
+  for (i = 0; i < (size_t) src->base_count && i < ARKSH_MAX_CLASS_BASES; ++i) {
+    copy_string(dest->bases[i], sizeof(dest->bases[i]), src->bases[i]);
+  }
+
+  dest->property_count = src->property_count;
+  for (i = 0; i < src->property_count; ++i) {
+    copy_string(dest->properties[i].name, sizeof(dest->properties[i].name), src->properties[i].name);
+    if (arksh_value_copy(&dest->properties[i].default_value, &src->properties[i].default_value) != 0) {
+      free_class_definition_contents(dest);
+      return 1;
+    }
+  }
+
+  dest->method_count = src->method_count;
+  for (i = 0; i < src->method_count; ++i) {
+    copy_string(dest->methods[i].name, sizeof(dest->methods[i].name), src->methods[i].name);
+    dest->methods[i].block = src->methods[i].block;
+  }
+
+  return 0;
+}
+
+static int copy_class_instance_for_subshell(ArkshClassInstance *dest, const ArkshClassInstance *src) {
+  if (dest == NULL || src == NULL) {
+    return 1;
+  }
+
+  memset(dest, 0, sizeof(*dest));
+  dest->id = src->id;
+  copy_string(dest->class_name, sizeof(dest->class_name), src->class_name);
+  if (arksh_value_copy(&dest->fields, &src->fields) != 0) {
+    memset(dest, 0, sizeof(*dest));
+    return 1;
+  }
+
+  return 0;
+}
+
+static int copy_plain_heap_array(
+  void **dest_items,
+  size_t *dest_capacity,
+  size_t *dest_count,
+  const void *src_items,
+  size_t src_count,
+  size_t item_size,
+  size_t max_capacity
+) {
+  if (dest_items == NULL || dest_capacity == NULL || dest_count == NULL || item_size == 0) {
+    return 1;
+  }
+
+  *dest_count = 0;
+  if (src_count == 0) {
+    return 0;
+  }
+
+  if (grow_heap_array(dest_items, dest_capacity, src_count, item_size, max_capacity) != 0) {
+    return 1;
+  }
+
+  memcpy(*dest_items, src_items, src_count * item_size);
+  *dest_count = src_count;
+  return 0;
+}
+
+static int clone_scope_frame_contents(ArkshScopeFrame *dest, const ArkshScopeFrame *src) {
+  size_t i;
+
+  if (dest == NULL || src == NULL) {
+    return 1;
+  }
+
+  if (src->var_count > 0 &&
+      grow_heap_array((void **) &dest->vars, &dest->var_capacity,
+                      src->var_count, sizeof(dest->vars[0]),
+                      ARKSH_MAX_SHELL_VARS) != 0) {
+    return 1;
+  }
+  dest->var_count = src->var_count;
+  if (src->var_count > 0) {
+    memcpy(dest->vars, src->vars, src->var_count * sizeof(dest->vars[0]));
+  }
+
+  if (src->binding_count > 0 &&
+      grow_heap_array((void **) &dest->bindings, &dest->binding_capacity,
+                      src->binding_count, sizeof(dest->bindings[0]),
+                      ARKSH_MAX_VALUE_BINDINGS) != 0) {
+    return 1;
+  }
+  dest->binding_count = 0;
+  for (i = 0; i < src->binding_count; ++i) {
+    copy_string(dest->bindings[i].name, sizeof(dest->bindings[i].name), src->bindings[i].name);
+    dest->bindings[i].deleted = src->bindings[i].deleted;
+    if (arksh_value_copy(&dest->bindings[i].value, &src->bindings[i].value) != 0) {
+      return 1;
+    }
+    dest->binding_count++;
+  }
+
+  if (src->has_positional && src->positional_count > 0 &&
+      grow_heap_array((void **) &dest->positional_params, &dest->positional_capacity,
+                      (size_t) src->positional_count, sizeof(dest->positional_params[0]),
+                      ARKSH_MAX_POSITIONAL_PARAMS) != 0) {
+    return 1;
+  }
+  dest->has_positional = src->has_positional;
+  dest->positional_count = src->positional_count;
+  if (src->has_positional && src->positional_count > 0) {
+    memcpy(
+      dest->positional_params,
+      src->positional_params,
+      (size_t) src->positional_count * sizeof(dest->positional_params[0])
+    );
+  }
+
+  return 0;
+}
+
+static ArkshScopeFrame *allocate_scope_frame_no_calloc(void) {
+  ArkshScopeFrame *frame = (ArkshScopeFrame *) malloc(sizeof(*frame));
+
+  if (frame == NULL) {
+    return NULL;
+  }
+
+  memset(frame, 0, sizeof(*frame));
+  return frame;
+}
+
+static void free_scope_frame_chain_without_sync(ArkshScopeFrame *frame) {
+  while (frame != NULL) {
+    ArkshScopeFrame *previous = frame->previous;
+    size_t i;
+
+    for (i = 0; i < frame->binding_count; ++i) {
+      arksh_value_free(&frame->bindings[i].value);
+    }
+    free(frame->vars);
+    free(frame->bindings);
+    free(frame->positional_params);
+    free(frame);
+    frame = previous;
+  }
+}
+
+static int clone_scope_frames_recursive(ArkshShell *clone, const ArkshScopeFrame *source, char *out, size_t out_size) {
+  ArkshScopeFrame *new_frame;
+
+  if (clone == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (source == NULL) {
+    return 0;
+  }
+
+  if (clone_scope_frames_recursive(clone, source->previous, out, out_size) != 0) {
+    return 1;
+  }
+  new_frame = allocate_scope_frame_no_calloc();
+  if (new_frame == NULL) {
+    snprintf(out, out_size, "unable to allocate subshell scope frame");
+    return 1;
+  }
+  new_frame->previous = clone->scope_frame;
+  clone->scope_frame = new_frame;
+  if (clone_scope_frame_contents(new_frame, source) != 0) {
+    snprintf(out, out_size, "unable to clone subshell scope frame");
+    return 1;
+  }
+
+  return 0;
+}
+
+static int restore_visible_var_env_from_parent(const ArkshShell *parent, const char *name) {
+  const char *value = NULL;
+  int exported = 0;
+  int found = 0;
+
+  if (parent == NULL || name == NULL) {
+    return 1;
+  }
+
+  if (lookup_visible_var(parent, parent->scope_frame, name, 0, &value, &exported, &found) != 0) {
+    return 1;
+  }
+  if (found && value != NULL && exported) {
+    return set_process_env(name, value);
+  }
+  return unset_process_env(name);
+}
+
+static int restore_cloned_scope_env(const ArkshShell *parent, const ArkshScopeFrame *frame) {
+  size_t i;
+
+  for (; frame != NULL; frame = frame->previous) {
+    for (i = 0; i < frame->var_count; ++i) {
+      if (restore_visible_var_env_from_parent(parent, frame->vars[i].name) != 0) {
+        return 1;
+      }
+    }
+  }
+
+  return 0;
+}
+
+int arksh_shell_clone_subshell(const ArkshShell *source, ArkshShell **out_shell, char *out, size_t out_size) {
+  ArkshShell *clone;
+  size_t i;
+
+  if (source == NULL || out_shell == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  *out_shell = NULL;
+  clone = (ArkshShell *) malloc(sizeof(*clone));
+  if (clone == NULL) {
+    snprintf(out, out_size, "unable to allocate subshell shell");
+    return 1;
+  }
+
+  memset(clone, 0, sizeof(*clone));
+  *clone = *source;
+  memset(&clone->scratch, 0, sizeof(clone->scratch));
+  arksh_scratch_arena_init(&clone->scratch);
+
+  clone->commands = NULL;
+  clone->command_count = 0;
+  clone->command_capacity = 0;
+  clone->plugins = NULL;
+  clone->plugin_count = 0;
+  clone->plugin_capacity = 0;
+  clone->functions = NULL;
+  clone->function_count = 0;
+  clone->function_capacity = 0;
+  clone->classes = NULL;
+  clone->class_count = 0;
+  clone->class_capacity = 0;
+  clone->instances = NULL;
+  clone->instance_count = 0;
+  clone->instance_capacity = 0;
+  clone->extensions = NULL;
+  clone->extension_count = 0;
+  clone->extension_capacity = 0;
+  clone->value_resolvers = NULL;
+  clone->value_resolver_count = 0;
+  clone->value_resolver_capacity = 0;
+  clone->pipeline_stages = NULL;
+  clone->pipeline_stage_count = 0;
+  clone->pipeline_stage_capacity = 0;
+  clone->aliases = NULL;
+  clone->alias_count = 0;
+  clone->alias_capacity = 0;
+  clone->jobs = NULL;
+  clone->job_count = 0;
+  clone->job_capacity = 0;
+  clone->traps = NULL;
+  clone->type_descriptors = NULL;
+  clone->type_descriptor_count = 0;
+  clone->type_descriptor_capacity = 0;
+  clone->scope_frame = NULL;
+  clone->history_dirty = 0;
+
+  clone->traps = (ArkshTrapEntry *) malloc(ARKSH_TRAP_COUNT * sizeof(*clone->traps));
+  if (clone->traps == NULL) {
+    snprintf(out, out_size, "unable to allocate subshell traps");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+  memset(clone->traps, 0, ARKSH_TRAP_COUNT * sizeof(*clone->traps));
+  if (source->traps != NULL) {
+    memcpy(clone->traps, source->traps, ARKSH_TRAP_COUNT * sizeof(clone->traps[0]));
+  }
+
+  if (copy_plain_heap_array((void **) &clone->commands, &clone->command_capacity, &clone->command_count,
+                            source->commands, source->command_count, sizeof(clone->commands[0]),
+                            ARKSH_MAX_COMMANDS) != 0) {
+    snprintf(out, out_size, "unable to clone subshell commands");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+  if (copy_plain_heap_array((void **) &clone->plugins, &clone->plugin_capacity, &clone->plugin_count,
+                            source->plugins, source->plugin_count, sizeof(clone->plugins[0]),
+                            ARKSH_MAX_PLUGINS) != 0) {
+    snprintf(out, out_size, "unable to clone subshell plugins");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+  for (i = 0; i < clone->plugin_count; ++i) {
+    clone->plugins[i].handle = NULL;
+  }
+  if (copy_plain_heap_array((void **) &clone->functions, &clone->function_capacity, &clone->function_count,
+                            source->functions, source->function_count, sizeof(clone->functions[0]),
+                            ARKSH_MAX_FUNCTIONS) != 0) {
+    snprintf(out, out_size, "unable to clone subshell functions");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+  if (copy_plain_heap_array((void **) &clone->extensions, &clone->extension_capacity, &clone->extension_count,
+                            source->extensions, source->extension_count, sizeof(clone->extensions[0]),
+                            ARKSH_MAX_EXTENSIONS) != 0) {
+    snprintf(out, out_size, "unable to clone subshell extensions");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+  if (copy_plain_heap_array((void **) &clone->value_resolvers, &clone->value_resolver_capacity, &clone->value_resolver_count,
+                            source->value_resolvers, source->value_resolver_count, sizeof(clone->value_resolvers[0]),
+                            ARKSH_MAX_VALUE_RESOLVERS) != 0) {
+    snprintf(out, out_size, "unable to clone subshell value resolvers");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+  if (copy_plain_heap_array((void **) &clone->pipeline_stages, &clone->pipeline_stage_capacity, &clone->pipeline_stage_count,
+                            source->pipeline_stages, source->pipeline_stage_count, sizeof(clone->pipeline_stages[0]),
+                            ARKSH_MAX_PIPELINE_STAGE_HANDLERS) != 0) {
+    snprintf(out, out_size, "unable to clone subshell pipeline stages");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+  if (copy_plain_heap_array((void **) &clone->aliases, &clone->alias_capacity, &clone->alias_count,
+                            source->aliases, source->alias_count, sizeof(clone->aliases[0]),
+                            ARKSH_MAX_ALIASES) != 0) {
+    snprintf(out, out_size, "unable to clone subshell aliases");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+  if (copy_plain_heap_array((void **) &clone->jobs, &clone->job_capacity, &clone->job_count,
+                            source->jobs, source->job_count, sizeof(clone->jobs[0]),
+                            ARKSH_MAX_JOBS) != 0) {
+    snprintf(out, out_size, "unable to clone subshell jobs");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+#ifdef _WIN32
+  for (i = 0; i < clone->job_count; ++i) {
+    clone->jobs[i].process.handle = NULL;
+  }
+#endif
+  if (copy_plain_heap_array((void **) &clone->type_descriptors, &clone->type_descriptor_capacity, &clone->type_descriptor_count,
+                            source->type_descriptors, source->type_descriptor_count, sizeof(clone->type_descriptors[0]),
+                            ARKSH_MAX_TYPE_DESCRIPTORS) != 0) {
+    snprintf(out, out_size, "unable to clone subshell type descriptors");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+
+  if (source->class_count > 0 &&
+      grow_heap_array((void **) &clone->classes, &clone->class_capacity,
+                      source->class_count, sizeof(clone->classes[0]),
+                      ARKSH_MAX_CLASSES) != 0) {
+    snprintf(out, out_size, "unable to clone subshell classes");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+  for (i = 0; i < source->class_count; ++i) {
+    if (copy_class_definition_for_subshell(&clone->classes[i], &source->classes[i]) != 0) {
+      snprintf(out, out_size, "unable to clone subshell classes");
+      clone->class_count = i;
+      arksh_shell_destroy_subshell(clone);
+      return 1;
+    }
+    clone->class_count++;
+  }
+
+  if (source->instance_count > 0 &&
+      grow_heap_array((void **) &clone->instances, &clone->instance_capacity,
+                      source->instance_count, sizeof(clone->instances[0]),
+                      ARKSH_MAX_INSTANCES) != 0) {
+    snprintf(out, out_size, "unable to clone subshell instances");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+  for (i = 0; i < source->instance_count; ++i) {
+    if (copy_class_instance_for_subshell(&clone->instances[i], &source->instances[i]) != 0) {
+      snprintf(out, out_size, "unable to clone subshell instances");
+      clone->instance_count = i;
+      arksh_shell_destroy_subshell(clone);
+      return 1;
+    }
+    clone->instance_count++;
+  }
+
+  if (clone_scope_frames_recursive(clone, source->scope_frame, out, out_size) != 0) {
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+  if (clone->scope_frame == NULL) {
+    clone->scope_frame = allocate_scope_frame_no_calloc();
+  }
+  if (clone->scope_frame == NULL) {
+    snprintf(out, out_size, "unable to allocate subshell root scope");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
+
+  *out_shell = clone;
+  out[0] = '\0';
+  return 0;
+}
+
+int arksh_shell_restore_after_subshell(const ArkshShell *parent, const ArkshShell *subshell, char *out, size_t out_size) {
+  if (parent == NULL || subshell == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (parent->cwd[0] != '\0' && arksh_platform_chdir(parent->cwd) != 0) {
+    snprintf(out, out_size, "unable to restore subshell working directory");
+    return 1;
+  }
+  if (restore_cloned_scope_env(parent, subshell->scope_frame) != 0) {
+    snprintf(out, out_size, "unable to restore subshell environment");
+    return 1;
+  }
+
+  out[0] = '\0';
+  return 0;
+}
+
+void arksh_shell_destroy_subshell(ArkshShell *shell) {
+  size_t i;
+
+  if (shell == NULL) {
+    return;
+  }
+
+  free_scope_frame_chain_without_sync(shell->scope_frame);
+
+  for (i = 0; i < shell->class_count; ++i) {
+    free_class_definition_contents(&shell->classes[i]);
+  }
+  for (i = 0; i < shell->instance_count; ++i) {
+    arksh_value_free(&shell->instances[i].fields);
+  }
+  for (i = 0; i < shell->job_count; ++i) {
+    arksh_platform_close_background_process(&shell->jobs[i].process);
+  }
+  for (i = 0; i < shell->plugin_count; ++i) {
+    ArkshPluginShutdownFn shutdown_fn;
+
+    if (shell->plugins[i].handle == NULL) {
+      continue;
+    }
+    shutdown_fn = (ArkshPluginShutdownFn) arksh_platform_library_symbol(shell->plugins[i].handle, "arksh_plugin_shutdown");
+    if (shutdown_fn != NULL) {
+      shutdown_fn(shell);
+    }
+    arksh_platform_library_close(shell->plugins[i].handle);
+    shell->plugins[i].handle = NULL;
+  }
+
+  arksh_scratch_arena_destroy(&shell->scratch);
+  free(shell->commands);
+  free(shell->plugins);
+  free(shell->functions);
+  free(shell->classes);
+  free(shell->instances);
+  free(shell->extensions);
+  free(shell->value_resolvers);
+  free(shell->pipeline_stages);
+  free(shell->aliases);
+  free(shell->jobs);
+  free(shell->traps);
+  free(shell->type_descriptors);
+  free(shell);
+}
+
 static const ArkshClassDef *resolve_class_for_lookup(const ArkshShell *shell, const ArkshClassDef *pending, const char *name) {
   if (pending != NULL && name != NULL && strcmp(pending->name, name) == 0) {
     return pending;

@@ -8,8 +8,6 @@
 #include "arksh/platform.h"
 #include "arksh/shell.h"
 
-static void destroy_subshell(ArkshShell *shell);
-
 static void copy_string(char *dest, size_t dest_size, const char *src) {
   if (dest_size == 0) {
     return;
@@ -142,151 +140,6 @@ static void trim_trailing_newlines(char *text) {
   }
 }
 
-static int clone_subshell(const ArkshShell *shell, ArkshShell **out_shell, char *error, size_t error_size) {
-  ArkshShell *clone;
-  const ArkshScopeFrame **frames;
-  size_t frame_depth = 0;
-  size_t i;
-  int positional_count;
-
-  if (shell == NULL || out_shell == NULL || error == NULL || error_size == 0) {
-    return 1;
-  }
-
-  *out_shell = NULL;
-  clone = (ArkshShell *) arksh_scratch_alloc_active_zero(1, sizeof(*clone));
-  if (clone == NULL) {
-    snprintf(error, error_size, "unable to allocate command substitution shell");
-    return 1;
-  }
-
-  *clone = *shell;
-  clone->scope_frame = NULL;
-  clone->vars = NULL;
-  clone->var_count = 0;
-  clone->var_capacity = 0;
-  clone->bindings = NULL;
-  clone->binding_count = 0;
-  clone->binding_capacity = 0;
-  clone->positional_params = NULL;
-  clone->positional_count = 0;
-  clone->positional_capacity = 0;
-
-  for (i = 0; i < shell->var_count; ++i) {
-    if (arksh_shell_set_var(clone, shell->vars[i].name, shell->vars[i].value, shell->vars[i].exported) != 0) {
-      snprintf(error, error_size, "unable to clone shell variable for command substitution");
-      destroy_subshell(clone);
-      return 1;
-    }
-  }
-  for (i = 0; i < shell->binding_count; ++i) {
-    if (arksh_shell_set_binding(clone, shell->bindings[i].name, &shell->bindings[i].value) != 0) {
-      snprintf(error, error_size, "unable to clone value binding for command substitution");
-      destroy_subshell(clone);
-      return 1;
-    }
-  }
-
-  {
-    const ArkshScopeFrame *cursor;
-
-    for (cursor = shell->scope_frame; cursor != NULL; cursor = cursor->previous) {
-      frame_depth++;
-    }
-  }
-  frames = frame_depth == 0 ? NULL : (const ArkshScopeFrame **) calloc(frame_depth, sizeof(*frames));
-  if (frame_depth > 0 && frames == NULL) {
-    snprintf(error, error_size, "unable to clone local scope for command substitution");
-    destroy_subshell(clone);
-    return 1;
-  }
-  if (frames != NULL) {
-    const ArkshScopeFrame *cursor = shell->scope_frame;
-    size_t depth_index = frame_depth;
-
-    while (cursor != NULL && depth_index > 0) {
-      frames[--depth_index] = cursor;
-      cursor = cursor->previous;
-    }
-    for (i = 0; i < frame_depth; ++i) {
-      size_t j;
-
-      for (j = 0; j < frames[i]->var_count; ++j) {
-        const ArkshScopedVar *entry = &frames[i]->vars[j];
-
-        if (entry->deleted) {
-          arksh_shell_unset_var(clone, entry->name);
-        } else if (arksh_shell_set_var(clone, entry->name, entry->value, entry->exported) != 0) {
-          free(frames);
-          snprintf(error, error_size, "unable to clone local variable for command substitution");
-          destroy_subshell(clone);
-          return 1;
-        }
-      }
-      for (j = 0; j < frames[i]->binding_count; ++j) {
-        const ArkshScopedBinding *entry = &frames[i]->bindings[j];
-
-        if (entry->deleted) {
-          arksh_shell_unset_binding(clone, entry->name);
-        } else if (arksh_shell_set_binding(clone, entry->name, &entry->value) != 0) {
-          free(frames);
-          snprintf(error, error_size, "unable to clone local binding for command substitution");
-          destroy_subshell(clone);
-          return 1;
-        }
-      }
-    }
-    free(frames);
-  }
-  positional_count = arksh_shell_get_positional_count(shell);
-  for (i = 0; i < (size_t) positional_count; ++i) {
-    const char *value = arksh_shell_get_positional(shell, (int) i);
-
-    if (value == NULL) {
-      continue;
-    }
-  }
-  if (positional_count > 0) {
-    const char **argv_copy = (const char **) calloc((size_t) positional_count, sizeof(*argv_copy));
-
-    if (argv_copy == NULL) {
-      snprintf(error, error_size, "unable to clone positional parameters for command substitution");
-      destroy_subshell(clone);
-      return 1;
-    }
-    for (i = 0; i < (size_t) positional_count; ++i) {
-      argv_copy[i] = arksh_shell_get_positional(shell, (int) i);
-    }
-    if (arksh_shell_set_positional_argv(clone, positional_count, argv_copy) != 0) {
-      free(argv_copy);
-      snprintf(error, error_size, "unable to clone positional parameters for command substitution");
-      destroy_subshell(clone);
-      return 1;
-    }
-    free(argv_copy);
-  }
-
-  *out_shell = clone;
-  return 0;
-}
-
-static void destroy_subshell(ArkshShell *shell) {
-  size_t i;
-
-  if (shell == NULL) {
-    return;
-  }
-
-  for (i = 0; i < shell->binding_count; ++i) {
-    arksh_value_free(&shell->bindings[i].value);
-  }
-  for (i = 0; i < shell->job_count; ++i) {
-    arksh_platform_close_background_process(&shell->jobs[i].process);
-  }
-
-  free(shell);
-}
-
 static int parse_command_substitution(const char *raw, size_t *index, char *out, size_t out_size, char *error, size_t error_size) {
   char command[ARKSH_MAX_OUTPUT];
   size_t command_len = 0;
@@ -364,8 +217,6 @@ static int parse_command_substitution(const char *raw, size_t *index, char *out,
 static int execute_command_substitution(ArkshShell *shell, const char *command, char *out, size_t out_size, char *error, size_t error_size) {
   char command_output[ARKSH_MAX_OUTPUT];
   ArkshShell *subshell = NULL;
-  char saved_cwd[ARKSH_MAX_PATH];
-  int have_saved_cwd = 0;
   int status;
   const char *p;
 
@@ -411,25 +262,20 @@ static int execute_command_substitution(ArkshShell *shell, const char *command, 
     }
   }
 
-  if (clone_subshell(shell, &subshell, error, error_size) != 0) {
+  if (arksh_shell_clone_subshell(shell, &subshell, error, error_size) != 0) {
     return 1;
-  }
-
-  if (arksh_platform_getcwd(saved_cwd, sizeof(saved_cwd)) == 0) {
-    have_saved_cwd = 1;
   }
 
   command_output[0] = '\0';
   status = arksh_shell_execute_line(subshell, command, command_output, sizeof(command_output));
   trim_trailing_newlines(command_output);
 
-  if (have_saved_cwd) {
-    if (arksh_platform_chdir(saved_cwd) == 0) {
-      copy_string(shell->cwd, sizeof(shell->cwd), saved_cwd);
-    }
+  if (arksh_shell_restore_after_subshell(shell, subshell, error, error_size) != 0) {
+    arksh_shell_destroy_subshell(subshell);
+    return 1;
   }
 
-  destroy_subshell(subshell);
+  arksh_shell_destroy_subshell(subshell);
 
   if (status != 0) {
     snprintf(error, error_size, "command substitution failed: %s", command);

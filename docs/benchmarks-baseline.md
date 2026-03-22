@@ -139,3 +139,31 @@ Measured results on the current build:
 - `command-substitution`: `calloc_calls=8`
 
 The main win of this step is architectural: shell functions and block execution now use `push/pop` scope frames instead of copying the whole visible scope on every call. The remaining cost around subshells and `$(...)` is now isolated enough to be tackled in `E12-S6` without reopening the function/block scoping paths.
+
+## E12-S6 Delta
+
+`E12-S6` replaced the old deep snapshot/restore path for subshells and command substitution with a lightweight cloned shell model:
+
+- global vars/bindings/positional parameters stay shared-read and are shadowed through a cloned scope-frame chain
+- mutable registries with shell-local side effects (`functions`, `aliases`, `classes`, `instances`, `plugins`, `jobs`, stages/resolvers/extensions) are copied only into the clone
+- process-wide side effects are restored explicitly after the clone exits (`cwd` and exported env visible from the parent shell)
+
+New regressions added for this step:
+
+- rich-state subshell isolation: classes, plugins and exported vars do not leak out of `( ... )`
+- rich-state command substitution isolation: plugin side effects and exported vars do not leak out of `$(...)`
+- perf regressions for `subshell` and `command-substitution`
+
+Measured results on the current build:
+
+- `subshell`: `max_rss_kb=16704`
+- `subshell`: `calloc_calls=176`
+- `command-substitution`: `max_rss_kb=14128`
+- `command-substitution`: `calloc_calls=8`
+
+Regression strategy after this step:
+
+- `command-substitution` keeps a hard allocation guard at `calloc_calls <= 20`
+- `subshell` now uses a resident-memory guard at `max_rss_kb <= 20000`
+
+The main win here is that command substitution stays cheap while subshell no longer needs a full state snapshot/restore cycle and now has a much smaller RSS footprint than the original baseline (`44624 KB -> 16704 KB`).

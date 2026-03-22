@@ -358,6 +358,9 @@ int arksh_shell_set_positional_copy(ArkshShell *shell, int count, const char val
 int arksh_shell_get_positional_count(const ArkshShell *shell);
 const char *arksh_shell_get_positional(const ArkshShell *shell, int index);
 int arksh_shell_shift_positional(ArkshShell *shell, int count);
+int arksh_shell_clone_subshell(const ArkshShell *source, ArkshShell **out_shell, char *out, size_t out_size);
+int arksh_shell_restore_after_subshell(const ArkshShell *parent, const ArkshShell *subshell, char *out, size_t out_size);
+void arksh_shell_destroy_subshell(ArkshShell *shell);
 const ArkshShellFunction *arksh_shell_find_function(const ArkshShell *shell, const char *name);
 int arksh_shell_set_function(ArkshShell *shell, const ArkshFunctionCommandNode *function_node);
 const ArkshClassDef *arksh_shell_find_class(const ArkshShell *shell, const char *name);

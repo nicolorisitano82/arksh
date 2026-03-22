@@ -1048,12 +1048,12 @@ Stato story: `[x]`
 
 ### E12-S6. Subshell e command substitution meno costose
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E12-S6-T1` sostituire gli snapshot profondi della subshell con un modello overlay o copy-on-write
-- `[ ]` `E12-S6-T2` alleggerire `clone_subshell()` in `expand.c` per `$(...)`, copiando solo lo stato strettamente necessario
-- `[ ]` `E12-S6-T3` conservare la semantica di isolamento su cwd, variabili, binding, classi, plugin e job side effect
-- `[ ]` `E12-S6-T4` aggiungere test e benchmark su `$(...)`, `( ... )` e script con stato shell ricco
+- `[x]` `E12-S6-T1` sostituire gli snapshot profondi della subshell con un modello overlay o copy-on-write
+- `[x]` `E12-S6-T2` alleggerire `clone_subshell()` in `expand.c` per `$(...)`, copiando solo lo stato strettamente necessario
+- `[x]` `E12-S6-T3` conservare la semantica di isolamento su cwd, variabili, binding, classi, plugin e job side effect
+- `[x]` `E12-S6-T4` aggiungere test e benchmark su `$(...)`, `( ... )` e script con stato shell ricco
 
 ### E12-S7. Riduzione di parse/render ricorsivi
 

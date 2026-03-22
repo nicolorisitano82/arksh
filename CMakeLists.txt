@@ -285,6 +285,10 @@ if(BUILD_TESTING)
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/scope/function-shift-scope.arksh")
   add_test(NAME arksh_command_substitution_local_scope
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/scope/function-command-substitution.arksh")
+  add_test(NAME arksh_subshell_rich_state_scope
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/scope/subshell-rich-state.arksh")
+  add_test(NAME arksh_command_substitution_rich_state_scope
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/scope/command-substitution-rich-state.arksh")
   add_test(NAME arksh_break_nested COMMAND arksh -c "while true ; do while true ; do text(\"once\") -> print() ; break 2 ; done ; done")
   add_test(NAME arksh_continue_nested COMMAND arksh -c "for outer in list(1, 2) ; do while true ; do outer -> print() ; continue 2 ; done ; done")
   add_test(NAME arksh_function_return COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/return.arksh")
@@ -363,6 +367,13 @@ if(BUILD_TESTING)
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     PASS_REGULAR_EXPRESSION "name=sample-plugin"
   )
+  set_tests_properties(
+    arksh_subshell_rich_state_scope
+    arksh_command_substitution_rich_state_scope
+    PROPERTIES
+      ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;USERPROFILE=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;ARKSH_PLUGIN_HOME=${CMAKE_CURRENT_BINARY_DIR}"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   add_test(NAME arksh_standard_plugin_autoload_set COMMAND arksh -c "plugin autoload set sample-plugin ; plugin autoload list")
   set_tests_properties(arksh_standard_plugin_autoload_set PROPERTIES
     ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;USERPROFILE=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;ARKSH_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home;ARKSH_PLUGIN_HOME=${CMAKE_CURRENT_BINARY_DIR}"
@@ -386,6 +397,8 @@ if(BUILD_TESTING)
     COMMAND arksh_perf_runner $<TARGET_FILE:arksh> json-structured script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/json-structured.arksh" "max_rss_kb<=34000")
   add_test(NAME arksh_perf_function_scope_alloc_drop
     COMMAND arksh_perf_runner $<TARGET_FILE:arksh> function-scope script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/function-scope.arksh" "calloc_calls<=200")
+  add_test(NAME arksh_perf_subshell_alloc_drop
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> subshell script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/subshell.arksh" "max_rss_kb<=20000")
   add_test(NAME arksh_perf_command_subst_alloc_drop
     COMMAND arksh_perf_runner $<TARGET_FILE:arksh> command-substitution script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/command-substitution.arksh" "calloc_calls<=20")
   set_tests_properties(
@@ -393,6 +406,7 @@ if(BUILD_TESTING)
     arksh_perf_object_pipeline_footprint_drop
     arksh_perf_json_structured_footprint_drop
     arksh_perf_function_scope_alloc_drop
+    arksh_perf_subshell_alloc_drop
     arksh_perf_command_subst_alloc_drop
     PROPERTIES
       WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -728,6 +742,16 @@ if(BUILD_TESTING)
     arksh_subshell_env_scope
     PROPERTIES
       PASS_REGULAR_EXPRESSION "outer"
+  )
+  set_tests_properties(
+    arksh_subshell_rich_state_scope
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "outer[\r\n]+outer[\r\n]+no plugins loaded"
+  )
+  set_tests_properties(
+    arksh_command_substitution_rich_state_scope
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "outer[\r\n]+outer[\r\n]+no plugins loaded"
   )
   set_tests_properties(
     arksh_group_redirection
