@@ -1,0 +1,6 @@
+function show(name) do
+local got=$(echo $name)
+[ "$got" = inner ] || false
+endfunction
+
+show inner

@@ -85,3 +85,57 @@ After landing the scratch arena in `E12-S2`, the same benchmark bundle showed cl
 - `command-substitution`: `calloc_calls` from `50` to `8`
 
 This baseline file remains the reference "before" snapshot. The detailed implementation delta is tracked in the `E12-S2` work and validated by dedicated perf regression tests.
+
+## E12-S3 Delta
+
+`E12-S3` made `ArkshValue` and `ArkshValueItem` lighter by moving large scalar payloads out of the always-resident inline layout and giving string/object/block values explicit heap ownership.
+
+Guardrails added in the unit suite:
+
+- `sizeof(ArkshValue) <= 128`
+- `sizeof(ArkshValueItem) <= 64`
+
+Measured effects on the benchmark bundle:
+
+- `object-pipeline`: `max_rss_kb` from `27728` to `20112`
+- `json-structured`: `max_rss_kb` from `37024` to `32288`
+
+Tradeoff observed after the refactor:
+
+- `calloc_calls` increased in the same scenarios because string/object/block payloads are now allocated on demand instead of living inline in every value slot.
+- The perf regression tests for `E12-S3` therefore validate resident-memory footprint, while the allocation-drop checks introduced in `E12-S2` remain focused on the paths where the scratch arena still gives a clear win.
+
+## E12-S4 Delta
+
+`E12-S4` moved the heavyweight shell registries and session buffers out of the inline `ArkshShell` layout and into heap-owned containers with explicit capacities.
+
+Guardrails added in the suite:
+
+- `sizeof(ArkshShell) <= 32768`
+- startup perf check: `calloc_bytes <= 200000`
+
+Measured startup effects after the refactor:
+
+- `startup`: `max_rss_kb` from `21152` to `3120`
+- `startup`: `calloc_bytes` now `68352`
+- `ArkshShell` size now `29112` bytes
+
+The biggest wins come from moving history, jobs, positional parameters, traps and the large runtime registries out of the base shell allocation. This lowers both the shell allocation footprint and the startup RSS seen by `arksh_perf_runner`.
+
+## E12-S5 Delta
+
+`E12-S5` replaced deep function and block scope snapshots with layered local frames for shell variables, typed bindings and positional parameters.
+
+Guardrails covered by the suite after the refactor:
+
+- full `ctest` green with dedicated regressions for local shadowing, `shift` isolation inside functions and command substitution visibility of function-local state
+- existing perf regression `arksh_perf_function_scope_alloc_drop` still enforced at `calloc_calls <= 200`
+
+Measured results on the current build:
+
+- `function-scope`: `calloc_calls=180`
+- `function-scope`: `calloc_bytes=9102`
+- `function-scope`: `max_rss_kb=15088`
+- `command-substitution`: `calloc_calls=8`
+
+The main win of this step is architectural: shell functions and block execution now use `push/pop` scope frames instead of copying the whole visible scope on every call. The remaining cost around subshells and `$(...)` is now isolated enough to be tackled in `E12-S6` without reopening the function/block scoping paths.

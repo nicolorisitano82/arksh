@@ -1020,31 +1020,31 @@ Stato story: `[x]`
 
 ### E12-S3. Layout piu leggero per `ArkshValue`
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E12-S3-T1` ridisegnare `ArkshValue` per separare il payload per tipo e ridurre i buffer inline sempre residenti
-- `[ ]` `E12-S3-T2` spostare stringhe grandi e payload complessi su heap con ownership chiara e API di free/copy coerenti
-- `[ ]` `E12-S3-T3` alleggerire anche `ArkshValueItem` e i contenitori lista/mappa per ridurre il costo delle copie in pipeline
-- `[ ]` `E12-S3-T4` riallineare `arksh_value_copy`, `arksh_value_free`, `arksh_value_render` e il parser JSON al nuovo layout
-- `[ ]` `E12-S3-T5` aggiungere test e benchmark per confrontare footprint e costo di copia prima/dopo
+- `[x]` `E12-S3-T1` ridisegnare `ArkshValue` per separare il payload per tipo e ridurre i buffer inline sempre residenti
+- `[x]` `E12-S3-T2` spostare stringhe grandi e payload complessi su heap con ownership chiara e API di free/copy coerenti
+- `[x]` `E12-S3-T3` alleggerire anche `ArkshValueItem` e i contenitori lista/mappa per ridurre il costo delle copie in pipeline
+- `[x]` `E12-S3-T4` riallineare `arksh_value_copy`, `arksh_value_free`, `arksh_value_render` e il parser JSON al nuovo layout
+- `[x]` `E12-S3-T5` aggiungere test e benchmark per confrontare footprint e costo di copia prima/dopo
 
 ### E12-S4. Layout piu leggero per `ArkshShell`
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E12-S4-T1` spezzare `ArkshShell` in sottostrutture heap-owned per registry, history, job table e metadata caricati a runtime
-- `[ ]` `E12-S4-T2` rendere dinamici i contenitori shell ancora fixed-size quando hanno impatto diretto sul footprint base
-- `[ ]` `E12-S4-T3` aggiornare init/destroy, plugin loader e registrazione di comandi/stage/resolver alla nuova struttura
-- `[ ]` `E12-S4-T4` ridurre il costo base di una nuova shell e documentare la differenza di memoria residente rispetto alla baseline
+- `[x]` `E12-S4-T1` spezzare `ArkshShell` in sottostrutture heap-owned per registry, history, job table e metadata caricati a runtime
+- `[x]` `E12-S4-T2` rendere dinamici i contenitori shell ancora fixed-size quando hanno impatto diretto sul footprint base
+- `[x]` `E12-S4-T3` aggiornare init/destroy, plugin loader e registrazione di comandi/stage/resolver alla nuova struttura
+- `[x]` `E12-S4-T4` ridurre il costo base di una nuova shell e documentare la differenza di memoria residente rispetto alla baseline
 
 ### E12-S5. Scope frame locali per funzioni e block
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E12-S5-T1` introdurre uno stack di frame locali per `vars`, `bindings` e parametri posizionali
-- `[ ]` `E12-S5-T2` far usare i frame alle funzioni shell, evitando snapshot profondi dell'intero scope quando non necessari
-- `[ ]` `E12-S5-T3` far usare i frame anche ai block e a `local`, sostituendo snapshot/restore puntuali dei binding
-- `[ ]` `E12-S5-T4` aggiungere test di regressione su shadowing, ritorno da funzione e isolamento dei block
+- `[x]` `E12-S5-T1` introdurre uno stack di frame locali per `vars`, `bindings` e parametri posizionali
+- `[x]` `E12-S5-T2` far usare i frame alle funzioni shell, evitando snapshot profondi dell'intero scope quando non necessari
+- `[x]` `E12-S5-T3` far usare i frame anche ai block e a `local`, sostituendo snapshot/restore puntuali dei binding
+- `[x]` `E12-S5-T4` aggiungere test di regressione su shadowing, ritorno da funzione e isolamento dei block
 
 ### E12-S6. Subshell e command substitution meno costose
 

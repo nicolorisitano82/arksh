@@ -20,6 +20,52 @@ static void copy_string(char *dest, size_t dest_size, const char *src) {
   snprintf(dest, dest_size, "%s", src == NULL ? "" : src);
 }
 
+static int grow_heap_array(void **items, size_t *capacity, size_t required, size_t item_size, size_t max_capacity) {
+  size_t next_capacity;
+  void *grown;
+
+  if (items == NULL || capacity == NULL || item_size == 0) {
+    return 1;
+  }
+  if (required == 0) {
+    return 0;
+  }
+  if (*capacity >= required) {
+    return 0;
+  }
+  if (max_capacity > 0 && required > max_capacity) {
+    return 1;
+  }
+
+  next_capacity = (*capacity == 0) ? 4u : *capacity;
+  while (next_capacity < required) {
+    size_t doubled = next_capacity * 2u;
+
+    if (doubled <= next_capacity) {
+      next_capacity = required;
+      break;
+    }
+    next_capacity = doubled;
+  }
+  if (max_capacity > 0 && next_capacity > max_capacity) {
+    next_capacity = max_capacity;
+  }
+  if (next_capacity < required) {
+    return 1;
+  }
+
+  grown = realloc(*items, next_capacity * item_size);
+  if (grown == NULL) {
+    return 1;
+  }
+  if (next_capacity > *capacity) {
+    memset((char *) grown + (*capacity * item_size), 0, (next_capacity - *capacity) * item_size);
+  }
+  *items = grown;
+  *capacity = next_capacity;
+  return 0;
+}
+
 static void trim_in_place(char *text) {
   size_t start = 0;
   size_t end;
@@ -310,21 +356,6 @@ typedef struct {
 } ArkshEachSelector;
 
 typedef struct {
-  int existed;
-  char name[ARKSH_MAX_NAME];
-  ArkshValue previous;
-} ArkshBlockBindingSnapshot;
-
-typedef struct {
-  ArkshShellVar vars[ARKSH_MAX_SHELL_VARS];
-  size_t var_count;
-  ArkshValueBinding bindings[ARKSH_MAX_VALUE_BINDINGS];
-  size_t binding_count;
-  char positional_params[ARKSH_MAX_POSITIONAL_PARAMS][ARKSH_MAX_VAR_VALUE];
-  int positional_count;
-} ArkshFunctionScopeSnapshot;
-
-typedef struct {
   int running;
   int last_status;
   int next_instance_id;
@@ -423,8 +454,7 @@ static int set_item_from_text(const char *text, ArkshValueItem *out_item) {
     return 0;
   }
 
-  out_item->kind = ARKSH_VALUE_STRING;
-  copy_string(out_item->text, sizeof(out_item->text), text);
+  arksh_value_item_set_string(out_item, text);
   return 0;
 }
 
@@ -503,7 +533,9 @@ static int value_is_truthy(const ArkshValue *value) {
     case ARKSH_VALUE_IMAGINARY:
       return value->number != 0.0;
     case ARKSH_VALUE_STRING:
-      return value->text[0] != '\0' && strcmp(value->text, "false") != 0 && strcmp(value->text, "0") != 0;
+      return arksh_value_text_cstr(value)[0] != '\0' &&
+             strcmp(arksh_value_text_cstr(value), "false") != 0 &&
+             strcmp(arksh_value_text_cstr(value), "0") != 0;
     case ARKSH_VALUE_OBJECT:
     case ARKSH_VALUE_BLOCK:
       return 1;
@@ -935,11 +967,15 @@ static int add_values(const ArkshValue *left, const ArkshValue *right, ArkshValu
     return 1;
   }
 
-  if (snprintf(out_value->text, sizeof(out_value->text), "%s%s", left_text, right_text) >= (int) sizeof(out_value->text)) {
-    snprintf(out, out_size, "string result is too large");
-    return 1;
+  {
+    char combined[ARKSH_MAX_OUTPUT];
+
+    if (snprintf(combined, sizeof(combined), "%s%s", left_text, right_text) >= (int) sizeof(combined)) {
+      snprintf(out, out_size, "string result is too large");
+      return 1;
+    }
+    arksh_value_set_string(out_value, combined);
   }
-  out_value->kind = ARKSH_VALUE_STRING;
   return 0;
 }
 
@@ -995,7 +1031,7 @@ static int evaluate_additive_expression(ArkshShell *shell, const char *text, Ark
 static int evaluate_ast_value(ArkshShell *shell, const ArkshAst *ast, ArkshValue *value, char *out, size_t out_size);
 static int resolve_stage_block_argument(ArkshShell *shell, const char *text, ArkshBlock *out_block, char *out, size_t out_size);
 static int evaluate_expression_text(ArkshShell *shell, const char *text, ArkshValue *out_value, char *out, size_t out_size);
-static int evaluate_block_body(ArkshShell *shell, const char *body, ArkshValue *out_value, ArkshBlockBindingSnapshot *local_snapshots, int *out_local_count, char *out, size_t out_size);
+static int evaluate_block_body(ArkshShell *shell, const char *body, ArkshValue *out_value, char *out, size_t out_size);
 static int render_value_for_shell_var(const ArkshValue *value, char *out, size_t out_size);
 static int evaluate_line_value_heap(ArkshShell *shell, const char *line, ArkshValue *value, char *out, size_t out_size);
 static int evaluate_binary_expr_iterative(ArkshShell *shell, const char *text, ArkshValue *value, char *out, size_t out_size);
@@ -1170,208 +1206,6 @@ static int evaluate_expression_text(ArkshShell *shell, const char *text, ArkshVa
 
   out[0] = '\0';
   return evaluate_expression_atom(shell, trimmed, out_value, out, out_size);
-}
-
-static int snapshot_binding(
-  ArkshShell *shell,
-  const char *name,
-  ArkshBlockBindingSnapshot *snapshot,
-  char *out,
-  size_t out_size
-) {
-  const ArkshValue *existing;
-
-  if (shell == NULL || name == NULL || snapshot == NULL || out == NULL || out_size == 0) {
-    return 1;
-  }
-
-  memset(snapshot, 0, sizeof(*snapshot));
-  copy_string(snapshot->name, sizeof(snapshot->name), name);
-  existing = arksh_shell_get_binding(shell, name);
-  if (existing == NULL) {
-    return 0;
-  }
-
-  snapshot->existed = 1;
-  if (arksh_value_copy(&snapshot->previous, existing) != 0) {
-    snprintf(out, out_size, "unable to snapshot binding: %s", name);
-    return 1;
-  }
-
-  return 0;
-}
-
-static int bind_block_arguments(
-  ArkshShell *shell,
-  const ArkshBlock *block,
-  const ArkshValue *args,
-  int argc,
-  ArkshBlockBindingSnapshot snapshots[ARKSH_MAX_BLOCK_PARAMS],
-  char *out,
-  size_t out_size
-) {
-  int i;
-
-  if (shell == NULL || block == NULL || snapshots == NULL || out == NULL || out_size == 0) {
-    return 1;
-  }
-
-  if (argc != block->param_count) {
-    snprintf(out, out_size, "block expects %d arguments, got %d", block->param_count, argc);
-    return 1;
-  }
-
-  for (i = 0; i < block->param_count; ++i) {
-    if (snapshot_binding(shell, block->params[i], &snapshots[i], out, out_size) != 0) {
-      int rollback;
-
-      for (rollback = i - 1; rollback >= 0; --rollback) {
-        if (snapshots[rollback].existed) {
-          arksh_shell_set_binding(shell, snapshots[rollback].name, &snapshots[rollback].previous);
-        } else {
-          arksh_shell_unset_binding(shell, snapshots[rollback].name);
-        }
-        arksh_value_free(&snapshots[rollback].previous);
-      }
-      return 1;
-    }
-    if (arksh_shell_set_binding(shell, block->params[i], &args[i]) != 0) {
-      int rollback;
-
-      for (rollback = i - 1; rollback >= 0; --rollback) {
-        if (snapshots[rollback].existed) {
-          arksh_shell_set_binding(shell, snapshots[rollback].name, &snapshots[rollback].previous);
-        } else {
-          arksh_shell_unset_binding(shell, snapshots[rollback].name);
-        }
-        arksh_value_free(&snapshots[rollback].previous);
-      }
-      arksh_value_free(&snapshots[i].previous);
-      snprintf(out, out_size, "unable to bind block argument: %s", block->params[i]);
-      return 1;
-    }
-  }
-
-  return 0;
-}
-
-static void restore_block_arguments(ArkshShell *shell, ArkshBlockBindingSnapshot snapshots[ARKSH_MAX_BLOCK_PARAMS], int count) {
-  int i;
-
-  if (shell == NULL || snapshots == NULL) {
-    return;
-  }
-
-  for (i = count - 1; i >= 0; --i) {
-    if (snapshots[i].name[0] == '\0') {
-      continue;
-    }
-    if (snapshots[i].existed) {
-      arksh_shell_set_binding(shell, snapshots[i].name, &snapshots[i].previous);
-    } else {
-      arksh_shell_unset_binding(shell, snapshots[i].name);
-    }
-    arksh_value_free(&snapshots[i].previous);
-  }
-}
-
-static void free_function_scope_snapshot(ArkshFunctionScopeSnapshot *snapshot) {
-  size_t i;
-
-  if (snapshot == NULL) {
-    return;
-  }
-
-  for (i = 0; i < snapshot->binding_count; ++i) {
-    arksh_value_free(&snapshot->bindings[i].value);
-  }
-
-  memset(snapshot, 0, sizeof(*snapshot));
-}
-
-static int snapshot_function_scope(
-  ArkshShell *shell,
-  ArkshFunctionScopeSnapshot *snapshot,
-  char *out,
-  size_t out_size
-) {
-  size_t i;
-
-  if (shell == NULL || snapshot == NULL || out == NULL || out_size == 0) {
-    return 1;
-  }
-
-  memset(snapshot, 0, sizeof(*snapshot));
-  snapshot->var_count = shell->var_count;
-  memcpy(snapshot->vars, shell->vars, shell->var_count * sizeof(shell->vars[0]));
-  snapshot->binding_count = shell->binding_count;
-
-  for (i = 0; i < shell->binding_count; ++i) {
-    copy_string(snapshot->bindings[i].name, sizeof(snapshot->bindings[i].name), shell->bindings[i].name);
-    if (arksh_value_copy(&snapshot->bindings[i].value, &shell->bindings[i].value) != 0) {
-      free_function_scope_snapshot(snapshot);
-      snprintf(out, out_size, "unable to snapshot function scope");
-      return 1;
-    }
-  }
-
-  snapshot->positional_count = shell->positional_count;
-  for (i = 0; i < (size_t) shell->positional_count && i < ARKSH_MAX_POSITIONAL_PARAMS; ++i) {
-    copy_string(snapshot->positional_params[i], sizeof(snapshot->positional_params[i]), shell->positional_params[i]);
-  }
-
-  return 0;
-}
-
-static int restore_function_scope(
-  ArkshShell *shell,
-  ArkshFunctionScopeSnapshot *snapshot,
-  char *out,
-  size_t out_size
-) {
-  size_t i;
-
-  if (shell == NULL || snapshot == NULL || out == NULL || out_size == 0) {
-    return 1;
-  }
-
-  while (shell->var_count > 0) {
-    char name[ARKSH_MAX_VAR_NAME];
-
-    copy_string(name, sizeof(name), shell->vars[shell->var_count - 1].name);
-    if (arksh_shell_unset_var(shell, name) != 0) {
-      snprintf(out, out_size, "unable to restore function variable scope");
-      return 1;
-    }
-  }
-
-  for (i = 0; i < snapshot->var_count; ++i) {
-    if (arksh_shell_set_var(shell, snapshot->vars[i].name, snapshot->vars[i].value, snapshot->vars[i].exported) != 0) {
-      snprintf(out, out_size, "unable to restore function variable scope");
-      return 1;
-    }
-  }
-
-  for (i = 0; i < shell->binding_count; ++i) {
-    arksh_value_free(&shell->bindings[i].value);
-  }
-  shell->binding_count = 0;
-
-  for (i = 0; i < snapshot->binding_count; ++i) {
-    copy_string(shell->bindings[i].name, sizeof(shell->bindings[i].name), snapshot->bindings[i].name);
-    if (arksh_value_copy(&shell->bindings[i].value, &snapshot->bindings[i].value) != 0) {
-      snprintf(out, out_size, "unable to restore function binding scope");
-      return 1;
-    }
-    shell->binding_count++;
-  }
-
-  shell->positional_count = snapshot->positional_count;
-  for (i = 0; i < (size_t) snapshot->positional_count && i < ARKSH_MAX_POSITIONAL_PARAMS; ++i) {
-    copy_string(shell->positional_params[i], sizeof(shell->positional_params[i]), snapshot->positional_params[i]);
-  }
-
-  return 0;
 }
 
 static void free_class_definition_contents_snapshot(ArkshClassDef *class_def) {
@@ -1614,9 +1448,23 @@ static int restore_shell_state(
   copy_string(shell->cwd, sizeof(shell->cwd), snapshot->cwd);
   shell->prompt = snapshot->prompt;
 
+  if (snapshot->var_count > 0 &&
+      grow_heap_array((void **) &shell->vars, &shell->var_capacity,
+                      snapshot->var_count, sizeof(shell->vars[0]),
+                      ARKSH_MAX_SHELL_VARS) != 0) {
+    snprintf(out, out_size, "unable to restore subshell variables");
+    return 1;
+  }
   shell->var_count = snapshot->var_count;
   memcpy(shell->vars, snapshot->vars, snapshot->var_count * sizeof(snapshot->vars[0]));
 
+  if (snapshot->binding_count > 0 &&
+      grow_heap_array((void **) &shell->bindings, &shell->binding_capacity,
+                      snapshot->binding_count, sizeof(shell->bindings[0]),
+                      ARKSH_MAX_VALUE_BINDINGS) != 0) {
+    snprintf(out, out_size, "unable to restore subshell bindings");
+    return 1;
+  }
   shell->binding_count = 0;
   for (i = 0; i < snapshot->binding_count; ++i) {
     copy_string(shell->bindings[i].name, sizeof(shell->bindings[i].name), snapshot->bindings[i].name);
@@ -1627,12 +1475,33 @@ static int restore_shell_state(
     shell->binding_count++;
   }
 
+  if (snapshot->alias_count > 0 &&
+      grow_heap_array((void **) &shell->aliases, &shell->alias_capacity,
+                      snapshot->alias_count, sizeof(shell->aliases[0]),
+                      ARKSH_MAX_ALIASES) != 0) {
+    snprintf(out, out_size, "unable to restore subshell aliases");
+    return 1;
+  }
   shell->alias_count = snapshot->alias_count;
   memcpy(shell->aliases, snapshot->aliases, snapshot->alias_count * sizeof(snapshot->aliases[0]));
 
+  if (snapshot->function_count > 0 &&
+      grow_heap_array((void **) &shell->functions, &shell->function_capacity,
+                      snapshot->function_count, sizeof(shell->functions[0]),
+                      ARKSH_MAX_FUNCTIONS) != 0) {
+    snprintf(out, out_size, "unable to restore subshell functions");
+    return 1;
+  }
   shell->function_count = snapshot->function_count;
   memcpy(shell->functions, snapshot->functions, snapshot->function_count * sizeof(snapshot->functions[0]));
 
+  if (snapshot->class_count > 0 &&
+      grow_heap_array((void **) &shell->classes, &shell->class_capacity,
+                      snapshot->class_count, sizeof(shell->classes[0]),
+                      ARKSH_MAX_CLASSES) != 0) {
+    snprintf(out, out_size, "unable to restore subshell classes");
+    return 1;
+  }
   shell->class_count = 0;
   for (i = 0; i < snapshot->class_count; ++i) {
     if (copy_class_definition_snapshot(&shell->classes[i], &snapshot->classes[i]) != 0) {
@@ -1642,6 +1511,13 @@ static int restore_shell_state(
     shell->class_count++;
   }
 
+  if (snapshot->instance_count > 0 &&
+      grow_heap_array((void **) &shell->instances, &shell->instance_capacity,
+                      snapshot->instance_count, sizeof(shell->instances[0]),
+                      ARKSH_MAX_INSTANCES) != 0) {
+    snprintf(out, out_size, "unable to restore subshell instances");
+    return 1;
+  }
   shell->instance_count = 0;
   for (i = 0; i < snapshot->instance_count; ++i) {
     if (copy_class_instance_snapshot(&shell->instances[i], &snapshot->instances[i]) != 0) {
@@ -1651,21 +1527,63 @@ static int restore_shell_state(
     shell->instance_count++;
   }
 
+  if (snapshot->extension_count > 0 &&
+      grow_heap_array((void **) &shell->extensions, &shell->extension_capacity,
+                      snapshot->extension_count, sizeof(shell->extensions[0]),
+                      ARKSH_MAX_EXTENSIONS) != 0) {
+    snprintf(out, out_size, "unable to restore subshell extensions");
+    return 1;
+  }
   shell->extension_count = snapshot->extension_count;
   memcpy(shell->extensions, snapshot->extensions, snapshot->extension_count * sizeof(snapshot->extensions[0]));
 
+  if (snapshot->value_resolver_count > 0 &&
+      grow_heap_array((void **) &shell->value_resolvers, &shell->value_resolver_capacity,
+                      snapshot->value_resolver_count, sizeof(shell->value_resolvers[0]),
+                      ARKSH_MAX_VALUE_RESOLVERS) != 0) {
+    snprintf(out, out_size, "unable to restore subshell value resolvers");
+    return 1;
+  }
   shell->value_resolver_count = snapshot->value_resolver_count;
   memcpy(shell->value_resolvers, snapshot->value_resolvers, snapshot->value_resolver_count * sizeof(snapshot->value_resolvers[0]));
 
+  if (snapshot->pipeline_stage_count > 0 &&
+      grow_heap_array((void **) &shell->pipeline_stages, &shell->pipeline_stage_capacity,
+                      snapshot->pipeline_stage_count, sizeof(shell->pipeline_stages[0]),
+                      ARKSH_MAX_PIPELINE_STAGE_HANDLERS) != 0) {
+    snprintf(out, out_size, "unable to restore subshell pipeline stages");
+    return 1;
+  }
   shell->pipeline_stage_count = snapshot->pipeline_stage_count;
   memcpy(shell->pipeline_stages, snapshot->pipeline_stages, snapshot->pipeline_stage_count * sizeof(snapshot->pipeline_stages[0]));
 
+  if (snapshot->command_count > 0 &&
+      grow_heap_array((void **) &shell->commands, &shell->command_capacity,
+                      snapshot->command_count, sizeof(shell->commands[0]),
+                      ARKSH_MAX_COMMANDS) != 0) {
+    snprintf(out, out_size, "unable to restore subshell commands");
+    return 1;
+  }
   shell->command_count = snapshot->command_count;
   memcpy(shell->commands, snapshot->commands, snapshot->command_count * sizeof(snapshot->commands[0]));
 
+  if (snapshot->plugin_count > 0 &&
+      grow_heap_array((void **) &shell->plugins, &shell->plugin_capacity,
+                      snapshot->plugin_count, sizeof(shell->plugins[0]),
+                      ARKSH_MAX_PLUGINS) != 0) {
+    snprintf(out, out_size, "unable to restore subshell plugins");
+    return 1;
+  }
   shell->plugin_count = snapshot->plugin_count;
   memcpy(shell->plugins, snapshot->plugins, snapshot->plugin_count * sizeof(snapshot->plugins[0]));
 
+  if (snapshot->job_count > 0 &&
+      grow_heap_array((void **) &shell->jobs, &shell->job_capacity,
+                      snapshot->job_count, sizeof(shell->jobs[0]),
+                      ARKSH_MAX_JOBS) != 0) {
+    snprintf(out, out_size, "unable to restore subshell jobs");
+    return 1;
+  }
   shell->job_count = snapshot->job_count;
   memcpy(shell->jobs, snapshot->jobs, snapshot->job_count * sizeof(snapshot->jobs[0]));
   return 0;
@@ -1689,13 +1607,18 @@ static int bind_function_parameters(
      accepts any number of positional arguments). */
   if (function_def->param_count == -1) {
     int posix_argc = command->argc - 1;
+    const char *positional_values[ARKSH_MAX_POSITIONAL_PARAMS];
+
     if (posix_argc > ARKSH_MAX_POSITIONAL_PARAMS) {
       snprintf(out, out_size, "function %s: too many arguments", function_def->name);
       return 1;
     }
-    shell->positional_count = posix_argc;
     for (i = 0; i < posix_argc; ++i) {
-      copy_string(shell->positional_params[i], sizeof(shell->positional_params[i]), command->argv[i + 1]);
+      positional_values[i] = command->argv[i + 1];
+    }
+    if (arksh_shell_set_positional_argv(shell, posix_argc, positional_values) != 0) {
+      snprintf(out, out_size, "function %s: unable to bind positional arguments", function_def->name);
+      return 1;
     }
     return 0;
   }
@@ -1724,9 +1647,16 @@ static int bind_function_parameters(
   }
 
   /* Set positional parameters ($1, $2, …) from call arguments. */
-  shell->positional_count = function_def->param_count;
-  for (i = 0; i < function_def->param_count && i < ARKSH_MAX_POSITIONAL_PARAMS; ++i) {
-    copy_string(shell->positional_params[i], sizeof(shell->positional_params[i]), command->argv[i + 1]);
+  {
+    const char *positional_values[ARKSH_MAX_POSITIONAL_PARAMS];
+
+    for (i = 0; i < function_def->param_count; ++i) {
+      positional_values[i] = command->argv[i + 1];
+    }
+    if (arksh_shell_set_positional_argv(shell, function_def->param_count, positional_values) != 0) {
+      snprintf(out, out_size, "function %s: unable to bind positional arguments", function_def->name);
+      goto cleanup;
+    }
   }
 
   for (i = 0; i < function_def->param_count; ++i) {
@@ -1765,16 +1695,13 @@ static int evaluate_block_body(
   ArkshShell *shell,
   const char *body,
   ArkshValue *out_value,
-  ArkshBlockBindingSnapshot *local_snapshots,
-  int *out_local_count,
   char *out,
   size_t out_size
 ) {
   size_t segment_start = 0;
   char trimmed_body[ARKSH_MAX_BLOCK_SOURCE];
-  int local_count = 0;
 
-  if (shell == NULL || body == NULL || out_value == NULL || out_local_count == NULL || out == NULL || out_size == 0) {
+  if (shell == NULL || body == NULL || out_value == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
@@ -1818,22 +1745,10 @@ static int evaluate_block_body(
     if (local_status == 0) {
       ArkshValue *local_value;
 
-      if (local_count >= ARKSH_MAX_BLOCK_LOCALS) {
-        snprintf(out, out_size, "too many local bindings inside block");
-        return 1;
-      }
       if (trimmed_body[separator_index] == '\0') {
         snprintf(out, out_size, "block local declarations require a final expression");
         return 1;
       }
-      if (local_snapshots == NULL) {
-        snprintf(out, out_size, "unable to allocate local block scope");
-        return 1;
-      }
-      if (snapshot_binding(shell, local_name, &local_snapshots[local_count], out, out_size) != 0) {
-        return 1;
-      }
-      local_count++;
 
       local_value = (ArkshValue *) allocate_temp_buffer(1, sizeof(*local_value), "block local value", out, out_size);
       if (local_value == NULL) {
@@ -1862,7 +1777,6 @@ static int evaluate_block_body(
       return 1;
     }
 
-    *out_local_count = local_count;
     return evaluate_expression_text(shell, trimmed_body + segment_start, out_value, out, out_size);
   }
 
@@ -1871,51 +1785,32 @@ static int evaluate_block_body(
 }
 
 static int evaluate_block(ArkshShell *shell, const ArkshBlock *block, const ArkshValue *args, int argc, ArkshValue *out_value, char *out, size_t out_size) {
-  ArkshBlockBindingSnapshot *snapshots;
-  ArkshBlockBindingSnapshot *local_snapshots;
-  int local_count = 0;
+  int i;
   int status;
 
   if (shell == NULL || block == NULL || out_value == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
-  snapshots = (ArkshBlockBindingSnapshot *) allocate_temp_buffer(
-    ARKSH_MAX_BLOCK_PARAMS,
-    sizeof(*snapshots),
-    "block binding snapshots",
-    out,
-    out_size
-  );
-  if (snapshots == NULL) {
+  if (argc != block->param_count) {
+    snprintf(out, out_size, "block expects %d arguments, got %d", block->param_count, argc);
     return 1;
   }
-
-  if (bind_block_arguments(shell, block, args, argc, snapshots, out, out_size) != 0) {
-    free(snapshots);
+  if (arksh_shell_push_scope_frame(shell) != 0) {
+    snprintf(out, out_size, "unable to allocate block scope");
     return 1;
   }
-
-  local_snapshots = (ArkshBlockBindingSnapshot *) allocate_temp_buffer(
-    ARKSH_MAX_BLOCK_LOCALS,
-    sizeof(*local_snapshots),
-    "block local snapshots",
-    out,
-    out_size
-  );
-  if (local_snapshots == NULL) {
-    restore_block_arguments(shell, snapshots, block->param_count);
-    free(snapshots);
-    return 1;
+  for (i = 0; i < block->param_count; ++i) {
+    if (arksh_shell_set_binding(shell, block->params[i], &args[i]) != 0) {
+      arksh_shell_pop_scope_frame(shell);
+      snprintf(out, out_size, "unable to bind block argument: %s", block->params[i]);
+      return 1;
+    }
   }
 
   out[0] = '\0';
-  status = evaluate_block_body(shell, block->body, out_value, local_snapshots, &local_count, out, out_size);
-
-  restore_block_arguments(shell, local_snapshots, local_count);
-  free(local_snapshots);
-  restore_block_arguments(shell, snapshots, block->param_count);
-  free(snapshots);
+  status = evaluate_block_body(shell, block->body, out_value, out, out_size);
+  arksh_shell_pop_scope_frame(shell);
   return status;
 }
 
@@ -2042,13 +1937,13 @@ static int extension_target_matches(const ArkshObjectExtension *extension, const
     case ARKSH_EXTENSION_TARGET_VALUE_KIND:
       return receiver->kind == extension->value_kind;
     case ARKSH_EXTENSION_TARGET_OBJECT_KIND:
-      return receiver->kind == ARKSH_VALUE_OBJECT && receiver->object.kind == extension->object_kind;
+      return receiver->kind == ARKSH_VALUE_OBJECT && arksh_value_object_ref(receiver)->kind == extension->object_kind;
     case ARKSH_EXTENSION_TARGET_TYPED_MAP: {
       const ArkshValueItem *type_entry;
       if (receiver->kind != ARKSH_VALUE_MAP) return 0;
       type_entry = arksh_value_map_get_item(receiver, "__type__");
       if (type_entry == NULL || type_entry->kind != ARKSH_VALUE_STRING) return 0;
-      return strcmp(type_entry->text, extension->target_name) == 0;
+      return strcmp(arksh_value_item_text_cstr(type_entry), extension->target_name) == 0;
     }
     default:
       return 0;
@@ -2394,7 +2289,7 @@ static int call_bound_value(
       }
     }
 
-    status = evaluate_block(shell, &bound_value->block, args, expression->argc, out_value, out, out_size);
+    status = evaluate_block(shell, arksh_value_block_ref(bound_value), args, expression->argc, out_value, out, out_size);
     free(args);
     return status;
   }
@@ -2412,7 +2307,7 @@ static int call_bound_value(
     }
 
     build_command_argv(expanded_args, expanded_argc, argv);
-    return arksh_object_call_method_value(&bound_value->object, expression->member, expanded_argc, argv, out_value, out, out_size);
+    return arksh_object_call_method_value(arksh_value_object_ref(bound_value), expression->member, expanded_argc, argv, out_value, out, out_size);
   }
 
   if (bound_value->kind == ARKSH_VALUE_CLASS || bound_value->kind == ARKSH_VALUE_INSTANCE) {
@@ -2574,9 +2469,7 @@ static int split_text_lines_into_value(const char *text, ArkshValue *out_value) 
 
     memcpy(line, cursor, len);
     line[len] = '\0';
-    arksh_value_item_init(item);
-    item->kind = ARKSH_VALUE_STRING;
-    copy_string(item->text, sizeof(item->text), line);
+    arksh_value_item_set_string(item, line);
     if (arksh_value_list_append_item(out_value, item) != 0) {
       return 1;
     }
@@ -2604,9 +2497,7 @@ static int append_string_item_to_value(ArkshValue *out_value, const char *text) 
   if (item == NULL) {
     return 1;
   }
-  arksh_value_item_init(item);
-  item->kind = ARKSH_VALUE_STRING;
-  copy_string(item->text, sizeof(item->text), text);
+  arksh_value_item_set_string(item, text);
   if (arksh_value_list_append_item(out_value, item) != 0) {
     return 1;
   }
@@ -2978,7 +2869,7 @@ static int resolve_stage_block_argument(ArkshShell *shell, const char *text, Ark
     return 1;
   }
 
-  *out_block = value->block;
+  *out_block = *arksh_value_block_ref(value);
   status = 0;
   free(value);
   return status;
@@ -3208,7 +3099,7 @@ static int apply_lines_stage(ArkshValue *value, char *out, size_t out_size) {
     return 1;
   }
 
-  copy_string(original, sizeof(original), value->text);
+  copy_string(original, sizeof(original), arksh_value_text_cstr(value));
   if (split_text_lines_into_value(original, value) != 0) {
     snprintf(out, out_size, "unable to split string into lines");
     return 1;
@@ -3239,7 +3130,7 @@ static int apply_grep_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
   /* If given a string, split into lines first so grep works line-by-line. */
   if (value->kind == ARKSH_VALUE_STRING) {
     char original[ARKSH_MAX_OUTPUT];
-    copy_string(original, sizeof(original), value->text);
+    copy_string(original, sizeof(original), arksh_value_text_cstr(value));
     if (split_text_lines_into_value(original, value) != 0) {
       snprintf(out, out_size, "grep() unable to split string into lines");
       return 1;
@@ -3274,7 +3165,10 @@ static int apply_trim_stage(ArkshValue *value, char *out, size_t out_size) {
   }
 
   if (value->kind == ARKSH_VALUE_STRING) {
-    trim_in_place(value->text);
+    char trimmed[ARKSH_MAX_OUTPUT];
+    copy_string(trimmed, sizeof(trimmed), arksh_value_text_cstr(value));
+    trim_in_place(trimmed);
+    arksh_value_set_string(value, trimmed);
     return 0;
   }
 
@@ -3285,7 +3179,10 @@ static int apply_trim_stage(ArkshValue *value, char *out, size_t out_size) {
 
   for (i = 0; i < value->list.count; ++i) {
     if (value->list.items[i].kind == ARKSH_VALUE_STRING) {
-      trim_in_place(value->list.items[i].text);
+      char trimmed[ARKSH_MAX_VALUE_TEXT];
+      copy_string(trimmed, sizeof(trimmed), arksh_value_item_text_cstr(&value->list.items[i]));
+      trim_in_place(trimmed);
+      arksh_value_item_set_string(&value->list.items[i], trimmed);
     }
   }
   return 0;
@@ -3304,7 +3201,7 @@ static int apply_split_stage(ArkshShell *shell, ArkshValue *value, const ArkshPi
     return 1;
   }
 
-  copy_string(original, sizeof(original), value->text);
+  copy_string(original, sizeof(original), arksh_value_text_cstr(value));
   if (stage->raw_args[0] == '\0') {
     if (split_text_whitespace_into_value(original, value) != 0) {
       snprintf(out, out_size, "unable to split string");
@@ -3347,7 +3244,10 @@ static int apply_join_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
     return 1;
   }
 
-  out[0] = '\0';
+  {
+    char joined[ARKSH_MAX_OUTPUT];
+
+    joined[0] = '\0';
   for (i = 0; i < value->list.count; ++i) {
     char rendered[ARKSH_MAX_OUTPUT];
     size_t rendered_len;
@@ -3359,25 +3259,26 @@ static int apply_join_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
     }
 
     if (i > 0) {
-      if (used + separator_len >= sizeof(value->text)) {
+      if (used + separator_len >= sizeof(joined)) {
         snprintf(out, out_size, "join() result is too large");
         return 1;
       }
-      memcpy(value->text + used, separator, separator_len);
+      memcpy(joined + used, separator, separator_len);
       used += separator_len;
     }
 
     rendered_len = strlen(rendered);
-    if (used + rendered_len >= sizeof(value->text)) {
+    if (used + rendered_len >= sizeof(joined)) {
       snprintf(out, out_size, "join() result is too large");
       return 1;
     }
-    memcpy(value->text + used, rendered, rendered_len);
+    memcpy(joined + used, rendered, rendered_len);
     used += rendered_len;
   }
 
-  value->text[used] = '\0';
-  value->kind = ARKSH_VALUE_STRING;
+    joined[used] = '\0';
+    arksh_value_set_string(value, joined);
+  }
   return 0;
 }
 
@@ -3552,7 +3453,7 @@ static int apply_from_json_stage(ArkshValue *value, char *out, size_t out_size) 
   if (parsed == NULL) {
     return 1;
   }
-  if (arksh_value_parse_json(value->text, parsed, out, out_size) != 0) {
+  if (arksh_value_parse_json(arksh_value_text_cstr(value), parsed, out, out_size) != 0) {
     free(parsed);
     return 1;
   }
@@ -3754,7 +3655,7 @@ static int apply_each_selector_to_item(ArkshShell *shell, const ArkshEachSelecto
     }
 
     build_command_argv(expanded_args, selector->argc, argv);
-    return arksh_object_call_method_value(&item->object, selector->name, selector->argc, argv, out_value, out, out_size);
+    return arksh_object_call_method_value(arksh_value_item_object_ref(item), selector->name, selector->argc, argv, out_value, out, out_size);
   }
 
   {
@@ -4297,7 +4198,7 @@ static int item_as_number(ArkshShell *shell, const ArkshValueItem *item, const c
     return 0;
   }
   if (item->kind == ARKSH_VALUE_STRING) {
-    *out_number = atof(item->text);
+    *out_number = atof(arksh_value_item_text_cstr(item));
     return 0;
   }
   snprintf(out, out_size, "sum/min/max: item is not a number");
@@ -4411,8 +4312,8 @@ static int apply_base64_encode_stage(ArkshValue *value, char *out, size_t out_si
     return 1;
   }
 
-  src = (const unsigned char *) value->text;
-  src_len = strlen(value->text);
+  src = (const unsigned char *) arksh_value_text_cstr(value);
+  src_len = strlen(arksh_value_text_cstr(value));
 
   if (src_len == 0) {
     arksh_value_free(value);
@@ -4493,7 +4394,7 @@ static int apply_base64_decode_stage(ArkshValue *value, char *out, size_t out_si
     return 1;
   }
 
-  src = value->text;
+  src = arksh_value_text_cstr(value);
   src_len = strlen(src);
 
   if (src_len == 0) {
@@ -5148,26 +5049,18 @@ static int execute_shell_function(
   char *out,
   size_t out_size
 ) {
-  ArkshFunctionScopeSnapshot *snapshot;
   int status;
 
   if (shell == NULL || function_def == NULL || command == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
-  snapshot = (ArkshFunctionScopeSnapshot *) allocate_temp_buffer(1, sizeof(*snapshot), "function scope snapshot", out, out_size);
-  if (snapshot == NULL) {
-    return 1;
-  }
-
-  if (snapshot_function_scope(shell, snapshot, out, out_size) != 0) {
-    free(snapshot);
+  if (arksh_shell_push_scope_frame(shell) != 0) {
+    snprintf(out, out_size, "unable to allocate function scope");
     return 1;
   }
   if (bind_function_parameters(shell, function_def, command, out, out_size) != 0) {
-    restore_function_scope(shell, snapshot, out, out_size);
-    free_function_scope_snapshot(snapshot);
-    free(snapshot);
+    arksh_shell_pop_scope_frame(shell);
     return 1;
   }
 
@@ -5177,14 +5070,7 @@ static int execute_shell_function(
   if (status == 0 && shell->control_signal == ARKSH_CONTROL_SIGNAL_RETURN) {
     arksh_shell_clear_control_signal(shell);
   }
-  if (restore_function_scope(shell, snapshot, out, out_size) != 0) {
-    free_function_scope_snapshot(snapshot);
-    free(snapshot);
-    return 1;
-  }
-
-  free_function_scope_snapshot(snapshot);
-  free(snapshot);
+  arksh_shell_pop_scope_frame(shell);
   return status;
 }
 
@@ -5691,9 +5577,16 @@ static int execute_subshell_command(
     free(snapshot);
     return 1;
   }
+  if (arksh_shell_push_scope_frame(shell) != 0) {
+    free_shell_state_snapshot(snapshot);
+    free(snapshot);
+    snprintf(out, out_size, "unable to allocate subshell scope");
+    return 1;
+  }
 
   command_output[0] = '\0';
   status = execute_compound_body(shell, compound, command_output, sizeof(command_output));
+  arksh_shell_pop_scope_frame(shell);
   if (restore_shell_state(shell, snapshot, out, out_size) != 0) {
     free_shell_state_snapshot(snapshot);
     free(snapshot);
@@ -6228,7 +6121,7 @@ static int render_value_for_shell_var(const ArkshValue *value, char *out, size_t
 
   switch (value->kind) {
     case ARKSH_VALUE_STRING:
-      copy_string(out, out_size, value->text);
+      copy_string(out, out_size, arksh_value_text_cstr(value));
       return 0;
     case ARKSH_VALUE_NUMBER:
       snprintf(out, out_size, "%.15g", value->number);
@@ -6237,10 +6130,10 @@ static int render_value_for_shell_var(const ArkshValue *value, char *out, size_t
       copy_string(out, out_size, value->boolean ? "true" : "false");
       return 0;
     case ARKSH_VALUE_OBJECT:
-      copy_string(out, out_size, value->object.path);
+      copy_string(out, out_size, arksh_value_object_ref(value)->path);
       return 0;
     case ARKSH_VALUE_BLOCK:
-      copy_string(out, out_size, value->block.source);
+      copy_string(out, out_size, arksh_value_block_ref(value)->source);
       return 0;
     case ARKSH_VALUE_LIST:
     case ARKSH_VALUE_EMPTY:

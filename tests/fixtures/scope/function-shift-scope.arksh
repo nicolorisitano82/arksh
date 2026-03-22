@@ -1,0 +1,9 @@
+set -- outer keep
+
+function show(a, b, c) do
+shift
+[ "$1" = beta ] || false
+endfunction
+
+show alpha beta gamma
+[ "$1" = outer ] || false

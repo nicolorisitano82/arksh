@@ -1,0 +1,9 @@
+set NAME outer
+
+function show() do
+local NAME=inner
+[ "$NAME" = inner ] || false
+endfunction
+
+show
+[ "$NAME" = outer ] || false

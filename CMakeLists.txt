@@ -279,6 +279,12 @@ if(BUILD_TESTING)
   add_test(NAME arksh_function_basic COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/basic.arksh")
   add_test(NAME arksh_function_redefine COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/redefine.arksh")
   add_test(NAME arksh_function_scope COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/scope.arksh")
+  add_test(NAME arksh_function_local_shadow
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/scope/function-local-shadow.arksh")
+  add_test(NAME arksh_function_shift_scope
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/scope/function-shift-scope.arksh")
+  add_test(NAME arksh_command_substitution_local_scope
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/scope/function-command-substitution.arksh")
   add_test(NAME arksh_break_nested COMMAND arksh -c "while true ; do while true ; do text(\"once\") -> print() ; break 2 ; done ; done")
   add_test(NAME arksh_continue_nested COMMAND arksh -c "for outer in list(1, 2) ; do while true ; do outer -> print() ; continue 2 ; done ; done")
   add_test(NAME arksh_function_return COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/return.arksh")
@@ -372,14 +378,20 @@ if(BUILD_TESTING)
     PASS_REGULAR_EXPRESSION "case=startup"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   )
-  add_test(NAME arksh_perf_object_pipeline_alloc_drop
-    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> object-pipeline script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/object-pipeline.arksh" "calloc_calls<=230")
+  add_test(NAME arksh_perf_startup_base_drop
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> startup command "perf show" "calloc_bytes<=200000")
+  add_test(NAME arksh_perf_object_pipeline_footprint_drop
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> object-pipeline script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/object-pipeline.arksh" "max_rss_kb<=25000")
+  add_test(NAME arksh_perf_json_structured_footprint_drop
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> json-structured script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/json-structured.arksh" "max_rss_kb<=34000")
   add_test(NAME arksh_perf_function_scope_alloc_drop
     COMMAND arksh_perf_runner $<TARGET_FILE:arksh> function-scope script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/function-scope.arksh" "calloc_calls<=200")
   add_test(NAME arksh_perf_command_subst_alloc_drop
     COMMAND arksh_perf_runner $<TARGET_FILE:arksh> command-substitution script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/command-substitution.arksh" "calloc_calls<=20")
   set_tests_properties(
-    arksh_perf_object_pipeline_alloc_drop
+    arksh_perf_startup_base_drop
+    arksh_perf_object_pipeline_footprint_drop
+    arksh_perf_json_structured_footprint_drop
     arksh_perf_function_scope_alloc_drop
     arksh_perf_command_subst_alloc_drop
     PROPERTIES

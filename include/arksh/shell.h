@@ -88,6 +88,33 @@ typedef struct {
 } ArkshValueBinding;
 
 typedef struct {
+  char name[ARKSH_MAX_VAR_NAME];
+  char value[ARKSH_MAX_VAR_VALUE];
+  int exported;
+  int deleted;
+} ArkshScopedVar;
+
+typedef struct {
+  char name[ARKSH_MAX_VAR_NAME];
+  ArkshValue value;
+  int deleted;
+} ArkshScopedBinding;
+
+typedef struct ArkshScopeFrame {
+  ArkshScopedVar *vars;
+  size_t var_count;
+  size_t var_capacity;
+  ArkshScopedBinding *bindings;
+  size_t binding_count;
+  size_t binding_capacity;
+  char (*positional_params)[ARKSH_MAX_VAR_VALUE];
+  int positional_count;
+  size_t positional_capacity;
+  int has_positional;
+  struct ArkshScopeFrame *previous;
+} ArkshScopeFrame;
+
+typedef struct {
   char name[ARKSH_MAX_NAME];
   char params[ARKSH_MAX_FUNCTION_PARAMS][ARKSH_MAX_NAME];
   int param_count;
@@ -237,42 +264,55 @@ typedef struct ArkshShell {
   int inherited_input_active;
   ArkshRedirectionNode inherited_input_redirection;
   ArkshPromptConfig prompt;
-  ArkshCommandDef commands[ARKSH_MAX_COMMANDS];
+  ArkshCommandDef *commands;
   size_t command_count;
-  ArkshLoadedPlugin plugins[ARKSH_MAX_PLUGINS];
+  size_t command_capacity;
+  ArkshLoadedPlugin *plugins;
   size_t plugin_count;
-  ArkshShellVar vars[ARKSH_MAX_SHELL_VARS];
+  size_t plugin_capacity;
+  ArkshShellVar *vars;
   size_t var_count;
-  ArkshValueBinding bindings[ARKSH_MAX_VALUE_BINDINGS];
+  size_t var_capacity;
+  ArkshValueBinding *bindings;
   size_t binding_count;
-  ArkshShellFunction functions[ARKSH_MAX_FUNCTIONS];
+  size_t binding_capacity;
+  ArkshShellFunction *functions;
   size_t function_count;
-  ArkshClassDef classes[ARKSH_MAX_CLASSES];
+  size_t function_capacity;
+  ArkshClassDef *classes;
   size_t class_count;
-  ArkshClassInstance instances[ARKSH_MAX_INSTANCES];
+  size_t class_capacity;
+  ArkshClassInstance *instances;
   size_t instance_count;
+  size_t instance_capacity;
   int next_instance_id;
-  ArkshObjectExtension extensions[ARKSH_MAX_EXTENSIONS];
+  ArkshObjectExtension *extensions;
   size_t extension_count;
-  ArkshValueResolverDef value_resolvers[ARKSH_MAX_VALUE_RESOLVERS];
+  size_t extension_capacity;
+  ArkshValueResolverDef *value_resolvers;
   size_t value_resolver_count;
-  ArkshPipelineStageDef pipeline_stages[ARKSH_MAX_PIPELINE_STAGE_HANDLERS];
+  size_t value_resolver_capacity;
+  ArkshPipelineStageDef *pipeline_stages;
   size_t pipeline_stage_count;
-  ArkshAlias aliases[ARKSH_MAX_ALIASES];
+  size_t pipeline_stage_capacity;
+  ArkshAlias *aliases;
   size_t alias_count;
-  char history[ARKSH_MAX_HISTORY][ARKSH_MAX_LINE];
+  size_t alias_capacity;
+  char (*history)[ARKSH_MAX_LINE];
   size_t history_count;
+  size_t history_capacity;
   char history_path[ARKSH_MAX_PATH];
   int history_dirty;
-  ArkshJob jobs[ARKSH_MAX_JOBS];
+  ArkshJob *jobs;
   size_t job_count;
+  size_t job_capacity;
   int next_job_id;
   int loading_plugin_index;
   ArkshControlSignalKind control_signal;
   int control_levels;
   int loop_depth;
   int function_depth;
-  ArkshTrapEntry traps[ARKSH_TRAP_COUNT];
+  ArkshTrapEntry *traps;
   int running_exit_trap;
   /* E1-S6-T2: set -e/-u/-x/-o options */
   int opt_errexit;   /* -e: exit on command failure */
@@ -280,14 +320,17 @@ typedef struct ArkshShell {
   int opt_xtrace;    /* -x: print commands before execution */
   int opt_pipefail;  /* -o pipefail: pipeline fails if any stage fails */
   int in_condition;  /* true while evaluating if/while/until condition */
-  char positional_params[ARKSH_MAX_POSITIONAL_PARAMS][ARKSH_MAX_VAR_VALUE];
+  char (*positional_params)[ARKSH_MAX_VAR_VALUE];
   int positional_count;
+  size_t positional_capacity;
   long long last_bg_pid;
   long long shell_pid;
   int force_capture; /* 1 inside capture()/capture_lines()/bridge — always capture stdout */
   ArkshScratchArena scratch;
-  ArkshTypeDescriptor type_descriptors[ARKSH_MAX_TYPE_DESCRIPTORS];
+  ArkshTypeDescriptor *type_descriptors;
   size_t type_descriptor_count;
+  size_t type_descriptor_capacity;
+  ArkshScopeFrame *scope_frame;
 } ArkshShell;
 
 int arksh_shell_init(ArkshShell *shell);
@@ -307,6 +350,14 @@ int arksh_shell_unset_var(ArkshShell *shell, const char *name);
 const ArkshValue *arksh_shell_get_binding(const ArkshShell *shell, const char *name);
 int arksh_shell_set_binding(ArkshShell *shell, const char *name, const ArkshValue *value);
 int arksh_shell_unset_binding(ArkshShell *shell, const char *name);
+int arksh_shell_push_scope_frame(ArkshShell *shell);
+void arksh_shell_pop_scope_frame(ArkshShell *shell);
+int arksh_shell_has_scope_frame(const ArkshShell *shell);
+int arksh_shell_set_positional_argv(ArkshShell *shell, int count, const char *const *values);
+int arksh_shell_set_positional_copy(ArkshShell *shell, int count, const char values[][ARKSH_MAX_VAR_VALUE]);
+int arksh_shell_get_positional_count(const ArkshShell *shell);
+const char *arksh_shell_get_positional(const ArkshShell *shell, int index);
+int arksh_shell_shift_positional(ArkshShell *shell, int count);
 const ArkshShellFunction *arksh_shell_find_function(const ArkshShell *shell, const char *name);
 int arksh_shell_set_function(ArkshShell *shell, const ArkshFunctionCommandNode *function_node);
 const ArkshClassDef *arksh_shell_find_class(const ArkshShell *shell, const char *name);
