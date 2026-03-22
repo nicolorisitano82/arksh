@@ -998,6 +998,8 @@ Stato story: `[ ]`
 
 > **Completati in E6:** S1 (path/fs), S2 (custom types), S3 (pipeline stages), S4 (shell integration), S5 (numeric types), S6 (Dict), S7 (base64), S8 (Matrix), S9 (trash plugin), S10 (plugin autoload). E6 chiusa.
 > **Extra:** esecuzione diretta di script `arksh file.arksh [args]` aggiunta a `main.c`.
+> **E7-S1:** parser/serializer robusti — offset errori, `\uXXXX`, ctrl chars, leading zeros, depth limit, MATRIX→JSON, NaN→null. 213/213 test passati.
+> **Extra:** script di esempio `examples/scripts/13-matrix-type.arksh` aggiunto.
 
 ---
 
@@ -1038,9 +1040,9 @@ Stato story: `[ ]`
 
 Prerequisito naturale per script di automazione e integrazione con API esterne.
 
-1. `E7-S1-T1` (migliorare diagnostica parser con posizione/offset dell'errore)
-2. `E7-S1-T2` (casi edge del parser — escape, unicode, numeri float)
-3. `E7-S1-T3` (casi edge del serializer — pretty-print opzionale)
+1. ~~`E7-S1-T1` (diagnostica parser con posizione/offset dell'errore)~~ `[x]`
+2. ~~`E7-S1-T2` (casi edge del parser — `\uXXXX`, ctrl chars, leading zeros, depth limit)~~ `[x]`
+3. ~~`E7-S1-T3` (casi edge del serializer — MATRIX→JSON, ctrl→`\uXXXX`, NaN→null)~~ `[x]`
 4. `E7-S2-T1` (strutture annidate oltre `ARKSH_MAX_COLLECTION_ITEMS`)
 5. `E7-S3-T1` (stage `jq`-like o `select` per query su valori JSON)
 
