@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "arksh/perf.h"
 #include "arksh/shell.h"
 
 static void print_output_if_any(const char *text) {
@@ -19,11 +20,15 @@ static void print_output_if_any(const char *text) {
 }
 
 int main(int argc, char **argv) {
+  const char *perf_env;
   ArkshShell *shell;
   char output[ARKSH_MAX_OUTPUT];
   char trap_output[ARKSH_MAX_OUTPUT];
   int trap_status = 0;
   int status;
+
+  perf_env = getenv("ARKSH_PERF");
+  arksh_perf_enable(perf_env != NULL && perf_env[0] != '\0' && strcmp(perf_env, "0") != 0);
 
   shell = (ArkshShell *) calloc(1, sizeof(*shell));
   if (shell == NULL) {

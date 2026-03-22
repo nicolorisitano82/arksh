@@ -145,32 +145,53 @@ endclass
 - [docs/manuale-utente.md](docs/manuale-utente.md) - Italian user manual
 - [docs/sintassi-arksh.md](docs/sintassi-arksh.md) - syntax reference
 - [docs/scelte-implementative.md](docs/scelte-implementative.md) - implementation notes
+- [docs/studio-cpu-memoria.md](docs/studio-cpu-memoria.md) - CPU and memory improvement study
+- [docs/benchmarks-baseline.md](docs/benchmarks-baseline.md) - initial performance baseline and benchmark commands
 - [docs/backlog-implementazione.md](docs/backlog-implementazione.md) - roadmap backlog and remaining work
 - [docs/parser-dispatch.md](docs/parser-dispatch.md) - parser dispatch tree
 - [docs/confronto-shell.md](docs/confronto-shell.md) - shell comparison notes
 
 ## Startup and Configuration
 
+Standard user directories:
+
+- config: `ARKSH_CONFIG_HOME`, otherwise `XDG_CONFIG_HOME/arksh`, otherwise `~/.config/arksh`
+- cache: `ARKSH_CACHE_HOME`, otherwise `XDG_CACHE_HOME/arksh`, otherwise `~/.cache/arksh`
+- state: `ARKSH_STATE_HOME`, otherwise `XDG_STATE_HOME/arksh`, otherwise `~/.local/state/arksh`
+- plugins: `ARKSH_PLUGIN_HOME`, otherwise `XDG_DATA_HOME/arksh/plugins`, otherwise `~/.local/share/arksh/plugins`
+
 At startup, `arksh` loads:
 
 1. `ARKSH_RC` if set
-2. otherwise `~/.arkshrc`
+2. otherwise `${ARKSH_CONFIG_HOME}/arkshrc` or the resolved standard config dir
+3. legacy fallback: `~/.arkshrc`
 
-History is stored in `ARKSH_HISTORY` or `~/.arksh/history`.
+History is stored in:
+
+1. `ARKSH_HISTORY`
+2. otherwise `${ARKSH_STATE_HOME}/history` or the resolved standard state dir
+3. legacy fallback: `~/.arksh/history`
 
 Prompt configuration is looked up in:
 
 1. `ARKSH_CONFIG`
 2. local `arksh.conf`
-3. `~/.arksh/prompt.conf`
+3. `${ARKSH_CONFIG_HOME}/prompt.conf` or the resolved standard config dir
+4. legacy fallback: `~/.arksh/prompt.conf`
 
-Minimal `~/.arkshrc`:
+Minimal `arkshrc`:
 
 ```text
 set PROJECT arksh
 export PROJECT_ROOT "$PWD"
 alias ll="ls -1"
-prompt load ~/.arksh/prompt.conf
+prompt load $ARKSH_CONFIG_DIR/prompt.conf
+```
+
+Install locally with:
+
+```bash
+cmake --install build
 ```
 
 ## Plugins
@@ -185,6 +206,12 @@ Load it:
 
 ```bash
 ./build/arksh -c 'plugin load build/arksh_sample_plugin.dylib ; plugin list'
+```
+
+After installation, plugins can also be resolved from the standard plugin directory, for example:
+
+```bash
+arksh -c 'plugin load sample-plugin ; plugin info sample-plugin'
 ```
 
 The sample plugin registers:

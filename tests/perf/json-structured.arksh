@@ -1,0 +1,12 @@
+perf reset
+
+for round in list(1, 2, 3, 4, 5, 6, 7, 8)
+do
+let payload = tests/fixtures/json/nested.json -> read_json()
+let found = payload -> get_path("a[2].b")
+let updated = payload -> set_path("meta.version", number(2))
+let merged = updated -> merge(map("benchmark", true))
+let names = list(map("profile", map("name", "alpha")), map("profile", map("name", "beta")), map("profile", map("name", "gamma"))) |> pluck("profile.name") |> join(",")
+done
+
+perf show

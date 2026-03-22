@@ -1,0 +1,10 @@
+perf reset
+
+for round in list(1, 2, 3, 4, 5, 6, 7, 8)
+do
+set CURRENT "$(pwd)"
+set AGAIN "$(pwd)"
+set THIRD "$(pwd)"
+done
+
+perf show

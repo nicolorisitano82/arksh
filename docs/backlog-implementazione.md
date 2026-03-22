@@ -70,7 +70,10 @@ Il backlog sotto copre **il rimanente** verso una shell completa e usabile.
 6. `E6` Object model avanzato e plugin typed
 7. `E7` JSON e dati strutturati a livello prodotto
 8. `E8` Qualita, test e CI
-9. `E9` Packaging, release e documentazione finale
+9. `E12` Prestazioni e footprint CPU/memoria
+10. `E9` Packaging, release e documentazione finale
+11. `E10` Plugin HTTP ufficiale
+12. `E11` POSIX core per uso come shell di sistema
 
 ---
 
@@ -797,15 +800,15 @@ Stato story: `[x]`
 
 ## E9. Packaging, release e documentazione finale
 
-Stato epoca: `[ ]`
+Stato epoca: `[~]`
 
 ### E9-S1. Installazione standard
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E9-S1-T1` aggiungere target `install` CMake
-- `[ ]` `E9-S1-T2` definire directory standard per config, cache, history e plugin
-- `[ ]` `E9-S1-T3` allineare il runtime a queste directory
+- `[x]` `E9-S1-T1` aggiungere target `install` CMake
+- `[x]` `E9-S1-T2` definire directory standard per config, cache, history e plugin
+- `[x]` `E9-S1-T3` allineare il runtime a queste directory
 
 ### E9-S2. Packaging per sistemi target
 
@@ -990,11 +993,93 @@ Stato story: `[ ]`
 
 ---
 
+## E12. Prestazioni e footprint CPU/memoria
+
+Stato epoca: `[~]`
+
+Obiettivo: ridurre CPU time, numero di allocazioni, copie profonde e memoria residente del core di `arksh`, seguendo il piano descritto in [docs/studio-cpu-memoria.md](/Users/nicolo/Desktop/oosh/docs/studio-cpu-memoria.md).
+
+### E12-S1. Baseline, benchmark e profiling
+
+Stato story: `[x]`
+
+- `[x]` `E12-S1-T1` creare benchmark ripetibili per startup, pipeline object-aware, JSON strutturato, function scope, subshell e command substitution
+- `[x]` `E12-S1-T2` aggiungere contatori opzionali per allocazioni, copie `arksh_value_copy` e render `arksh_value_render`
+- `[x]` `E12-S1-T3` documentare la baseline iniziale in un file dedicato con tempo, allocazioni e RSS per i casi principali
+- `[x]` `E12-S1-T4` integrare almeno un target `perf` o script di benchmark eseguibile via CMake o shell
+
+### E12-S2. Scratch arena per executor ed espansioni
+
+Stato story: `[ ]`
+
+- `[ ]` `E12-S2-T1` introdurre un modulo `arena` o `scratch allocator` riutilizzabile nel core
+- `[ ]` `E12-S2-T2` sostituire `allocate_temp_buffer()` nell'executor con allocazioni da arena per i buffer temporanei del path caldo
+- `[ ]` `E12-S2-T3` integrare la stessa arena in `expand.c` per command substitution, field splitting e buffer temporanei
+- `[ ]` `E12-S2-T4` garantire reset a fine comando senza leak e senza cambiare la semantica dei valori che devono sopravvivere oltre il frame
+- `[ ]` `E12-S2-T5` aggiungere benchmark e regressioni per verificare il calo di allocazioni rispetto alla baseline
+
+### E12-S3. Layout piu leggero per `ArkshValue`
+
+Stato story: `[ ]`
+
+- `[ ]` `E12-S3-T1` ridisegnare `ArkshValue` per separare il payload per tipo e ridurre i buffer inline sempre residenti
+- `[ ]` `E12-S3-T2` spostare stringhe grandi e payload complessi su heap con ownership chiara e API di free/copy coerenti
+- `[ ]` `E12-S3-T3` alleggerire anche `ArkshValueItem` e i contenitori lista/mappa per ridurre il costo delle copie in pipeline
+- `[ ]` `E12-S3-T4` riallineare `arksh_value_copy`, `arksh_value_free`, `arksh_value_render` e il parser JSON al nuovo layout
+- `[ ]` `E12-S3-T5` aggiungere test e benchmark per confrontare footprint e costo di copia prima/dopo
+
+### E12-S4. Layout piu leggero per `ArkshShell`
+
+Stato story: `[ ]`
+
+- `[ ]` `E12-S4-T1` spezzare `ArkshShell` in sottostrutture heap-owned per registry, history, job table e metadata caricati a runtime
+- `[ ]` `E12-S4-T2` rendere dinamici i contenitori shell ancora fixed-size quando hanno impatto diretto sul footprint base
+- `[ ]` `E12-S4-T3` aggiornare init/destroy, plugin loader e registrazione di comandi/stage/resolver alla nuova struttura
+- `[ ]` `E12-S4-T4` ridurre il costo base di una nuova shell e documentare la differenza di memoria residente rispetto alla baseline
+
+### E12-S5. Scope frame locali per funzioni e block
+
+Stato story: `[ ]`
+
+- `[ ]` `E12-S5-T1` introdurre uno stack di frame locali per `vars`, `bindings` e parametri posizionali
+- `[ ]` `E12-S5-T2` far usare i frame alle funzioni shell, evitando snapshot profondi dell'intero scope quando non necessari
+- `[ ]` `E12-S5-T3` far usare i frame anche ai block e a `local`, sostituendo snapshot/restore puntuali dei binding
+- `[ ]` `E12-S5-T4` aggiungere test di regressione su shadowing, ritorno da funzione e isolamento dei block
+
+### E12-S6. Subshell e command substitution meno costose
+
+Stato story: `[ ]`
+
+- `[ ]` `E12-S6-T1` sostituire gli snapshot profondi della subshell con un modello overlay o copy-on-write
+- `[ ]` `E12-S6-T2` alleggerire `clone_subshell()` in `expand.c` per `$(...)`, copiando solo lo stato strettamente necessario
+- `[ ]` `E12-S6-T3` conservare la semantica di isolamento su cwd, variabili, binding, classi, plugin e job side effect
+- `[ ]` `E12-S6-T4` aggiungere test e benchmark su `$(...)`, `( ... )` e script con stato shell ricco
+
+### E12-S7. Riduzione di parse/render ricorsivi
+
+Stato story: `[ ]`
+
+- `[ ]` `E12-S7-T1` estendere l'AST per rappresentare meglio le chain `->` e i selector annidati senza ripassare da stringhe
+- `[ ]` `E12-S7-T2` far sì che stage e member call ricevano argomenti gia parse-ati quando possibile
+- `[ ]` `E12-S7-T3` ridurre i passaggi `value -> text -> parse -> value` nei path caldi dell'executor
+- `[ ]` `E12-S7-T4` aggiungere regressioni specifiche sulle forme annidate e benchmark sul calo di CPU
+
+### E12-S8. Ottimizzazioni mirate e indicizzazione
+
+Stato story: `[ ]`
+
+- `[ ]` `E12-S8-T1` rendere dinamici i contenitori core ancora statici con impatto reale su memoria e scalabilità
+- `[ ]` `E12-S8-T2` introdurre lookup piu efficienti per registry consultati spesso: comandi, type resolver, pipeline stage, classi e istanze
+- `[ ]` `E12-S8-T3` valutare cache leggere per completion e prompt con invalidazione esplicita
+- `[ ]` `E12-S8-T4` documentare i guadagni finali e aggiornare `docs/studio-cpu-memoria.md` con lo stato di avanzamento reale
+
+---
+
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`
 **In corso:** nessuna
-**Aperte:** E9 (release), E10 (HTTP plugin), E11 (POSIX core)
+**Aperte:** E9 (release), E10 (HTTP plugin), E11 (POSIX core), E12 (performance e footprint)
 
 > **Completati in E6:** S1 (path/fs), S2 (custom types), S3 (pipeline stages), S4 (shell integration), S5 (numeric types), S6 (Dict), S7 (base64), S8 (Matrix), S9 (trash plugin), S10 (plugin autoload). E6 chiusa.
 > **Extra:** esecuzione diretta di script `arksh file.arksh [args]` aggiunta a `main.c`.
@@ -1107,6 +1192,21 @@ Ordine consigliato:
 9. `E11-S9` (sostituzione di processo `<()` / `>()`)
 
 Note: `E11-S7` prima di `E11-S5` perché l'introduzione dello stack di frame variabili è un prerequisito per il corretto isolamento delle subshell.
+
+### Percorso P — performance e footprint (E12)
+
+Nuova epoca dedicata a CPU, allocazioni e memoria residente, derivata da [docs/studio-cpu-memoria.md](/Users/nicolo/Desktop/oosh/docs/studio-cpu-memoria.md).
+
+Ordine consigliato:
+
+1. `E12-S1` (baseline e benchmark)
+2. `E12-S2` (scratch arena)
+3. `E12-S3` (snellimento `ArkshValue`)
+4. `E12-S4` (snellimento `ArkshShell`)
+5. `E12-S5` (scope frame per funzioni e block)
+6. `E12-S6` (subshell e `$(...)` meno costose)
+7. `E12-S7` (meno parse/render ricorsivi)
+8. `E12-S8` (ottimizzazioni mirate e indicizzazione)
 
 ---
 

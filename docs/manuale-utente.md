@@ -404,21 +404,31 @@ Il sample plugin aggiunge un comando, un resolver, uno stage, una proprietà e u
 
 ## 10. Prompt e startup
 
+Directory standard utente:
+
+- config: `ARKSH_CONFIG_HOME`, altrimenti `XDG_CONFIG_HOME/arksh`, altrimenti `~/.config/arksh`
+- cache: `ARKSH_CACHE_HOME`, altrimenti `XDG_CACHE_HOME/arksh`, altrimenti `~/.cache/arksh`
+- state: `ARKSH_STATE_HOME`, altrimenti `XDG_STATE_HOME/arksh`, altrimenti `~/.local/state/arksh`
+- plugin: `ARKSH_PLUGIN_HOME`, altrimenti `XDG_DATA_HOME/arksh/plugins`, altrimenti `~/.local/share/arksh/plugins`
+
 ARKsh carica lo stato iniziale in questo ordine:
 
 1. `ARKSH_RC`, se definita
-2. altrimenti `~/.arkshrc`
+2. altrimenti `${ARKSH_CONFIG_HOME}/arkshrc` o la config dir standard risolta
+3. fallback legacy: `~/.arkshrc`
 
 History:
 
 - `ARKSH_HISTORY`
-- altrimenti `~/.arksh/history`
+- altrimenti `${ARKSH_STATE_HOME}/history` o la state dir standard risolta
+- fallback legacy: `~/.arksh/history`
 
 Ricerca config prompt:
 
 1. `ARKSH_CONFIG`
 2. `arksh.conf` locale
-3. `~/.arksh/prompt.conf`
+3. `${ARKSH_CONFIG_HOME}/prompt.conf` o la config dir standard risolta
+4. fallback legacy: `~/.arksh/prompt.conf`
 
 Esempio di config prompt:
 
@@ -428,6 +438,12 @@ left=userhost,cwd,plugins
 right=status,os,date,time
 separator= ::
 use_color=1
+```
+
+Installazione locale:
+
+```bash
+cmake --install build
 ```
 
 Caricamento:

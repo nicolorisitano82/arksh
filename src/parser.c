@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "arksh/lexer.h"
+#include "arksh/perf.h"
 #include "arksh/parser.h"
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {

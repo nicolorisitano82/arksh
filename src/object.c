@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "arksh/object.h"
+#include "arksh/perf.h"
 #include "arksh/platform.h"
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {
@@ -635,6 +636,8 @@ int arksh_value_copy(ArkshValue *dest, const ArkshValue *src) {
   if (dest == NULL || src == NULL) {
     return 1;
   }
+
+  arksh_perf_note_value_copy();
 
   if (dest == src) {
     return 0;
@@ -1834,6 +1837,8 @@ int arksh_value_item_render(const ArkshValueItem *item, char *out, size_t out_si
 
 int arksh_value_render(const ArkshValue *value, char *out, size_t out_size) {
   size_t i;
+
+  arksh_perf_note_value_render();
 
   if (value == NULL || out == NULL || out_size == 0) {
     return 1;

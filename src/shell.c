@@ -17,6 +17,7 @@
 #include "arksh/executor.h"
 #include "arksh/line_editor.h"
 #include "arksh/lexer.h"
+#include "arksh/perf.h"
 #include "arksh/parser.h"
 #include "arksh/platform.h"
 #include "arksh/prompt.h"
@@ -709,7 +710,7 @@ static ArkshLoadedPlugin *find_loaded_plugin(ArkshShell *shell, const char *quer
     return NULL;
   }
 
-  if (arksh_platform_resolve_path(shell->cwd, query, resolved, sizeof(resolved)) == 0) {
+  if (arksh_shell_resolve_plugin_path(shell, query, resolved, sizeof(resolved)) == 0) {
     have_resolved = 1;
   }
 
@@ -3287,6 +3288,12 @@ static int resolver_shell_namespace(
 
   arksh_value_set_map(out_value);
   if (map_add_string_entry(out_value, "cwd", shell->cwd) != 0 ||
+      map_add_string_entry(out_value, "config_dir", shell->config_dir) != 0 ||
+      map_add_string_entry(out_value, "cache_dir", shell->cache_dir) != 0 ||
+      map_add_string_entry(out_value, "state_dir", shell->state_dir) != 0 ||
+      map_add_string_entry(out_value, "data_dir", shell->data_dir) != 0 ||
+      map_add_string_entry(out_value, "plugin_dir", shell->plugin_dir) != 0 ||
+      map_add_string_entry(out_value, "history_path", shell->history_path) != 0 ||
       map_add_number_entry(out_value, "last_status", (double) shell->last_status) != 0 ||
       map_add_bool_entry(out_value, "running", shell->running) != 0 ||
       map_add_number_entry(out_value, "history_count", (double) shell->history_count) != 0 ||
@@ -5422,9 +5429,207 @@ static void initialize_default_variables(ArkshShell *shell) {
   arksh_shell_set_var(shell, "IFS", " \t\n", 0);
 }
 
+static int join_runtime_path(const char *base, const char *name, char *out, size_t out_size) {
+  const char *separator = arksh_platform_path_separator();
+  size_t base_len;
+
+  if (base == NULL || name == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (base[0] == '\0') {
+    copy_string(out, out_size, name);
+    return 0;
+  }
+
+  base_len = strlen(base);
+  if (base_len > 0 &&
+      (base[base_len - 1] == '/' ||
+       base[base_len - 1] == '\\' ||
+       base[base_len - 1] == separator[0])) {
+    if (snprintf(out, out_size, "%s%s", base, name) >= (int) out_size) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (snprintf(out, out_size, "%s%s%s", base, separator, name) >= (int) out_size) {
+    return 1;
+  }
+
+  return 0;
+}
+
+static int resolve_dir_override(ArkshShell *shell, const char *env_name, char *out, size_t out_size) {
+  const char *value;
+
+  if (shell == NULL || env_name == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  value = getenv(env_name);
+  if (value == NULL || value[0] == '\0') {
+    out[0] = '\0';
+    return 1;
+  }
+
+  if (arksh_platform_resolve_path(shell->cwd, value, out, out_size) != 0) {
+    out[0] = '\0';
+    return 1;
+  }
+
+  return 0;
+}
+
+static void build_legacy_arksh_dir(ArkshShell *shell, char *out, size_t out_size) {
+  const char *home = arksh_shell_get_var(shell, "HOME");
+
+  if (out == NULL || out_size == 0) {
+    return;
+  }
+
+  out[0] = '\0';
+  if (home == NULL || home[0] == '\0') {
+    return;
+  }
+
+  join_runtime_path(home, ".arksh", out, out_size);
+}
+
+static void resolve_runtime_directories(ArkshShell *shell) {
+  const char *home;
+  char base[ARKSH_MAX_PATH];
+
+  if (shell == NULL) {
+    return;
+  }
+
+  shell->config_dir[0] = '\0';
+  shell->cache_dir[0] = '\0';
+  shell->state_dir[0] = '\0';
+  shell->data_dir[0] = '\0';
+  shell->plugin_dir[0] = '\0';
+
+  home = arksh_shell_get_var(shell, "HOME");
+
+  if (resolve_dir_override(shell, "ARKSH_CONFIG_HOME", shell->config_dir, sizeof(shell->config_dir)) != 0) {
+#ifdef _WIN32
+    const char *appdata = getenv("APPDATA");
+    if (appdata != NULL && appdata[0] != '\0') {
+      join_runtime_path(appdata, "arksh", shell->config_dir, sizeof(shell->config_dir));
+    }
+#else
+    const char *xdg = getenv("XDG_CONFIG_HOME");
+    if (xdg != NULL && xdg[0] != '\0') {
+      join_runtime_path(xdg, "arksh", shell->config_dir, sizeof(shell->config_dir));
+    } else if (home != NULL && home[0] != '\0') {
+      join_runtime_path(home, ".config/arksh", shell->config_dir, sizeof(shell->config_dir));
+    }
+#endif
+  }
+
+  if (resolve_dir_override(shell, "ARKSH_CACHE_HOME", shell->cache_dir, sizeof(shell->cache_dir)) != 0) {
+#ifdef _WIN32
+    const char *local_appdata = getenv("LOCALAPPDATA");
+    if (local_appdata != NULL && local_appdata[0] != '\0') {
+      join_runtime_path(local_appdata, "arksh/cache", shell->cache_dir, sizeof(shell->cache_dir));
+    }
+#else
+    const char *xdg = getenv("XDG_CACHE_HOME");
+    if (xdg != NULL && xdg[0] != '\0') {
+      join_runtime_path(xdg, "arksh", shell->cache_dir, sizeof(shell->cache_dir));
+    } else if (home != NULL && home[0] != '\0') {
+      join_runtime_path(home, ".cache/arksh", shell->cache_dir, sizeof(shell->cache_dir));
+    }
+#endif
+  }
+
+  if (resolve_dir_override(shell, "ARKSH_STATE_HOME", shell->state_dir, sizeof(shell->state_dir)) != 0) {
+#ifdef _WIN32
+    const char *local_appdata = getenv("LOCALAPPDATA");
+    if (local_appdata != NULL && local_appdata[0] != '\0') {
+      join_runtime_path(local_appdata, "arksh/state", shell->state_dir, sizeof(shell->state_dir));
+    }
+#else
+    const char *xdg = getenv("XDG_STATE_HOME");
+    if (xdg != NULL && xdg[0] != '\0') {
+      join_runtime_path(xdg, "arksh", shell->state_dir, sizeof(shell->state_dir));
+    } else if (home != NULL && home[0] != '\0') {
+      join_runtime_path(home, ".local/state/arksh", shell->state_dir, sizeof(shell->state_dir));
+    }
+#endif
+  }
+
+  if (resolve_dir_override(shell, "ARKSH_DATA_HOME", shell->data_dir, sizeof(shell->data_dir)) != 0) {
+#ifdef _WIN32
+    const char *local_appdata = getenv("LOCALAPPDATA");
+    if (local_appdata != NULL && local_appdata[0] != '\0') {
+      join_runtime_path(local_appdata, "arksh/data", shell->data_dir, sizeof(shell->data_dir));
+    }
+#else
+    const char *xdg = getenv("XDG_DATA_HOME");
+    if (xdg != NULL && xdg[0] != '\0') {
+      join_runtime_path(xdg, "arksh", shell->data_dir, sizeof(shell->data_dir));
+    } else if (home != NULL && home[0] != '\0') {
+      join_runtime_path(home, ".local/share/arksh", shell->data_dir, sizeof(shell->data_dir));
+    }
+#endif
+  }
+
+  if (resolve_dir_override(shell, "ARKSH_PLUGIN_HOME", shell->plugin_dir, sizeof(shell->plugin_dir)) != 0) {
+#ifdef _WIN32
+    const char *local_appdata = getenv("LOCALAPPDATA");
+    if (local_appdata != NULL && local_appdata[0] != '\0') {
+      join_runtime_path(local_appdata, "arksh/plugins", shell->plugin_dir, sizeof(shell->plugin_dir));
+    }
+#else
+    if (shell->data_dir[0] != '\0') {
+      join_runtime_path(shell->data_dir, "plugins", shell->plugin_dir, sizeof(shell->plugin_dir));
+    }
+#endif
+  }
+
+  if (shell->config_dir[0] == '\0' || shell->cache_dir[0] == '\0' || shell->state_dir[0] == '\0') {
+    build_legacy_arksh_dir(shell, base, sizeof(base));
+    if (base[0] != '\0') {
+      if (shell->config_dir[0] == '\0') {
+        copy_string(shell->config_dir, sizeof(shell->config_dir), base);
+      }
+      if (shell->cache_dir[0] == '\0') {
+        copy_string(shell->cache_dir, sizeof(shell->cache_dir), base);
+      }
+      if (shell->state_dir[0] == '\0') {
+        copy_string(shell->state_dir, sizeof(shell->state_dir), base);
+      }
+      if (shell->data_dir[0] == '\0') {
+        copy_string(shell->data_dir, sizeof(shell->data_dir), base);
+      }
+      if (shell->plugin_dir[0] == '\0') {
+        join_runtime_path(base, "plugins", shell->plugin_dir, sizeof(shell->plugin_dir));
+      }
+    }
+  }
+
+  if (shell->config_dir[0] != '\0') {
+    arksh_shell_set_var(shell, "ARKSH_CONFIG_DIR", shell->config_dir, 0);
+  }
+  if (shell->cache_dir[0] != '\0') {
+    arksh_shell_set_var(shell, "ARKSH_CACHE_DIR", shell->cache_dir, 0);
+  }
+  if (shell->state_dir[0] != '\0') {
+    arksh_shell_set_var(shell, "ARKSH_STATE_DIR", shell->state_dir, 0);
+  }
+  if (shell->data_dir[0] != '\0') {
+    arksh_shell_set_var(shell, "ARKSH_DATA_DIR", shell->data_dir, 0);
+  }
+  if (shell->plugin_dir[0] != '\0') {
+    arksh_shell_set_var(shell, "ARKSH_PLUGIN_DIR", shell->plugin_dir, 0);
+  }
+}
+
 static void resolve_history_path(ArkshShell *shell) {
   const char *env_path;
-  const char *home;
+  char legacy_dir[ARKSH_MAX_PATH];
 
   if (shell == NULL) {
     return;
@@ -5438,9 +5643,14 @@ static void resolve_history_path(ArkshShell *shell) {
     return;
   }
 
-  home = arksh_shell_get_var(shell, "HOME");
-  if (home != NULL && home[0] != '\0') {
-    snprintf(shell->history_path, sizeof(shell->history_path), "%s/.arksh/history", home);
+  if (shell->state_dir[0] != '\0' &&
+      join_runtime_path(shell->state_dir, "history", shell->history_path, sizeof(shell->history_path)) == 0) {
+    return;
+  }
+
+  build_legacy_arksh_dir(shell, legacy_dir, sizeof(legacy_dir));
+  if (legacy_dir[0] != '\0') {
+    join_runtime_path(legacy_dir, "history", shell->history_path, sizeof(shell->history_path));
   }
 }
 
@@ -6432,23 +6642,50 @@ static int command_prompt(ArkshShell *shell, int argc, char **argv, char *out, s
   return 1;
 }
 
-static int plugin_autoload_conf_path(ArkshShell *shell, char *out, size_t out_size) {
-  const char *home = arksh_shell_get_var(shell, "HOME");
-  if (home == NULL || home[0] == '\0') {
+static int plugin_autoload_conf_paths(
+  ArkshShell *shell,
+  char *primary,
+  size_t primary_size,
+  char *legacy,
+  size_t legacy_size
+) {
+  char legacy_dir[ARKSH_MAX_PATH];
+
+  if (shell == NULL) {
     return 1;
   }
-  snprintf(out, out_size, "%s/.arksh/plugins.conf", home);
-  return 0;
+
+  if (primary != NULL && primary_size > 0) {
+    primary[0] = '\0';
+  }
+  if (legacy != NULL && legacy_size > 0) {
+    legacy[0] = '\0';
+  }
+
+  if (primary != NULL && primary_size > 0 && shell->config_dir[0] != '\0') {
+    if (join_runtime_path(shell->config_dir, "plugins.conf", primary, primary_size) != 0) {
+      primary[0] = '\0';
+    }
+  }
+
+  if (legacy != NULL && legacy_size > 0) {
+    build_legacy_arksh_dir(shell, legacy_dir, sizeof(legacy_dir));
+    if (legacy_dir[0] != '\0' &&
+        join_runtime_path(legacy_dir, "plugins.conf", legacy, legacy_size) != 0) {
+      legacy[0] = '\0';
+    }
+  }
+
+  return (primary != NULL && primary[0] != '\0') || (legacy != NULL && legacy[0] != '\0') ? 0 : 1;
 }
 
-static int try_load_plugin_autoload(ArkshShell *shell) {
-  char conf_path[ARKSH_MAX_PATH];
+static int try_load_plugin_autoload_from(ArkshShell *shell, const char *conf_path) {
   char line[ARKSH_MAX_PATH];
   char trimmed[ARKSH_MAX_PATH];
   char plugin_output[ARKSH_MAX_OUTPUT];
   FILE *fp;
 
-  if (plugin_autoload_conf_path(shell, conf_path, sizeof(conf_path)) != 0) {
+  if (conf_path == NULL || conf_path[0] == '\0') {
     return 0;
   }
 
@@ -6466,6 +6703,24 @@ static int try_load_plugin_autoload(ArkshShell *shell) {
   }
 
   fclose(fp);
+  return 0;
+}
+
+static int try_load_plugin_autoload(ArkshShell *shell) {
+  char primary[ARKSH_MAX_PATH];
+  char legacy[ARKSH_MAX_PATH];
+
+  if (plugin_autoload_conf_paths(shell, primary, sizeof(primary), legacy, sizeof(legacy)) != 0) {
+    return 0;
+  }
+
+  if (primary[0] != '\0') {
+    try_load_plugin_autoload_from(shell, primary);
+  }
+  if (legacy[0] != '\0' && strcmp(primary, legacy) != 0) {
+    try_load_plugin_autoload_from(shell, legacy);
+  }
+
   return 0;
 }
 
@@ -6553,38 +6808,43 @@ static int command_plugin(ArkshShell *shell, int argc, char **argv, char *out, s
 
   if (strcmp(argv[1], "autoload") == 0) {
     char conf_path[ARKSH_MAX_PATH];
+    char legacy_conf_path[ARKSH_MAX_PATH];
     char dir_path[ARKSH_MAX_PATH];
 
-    if (plugin_autoload_conf_path(shell, conf_path, sizeof(conf_path)) != 0) {
-      snprintf(out, out_size, "plugin autoload: HOME not set");
+    if (plugin_autoload_conf_paths(shell, conf_path, sizeof(conf_path), legacy_conf_path, sizeof(legacy_conf_path)) != 0) {
+      snprintf(out, out_size, "plugin autoload: config directory unavailable");
       return 1;
     }
 
     /* plugin autoload list */
     if (argc < 3 || strcmp(argv[2], "list") == 0) {
-      FILE *fp = fopen(conf_path, "r");
+      FILE *fp = NULL;
       char line[ARKSH_MAX_PATH];
       char trimmed[ARKSH_MAX_PATH];
       int found = 0;
 
-      if (fp == NULL) {
-        snprintf(out, out_size, "no plugins configured for autoload");
-        return 0;
+      if (conf_path[0] != '\0') {
+        fp = fopen(conf_path, "r");
+      }
+      if (fp == NULL && legacy_conf_path[0] != '\0' && strcmp(conf_path, legacy_conf_path) != 0) {
+        fp = fopen(legacy_conf_path, "r");
       }
 
-      out[0] = '\0';
-      while (fgets(line, sizeof(line), fp) != NULL) {
-        trim_copy(line, trimmed, sizeof(trimmed));
-        if (trimmed[0] == '\0' || trimmed[0] == '#') {
-          continue;
+      if (fp != NULL) {
+        out[0] = '\0';
+        while (fgets(line, sizeof(line), fp) != NULL) {
+          trim_copy(line, trimmed, sizeof(trimmed));
+          if (trimmed[0] == '\0' || trimmed[0] == '#') {
+            continue;
+          }
+          if (found) {
+            strncat(out, "\n", out_size - strlen(out) - 1);
+          }
+          strncat(out, trimmed, out_size - strlen(out) - 1);
+          found = 1;
         }
-        if (found) {
-          strncat(out, "\n", out_size - strlen(out) - 1);
-        }
-        strncat(out, trimmed, out_size - strlen(out) - 1);
-        found = 1;
+        fclose(fp);
       }
-      fclose(fp);
 
       if (!found) {
         snprintf(out, out_size, "no plugins configured for autoload");
@@ -6605,12 +6865,16 @@ static int command_plugin(ArkshShell *shell, int argc, char **argv, char *out, s
         return 1;
       }
 
-      if (arksh_platform_resolve_path(shell->cwd, argv[3], resolved, sizeof(resolved)) != 0) {
+      if (arksh_shell_resolve_plugin_path(shell, argv[3], resolved, sizeof(resolved)) != 0) {
         snprintf(out, out_size, "unable to resolve path: %s", argv[3]);
         return 1;
       }
 
-      /* ensure ~/.arksh/ directory exists */
+      if (conf_path[0] == '\0') {
+        copy_string(conf_path, sizeof(conf_path), legacy_conf_path);
+      }
+
+      /* ensure config directory exists */
       arksh_platform_dirname(conf_path, dir_path, sizeof(dir_path));
       arksh_platform_ensure_directory(dir_path);
 
@@ -6660,9 +6924,13 @@ static int command_plugin(ArkshShell *shell, int argc, char **argv, char *out, s
         return 1;
       }
 
-      have_resolved = (arksh_platform_resolve_path(shell->cwd, argv[3], resolved, sizeof(resolved)) == 0);
+      have_resolved = (arksh_shell_resolve_plugin_path(shell, argv[3], resolved, sizeof(resolved)) == 0);
 
       fp = fopen(conf_path, "r");
+      if (fp == NULL && legacy_conf_path[0] != '\0' && strcmp(conf_path, legacy_conf_path) != 0) {
+        copy_string(conf_path, sizeof(conf_path), legacy_conf_path);
+        fp = fopen(conf_path, "r");
+      }
       if (fp == NULL) {
         snprintf(out, out_size, "no autoload config found");
         return 1;
@@ -7327,6 +7595,70 @@ static int command_history(ArkshShell *shell, int argc, char **argv, char *out, 
   }
 
   return 0;
+}
+
+static int command_perf(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  ArkshPerfCounters counters;
+  const char *action = argc >= 2 ? argv[1] : "show";
+
+  (void) shell;
+
+  if (out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  out[0] = '\0';
+
+  if (strcmp(action, "show") == 0 || strcmp(action, "status") == 0) {
+    arksh_perf_snapshot(&counters);
+    snprintf(
+      out,
+      out_size,
+      "enabled=%d\n"
+      "malloc_calls=%llu\n"
+      "calloc_calls=%llu\n"
+      "realloc_calls=%llu\n"
+      "free_calls=%llu\n"
+      "malloc_bytes=%llu\n"
+      "calloc_bytes=%llu\n"
+      "realloc_bytes=%llu\n"
+      "temp_buffer_calls=%llu\n"
+      "temp_buffer_bytes=%llu\n"
+      "value_copy_calls=%llu\n"
+      "value_render_calls=%llu",
+      counters.enabled,
+      counters.malloc_calls,
+      counters.calloc_calls,
+      counters.realloc_calls,
+      counters.free_calls,
+      counters.malloc_bytes,
+      counters.calloc_bytes,
+      counters.realloc_bytes,
+      counters.temp_buffer_calls,
+      counters.temp_buffer_bytes,
+      counters.value_copy_calls,
+      counters.value_render_calls
+    );
+    return 0;
+  }
+
+  if (strcmp(action, "on") == 0 || strcmp(action, "enable") == 0) {
+    arksh_perf_enable(1);
+    return 0;
+  }
+
+  if (strcmp(action, "off") == 0 || strcmp(action, "disable") == 0) {
+    arksh_perf_enable(0);
+    return 0;
+  }
+
+  if (strcmp(action, "reset") == 0) {
+    arksh_perf_reset();
+    return 0;
+  }
+
+  snprintf(out, out_size, "usage: perf [show|status|on|off|reset]");
+  return 1;
 }
 
 static int command_jobs(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
@@ -8853,6 +9185,7 @@ static int register_builtin_commands(ArkshShell *shell) {
   if (register_builtin(shell, "alias",   "list or define aliases",                    command_alias,   ARKSH_BUILTIN_MIXED) != 0 ||
       register_builtin(shell, "extend",  "list or define object/value extensions",    command_extend,  ARKSH_BUILTIN_MIXED) != 0 ||
       register_builtin(shell, "let",     "list or create typed value bindings",       command_let,     ARKSH_BUILTIN_MIXED) != 0 ||
+      register_builtin(shell, "perf",    "show or control lightweight core counters", command_perf,    ARKSH_BUILTIN_MIXED) != 0 ||
       register_builtin(shell, "plugin",  "load, inspect or toggle plugins",           command_plugin,  ARKSH_BUILTIN_MIXED) != 0 ||
       register_builtin(shell, "prompt",  "show or load prompt configuration",        command_prompt,  ARKSH_BUILTIN_MIXED) != 0) {
     return 1;
@@ -9726,7 +10059,7 @@ static int register_builtin_extensions(ArkshShell *shell) {
 
 static int try_load_default_config(ArkshShell *shell) {
   const char *env_path = getenv("ARKSH_CONFIG");
-  const char *home = arksh_shell_get_var(shell, "HOME");
+  char legacy_dir[ARKSH_MAX_PATH];
   char path[ARKSH_MAX_PATH];
   char output[ARKSH_MAX_OUTPUT];
 
@@ -9740,8 +10073,16 @@ static int try_load_default_config(ArkshShell *shell) {
     return 0;
   }
 
-  if (home != NULL && home[0] != '\0') {
-    snprintf(path, sizeof(path), "%s/.arksh/prompt.conf", home);
+  if (shell->config_dir[0] != '\0' &&
+      join_runtime_path(shell->config_dir, "prompt.conf", path, sizeof(path)) == 0) {
+    if (arksh_shell_load_config(shell, path, output, sizeof(output)) == 0) {
+      return 0;
+    }
+  }
+
+  build_legacy_arksh_dir(shell, legacy_dir, sizeof(legacy_dir));
+  if (legacy_dir[0] != '\0' &&
+      join_runtime_path(legacy_dir, "prompt.conf", path, sizeof(path)) == 0) {
     if (arksh_shell_load_config(shell, path, output, sizeof(output)) == 0) {
       return 0;
     }
@@ -9753,6 +10094,7 @@ static int try_load_default_config(ArkshShell *shell) {
 static int try_load_default_rc(ArkshShell *shell) {
   const char *env_path = getenv("ARKSH_RC");
   const char *home = arksh_shell_get_var(shell, "HOME");
+  char legacy_path[ARKSH_MAX_PATH];
   char path[ARKSH_MAX_PATH];
   char output[ARKSH_MAX_OUTPUT];
 
@@ -9763,12 +10105,23 @@ static int try_load_default_rc(ArkshShell *shell) {
     return 0;
   }
 
-  if (home == NULL || home[0] == '\0') {
+  if (shell->config_dir[0] != '\0' &&
+      join_runtime_path(shell->config_dir, "arkshrc", path, sizeof(path)) == 0) {
+    if (arksh_shell_source_file(shell, path, 0, NULL, output, sizeof(output)) == 0) {
+      return 0;
+    }
+    if (strstr(output, "unable to open source file") == NULL) {
+      fprintf(stderr, "arksh: %s\n", output);
+      return 0;
+    }
+  }
+
+  if (home == NULL || home[0] == '\0' ||
+      join_runtime_path(home, ".arkshrc", legacy_path, sizeof(legacy_path)) != 0) {
     return 0;
   }
 
-  snprintf(path, sizeof(path), "%s/.arkshrc", home);
-  if (arksh_shell_source_file(shell, path, 0, NULL, output, sizeof(output)) != 0 &&
+  if (arksh_shell_source_file(shell, legacy_path, 0, NULL, output, sizeof(output)) != 0 &&
       strstr(output, "unable to open source file") == NULL) {
     fprintf(stderr, "arksh: %s\n", output);
   }
@@ -9777,6 +10130,8 @@ static int try_load_default_rc(ArkshShell *shell) {
 }
 
 int arksh_shell_init(ArkshShell *shell) {
+  const char *perf_env;
+
   if (shell == NULL) {
     return 1;
   }
@@ -9788,6 +10143,8 @@ int arksh_shell_init(ArkshShell *shell) {
   shell->next_job_id = 1;
   shell->loading_plugin_index = -1;
   shell->last_bg_pid = -1;
+  perf_env = getenv("ARKSH_PERF");
+  arksh_perf_enable(perf_env != NULL && perf_env[0] != '\0' && strcmp(perf_env, "0") != 0);
   {
     ArkshPlatformProcessInfo proc_info;
     memset(&proc_info, 0, sizeof(proc_info));
@@ -9803,6 +10160,7 @@ int arksh_shell_init(ArkshShell *shell) {
 
   arksh_prompt_config_init(&shell->prompt);
   initialize_default_variables(shell);
+  resolve_runtime_directories(shell);
   resolve_history_path(shell);
   load_history(shell);
 
@@ -9996,6 +10354,7 @@ void arksh_shell_print_help(const ArkshShell *shell, char *out, size_t out_size)
     "  classes Document\n"
     "  extend\n"
     "  history\n"
+    "  perf show\n"
     "  sleep 5 &\n"
     "  jobs\n"
     "  fg\n"
@@ -10011,7 +10370,7 @@ void arksh_shell_print_help(const ArkshShell *shell, char *out, size_t out_size)
     "  switch . -> type ; case \"directory\" ; then text(\"dir\") -> print() ; default ; then text(\"other\") -> print() ; endswitch\n"
     "  for entry in . -> children() |> take(3) ; do entry -> name ; done\n"
     "  greet team\n"
-    "  source ~/.arkshrc\n"
+    "  source $ARKSH_CONFIG_DIR/arkshrc\n"
     "  type ls\n"
     "  plugin list\n"
     "  plugin disable sample-plugin\n"

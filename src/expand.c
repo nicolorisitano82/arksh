@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "arksh/expand.h"
+#include "arksh/perf.h"
 #include "arksh/platform.h"
 #include "arksh/shell.h"
 

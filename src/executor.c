@@ -8,6 +8,7 @@
 #include "arksh/lexer.h"
 #include "arksh/object.h"
 #include "arksh/parser.h"
+#include "arksh/perf.h"
 #include "arksh/platform.h"
 #include "arksh/shell.h"
 
@@ -122,6 +123,7 @@ static void *allocate_temp_buffer(size_t count, size_t item_size, const char *la
     return NULL;
   }
 
+  arksh_perf_note_temp_buffer(count, item_size);
   buffer = calloc(count, item_size);
   if (buffer == NULL && out != NULL && out_size > 0) {
     snprintf(out, out_size, "unable to allocate %s", label == NULL ? "temporary buffer" : label);

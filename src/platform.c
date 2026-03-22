@@ -23,6 +23,7 @@
 #endif
 
 #include "arksh/ast.h"
+#include "arksh/perf.h"
 #include "arksh/platform.h"
 
 #ifndef _WIN32

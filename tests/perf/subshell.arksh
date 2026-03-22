@@ -1,0 +1,9 @@
+perf reset
+set MODE outer
+
+for round in list(1, 2, 3, 4, 5, 6, 7, 8)
+do
+( set MODE inner ; let kind = . -> type ; let pid = proc() -> pid )
+done
+
+perf show

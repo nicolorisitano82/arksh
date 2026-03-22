@@ -228,6 +228,11 @@ typedef struct ArkshShell {
   char cwd[ARKSH_MAX_PATH];
   char program_path[ARKSH_MAX_PATH];
   char executable_path[ARKSH_MAX_PATH];
+  char config_dir[ARKSH_MAX_PATH];
+  char cache_dir[ARKSH_MAX_PATH];
+  char state_dir[ARKSH_MAX_PATH];
+  char data_dir[ARKSH_MAX_PATH];
+  char plugin_dir[ARKSH_MAX_PATH];
   int inherited_input_active;
   ArkshRedirectionNode inherited_input_redirection;
   ArkshPromptConfig prompt;
@@ -293,6 +298,7 @@ void arksh_shell_print_help(const ArkshShell *shell, char *out, size_t out_size)
 void arksh_shell_set_program_path(ArkshShell *shell, const char *path);
 int arksh_shell_load_config(ArkshShell *shell, const char *path, char *out, size_t out_size);
 int arksh_shell_load_plugin(ArkshShell *shell, const char *path, char *out, size_t out_size);
+int arksh_shell_resolve_plugin_path(const ArkshShell *shell, const char *query, char *out, size_t out_size);
 const char *arksh_shell_get_var(const ArkshShell *shell, const char *name);
 int arksh_shell_set_var(ArkshShell *shell, const char *name, const char *value, int exported);
 int arksh_shell_unset_var(ArkshShell *shell, const char *name);

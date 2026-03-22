@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 
 project(arksh VERSION 0.1.0 LANGUAGES C)
 
+include(GNUInstallDirs)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
@@ -70,6 +72,7 @@ add_library(arksh_core STATIC
   src/lexer.c
   src/object.c
   src/parser.c
+  src/perf.c
   src/platform.c
   src/plugin.c
   src/prompt.c
@@ -78,12 +81,47 @@ add_library(arksh_core STATIC
 
 target_include_directories(arksh_core PUBLIC include)
 
+if(WIN32)
+  set(ARKSH_PLUGIN_INSTALL_DIR "${CMAKE_INSTALL_BINDIR}/plugins")
+  set(ARKSH_RUNTIME_PLUGIN_RELDIR "plugins")
+else()
+  set(ARKSH_PLUGIN_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/arksh/plugins")
+  set(ARKSH_RUNTIME_PLUGIN_RELDIR "../${CMAKE_INSTALL_LIBDIR}/arksh/plugins")
+endif()
+
+target_compile_definitions(arksh_core PUBLIC
+  ARKSH_RUNTIME_PLUGIN_RELDIR="${ARKSH_RUNTIME_PLUGIN_RELDIR}"
+)
+
 if(NOT WIN32)
   target_link_libraries(arksh_core PUBLIC dl)
 endif()
 
 add_executable(arksh src/main.c)
 target_link_libraries(arksh PRIVATE arksh_core)
+
+add_executable(arksh_perf_runner tests/perf_runner.c)
+target_link_libraries(arksh_perf_runner PRIVATE arksh_core)
+
+if(WIN32)
+  add_custom_target(arksh_perf
+    COMMAND ${CMAKE_COMMAND} -E echo "arksh_perf is currently supported on POSIX hosts only"
+    DEPENDS arksh arksh_perf_runner
+    USES_TERMINAL
+  )
+else()
+  add_custom_target(arksh_perf
+    COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> startup command "perf show"
+    COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> object-pipeline script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/object-pipeline.arksh"
+    COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> json-structured script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/json-structured.arksh"
+    COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> function-scope script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/function-scope.arksh"
+    COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> subshell script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/subshell.arksh"
+    COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> command-substitution script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/command-substitution.arksh"
+    DEPENDS arksh arksh_perf_runner
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    USES_TERMINAL
+  )
+endif()
 
 function(arksh_add_plugin target_name source_file)
   add_library(${target_name} MODULE ${source_file})
@@ -115,6 +153,38 @@ elseif(WIN32)
   target_link_libraries(arksh_trash_plugin PRIVATE Shell32)
 endif()
 
+install(TARGETS arksh
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  BUNDLE DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(TARGETS
+  arksh_sample_plugin
+  arksh_skeleton_plugin
+  arksh_point_plugin
+  arksh_trash_plugin
+  LIBRARY DESTINATION ${ARKSH_PLUGIN_INSTALL_DIR}
+  RUNTIME DESTINATION ${ARKSH_PLUGIN_INSTALL_DIR}
+  BUNDLE DESTINATION ${ARKSH_PLUGIN_INSTALL_DIR}
+)
+
+install(FILES
+  examples/arkshrc
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/arksh/examples
+  RENAME arkshrc.example
+)
+
+install(FILES
+  examples/arksh.conf
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/arksh/examples
+  RENAME prompt.conf.example
+)
+
+install(DIRECTORY
+  examples/scripts
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/arksh/examples
+)
+
 include(CTest)
 
 if(BUILD_TESTING)
@@ -144,6 +214,19 @@ if(BUILD_TESTING)
   endif()
 
   file(COPY tests/fixtures DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tests")
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home")
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty")
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/runtime/state-home")
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/examples/arkshrc"
+    "${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home/arkshrc"
+    COPYONLY
+  )
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/examples/arksh.conf"
+    "${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home/prompt.conf"
+    COPYONLY
+  )
 
   if(WIN32)
     set(ARKSH_TEST_EMIT "arksh_test_emit_args.exe")
@@ -254,6 +337,38 @@ if(BUILD_TESTING)
   add_test(NAME arksh_pipeline_pluck COMMAND arksh -c "list(map(\"name\", \"alpha\"), map(\"name\", \"beta\")) |> pluck(\"name\") |> join(\",\")")
   add_test(NAME arksh_plugin_value_resolver COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_sample_plugin> ; sample() -> name")
   add_test(NAME arksh_plugin_pipeline_stage COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_sample_plugin> ; text(\"ciao\") |> sample_wrap()")
+  add_test(NAME arksh_standard_rc_dir COMMAND arksh -c "type docs")
+  set_tests_properties(arksh_standard_rc_dir PROPERTIES
+    ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;USERPROFILE=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;ARKSH_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_standard_state_dir COMMAND arksh -c "shell() -> history_path")
+  set_tests_properties(arksh_standard_state_dir PROPERTIES
+    ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;USERPROFILE=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;ARKSH_STATE_HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/state-home"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    PASS_REGULAR_EXPRESSION "state-home.*history"
+  )
+  add_test(NAME arksh_standard_plugin_dir COMMAND arksh -c "plugin load sample-plugin ; plugin info sample-plugin")
+  set_tests_properties(arksh_standard_plugin_dir PROPERTIES
+    ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;USERPROFILE=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;ARKSH_PLUGIN_HOME=${CMAKE_CURRENT_BINARY_DIR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    PASS_REGULAR_EXPRESSION "name=sample-plugin"
+  )
+  add_test(NAME arksh_standard_plugin_autoload_set COMMAND arksh -c "plugin autoload set sample-plugin ; plugin autoload list")
+  set_tests_properties(arksh_standard_plugin_autoload_set PROPERTIES
+    ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;USERPROFILE=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;ARKSH_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home;ARKSH_PLUGIN_HOME=${CMAKE_CURRENT_BINARY_DIR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    PASS_REGULAR_EXPRESSION "arksh_sample_plugin"
+  )
+  add_test(NAME arksh_perf_builtin_show COMMAND arksh -c "perf on ; perf reset ; . -> type ; perf show")
+  set_tests_properties(arksh_perf_builtin_show PROPERTIES
+    PASS_REGULAR_EXPRESSION "enabled=1"
+  )
+  add_test(NAME arksh_perf_runner_smoke COMMAND arksh_perf_runner $<TARGET_FILE:arksh> startup command "perf show")
+  set_tests_properties(arksh_perf_runner_smoke PROPERTIES
+    PASS_REGULAR_EXPRESSION "case=startup"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
   add_test(NAME arksh_positional_in_function COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/positional-in-function.arksh")
   add_test(NAME arksh_positional_count COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-count.arksh")
   add_test(NAME arksh_positional_all COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-all.arksh")
