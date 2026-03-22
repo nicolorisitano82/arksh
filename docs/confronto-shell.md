@@ -2,6 +2,8 @@
 
 Questo documento confronta `arksh` con le shell Unix più diffuse lungo le dimensioni che ne definiscono il posizionamento: modello dei dati, ergonomia interattiva, scripting e portabilità.
 
+Stato del confronto: repository aggiornato al `2026-03-22`.
+
 Le shell analizzate sono: **bash**, **zsh**, **fish**, **nushell**, **dash** e **arksh**.
 
 ---
@@ -12,7 +14,7 @@ Le shell analizzate sono: **bash**, **zsh**, **fish**, **nushell**, **dash** e *
 |------------------------|-------------------|--------------------|--------------------|--------------------|--------------------|--------------------|
 | Anno di prima release  | 1989              | 1990               | 2005               | 2019               | 1997               | 2026               |
 | Linguaggio principale  | C                 | C                  | C++                | Rust               | C                  | C (C11)            |
-| Standard di riferimento| POSIX + GNU ext.  | POSIX + Zsh ext.   | Proprio            | Proprio            | POSIX stretto      | Proprio            |
+| Standard di riferimento| POSIX + GNU ext.  | POSIX + Zsh ext.   | Proprio            | Proprio            | POSIX stretto      | Proprio + core POSIX parziale |
 | Licenza                | GPL 3             | MIT-like (vari)    | GPL 2              | MIT                | BSD                | MIT                |
 | Portabilità OS         | Linux, macOS, Win | Linux, macOS       | Linux, macOS, Win  | Linux, macOS, Win  | Linux, macOS, Unix | Linux, macOS, Win  |
 | Shell di login default | Linux (comune)    | macOS (da 10.15)   | Opzionale          | Opzionale          | Debian `/bin/sh`   | No                 |
@@ -26,19 +28,19 @@ La dimensione più importante per capire il posizionamento di arksh.
 | Caratteristica                    | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |-----------------------------------|--------|--------|--------|---------|--------|--------|
 | Tipo di dato nativo               | Stringa| Stringa| Stringa| Strutturato | Stringa | Object-aware |
-| Interi nativi                     | Si (`$((...))`) | Si | No | Si | No | Si (`Integer`, `Float`, `Double`, `Imaginary`; aritmetica type-aware con promozione) |
+| Interi nativi                     | Si (`$((...))`) | Si | No | Si | No | Si (`$((...))` + `Integer`, `Float`, `Double`, `Imaginary`; aritmetica type-aware con promozione) |
 | Liste native                      | Array indicizzati | Array + hash | Liste | Liste tipizzate | No | `list(...)` object-aware |
 | Dizionari / mappe native          | Array associativi (bash 4+) | Hash | No | Record strutturati | No | `map(...)` typed-map; `Dict()` immutabile con API chiara (`set`, `get`, `has`, `delete`, `keys`, `values`, bridge JSON); `Matrix(col...)` tabella bidimensionale con `add_row`, `select`, `where`, `to_csv`, `to_json` (E6-S8) |
 | Booleani come tipo                | No (0/1 o stringhe) | No | No | Si | No | Si (`true`, `false`, `bool(...)`) |
 | Oggetti filesystem come tipo      | No     | No     | No     | Si (LS restituisce tabella) | No | Si (file, directory, device, mount) |
-| Namespace di sistema built-in     | No     | No     | No     | Parziale | No | Si (`fs()`, `user()`, `sys()`, `time()`) |
+| Namespace di sistema built-in     | No     | No     | No     | Parziale | No | Si (`fs()`, `user()`, `sys()`, `time()`, `env()`, `proc()`, `shell()`) |
 | Proprietà su oggetti (`-> size`)  | No     | No     | No     | Colonne nella tabella | No | Si, con sintassi `path -> property` |
 | Metodi su oggetti (`-> children()`)| No    | No     | No     | Comandi | No | Si, con sintassi `path -> method()` |
 | Block / closure come valori       | No     | No     | No     | Block (limitati) | No | Si, Smalltalk-style `[:x \| body]` |
-| JSON nativo                       | No (jq esterno) | No | No | Si | No | Si (`to_json`, `from_json`, `read_json`, `write_json`) |
+| JSON nativo                       | No (jq esterno) | No | No | Si | No | Si (`to_json`, `from_json`, `read_json`, `write_json`, query `get_path`/`set_path`/`pluck`) |
 | Classi definibili dall'utente     | No     | No     | No     | No      | No     | Si (`class ... endclass`) |
 | Ereditarietà                      | No     | No     | No     | No      | No     | Si, multipla a precedenza sinistra |
-| Tipi custom da plugin             | No     | No     | No     | Parziale | No    | Si (typed-map con `register_type_descriptor`, ABI v4) |
+| Tipi custom da plugin             | No     | No     | No     | Parziale | No    | Si (typed-map con `register_type_descriptor`, ABI v4 usata nel core plugin) |
 | Estensioni di tipo runtime        | No     | No     | No     | No      | No     | Si (`extend target property/method`) |
 
 ---
@@ -84,7 +86,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 
 | Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
-| Sintassi compatibile POSIX             | Largamente | Largamente | No  | No     | Si (stretto) | Alta |
+| Sintassi compatibile POSIX             | Largamente | Largamente | No  | No     | Si (stretto) | Parziale avanzata |
 | `VAR=value` standalone assignment      | Si     | Si     | Si     | Si      | Si     | Si     |
 | `VAR=val cmd` env-prefix               | Si     | Si     | Si     | Si      | Si     | Si     |
 | `if` / `while` / `for`                 | Si     | Si     | Si     | Si      | Si     | Si     |
@@ -92,7 +94,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 | `case` pattern `word)` e `(word)`      | Si     | Si     | —      | —       | Si     | Si     |
 | Funzioni con sintassi POSIX `f() {}`   | Si     | Si     | No     | No      | Si     | Si     |
 | Funzioni con parametri nominali        | No     | No     | No     | Si      | No     | Si (`function f(a b) do ... endfunction`) |
-| Scope locale per variabili (`local`)   | Parziale | Si   | Si     | Si      | Parziale | Si   |
+| Scope locale per variabili (`local`)   | Parziale | Si   | Si     | Si      | Parziale | Si (funzioni e block) |
 | `shift [n]` / `set -- args`           | Si     | Si     | No     | No      | Si     | Si     |
 | Funzioni come valori                   | No     | No     | No     | Si      | No     | Parziale (block sono valori) |
 | Override di built-in con funzioni      | Si     | Si     | Si     | Si      | Si     | Si + `builtin` per escape |
@@ -100,14 +102,15 @@ La dimensione più importante per capire il posizionamento di arksh.
 | `eval`                                 | Si     | Si     | Si (limitato) | Si | Si | Si |
 | `exec`                                 | Si     | Si     | Si     | Parziale | Si | Si |
 | Heredoc (`<<`, `<<-`)                  | Si     | Si     | Si     | Si      | Si     | Si |
-| `set -e` / `-u` / `-x` / `-o`         | Si     | Si     | No     | No      | Si     | Si (`errexit`, `nounset`, `xtrace`, `pipefail`) |
+| `set -e` / `-u` / `-x` / `-o`         | Si     | Si     | No     | No      | Si     | Parziale (`errexit`, `nounset`, `xtrace`; `pipefail` da chiudere) |
 | `read` built-in                        | Si     | Si     | Si     | Si      | Si     | Si (`-r -p -t -n`, IFS splitting) |
 | `printf` built-in                      | Si     | Si     | Si     | Si      | Si     | Si (spec POSIX §2.2.3, padding, escape) |
 | `echo -e` / `-n`                       | Si     | Si     | Si     | Si      | Parziale | Si |
 | `readonly`                             | Si     | Si     | No     | Si      | Si     | Si |
-| `getopts` built-in                     | Si     | Si     | No     | No      | Si     | Si (POSIX, silent mode, `OPTIND`/`OPTARG`) |
-| `test` / `[` completi                  | Si     | Si     | Si     | Si      | Si     | Si (file, stringa, aritmetica, `-a -o !`) |
-| `$((...))` arithmetic expansion        | Si     | Si     | `math` | Nativi  | Si     | Parziale (in value expr; non in argomenti shell) |
+| `getopts` built-in                     | Si     | Si     | No     | No      | Si     | Si (POSIX base, `OPTIND`/`OPTARG`) |
+| `ulimit` / `umask`                     | Si     | Si     | No     | No      | Si     | No / da completare |
+| `test` / `[` completi                  | Si     | Si     | Si     | Si      | Si     | Parziale avanzato (stringa, numerico, logici; primari POSIX ancora da chiudere) |
+| `$((...))` arithmetic expansion        | Si     | Si     | `math` | Nativi  | Si     | Si |
 | Operatore ternario                     | No     | No     | No     | `if` inline | No | Si (`? :`) |
 | Classi / tipi custom                   | No     | No     | No     | No      | No     | Si |
 
@@ -132,15 +135,15 @@ La dimensione più importante per capire il posizionamento di arksh.
 
 | Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
-| Plugin / moduli di terze parti         | No (solo script) | Si (zplug, zinit, ecc.) | Si (fisher, oh-my-fish) | Si (moduli) | No | Si (ABI C stabile) |
+| Plugin / moduli di terze parti         | No (solo script) | Si (zplug, zinit, ecc.) | Si (fisher, oh-my-fish) | Si (moduli) | No | Si (ABI C già usata; versioning formale ancora in backlog) |
 | Aggiungere comandi da plugin           | Script | Script | Script | Script/plugin | No | Si (libreria dinamica) |
 | Aggiungere tipi / resolver da plugin   | No     | No     | No     | Parziale | No | Si (typed-map con `register_type_descriptor`, ABI v4) |
 | Aggiungere stage pipeline da plugin    | No     | No     | No     | Parziale | No | Si (con descrizione; visibili in `help stages`) |
 | Aggiungere proprietà/metodi oggetto    | No     | No     | No     | No      | No     | Si (su tipi built-in e su tipi custom del plugin) |
 | Introspezione metadati a runtime       | No     | No     | No     | Parziale | No     | Si (`help commands\|resolvers\|stages\|types`, `help <name>`) |
 | Framework di configurazione community  | Oh My Bash | Oh My Zsh, Prezto | Oh My Fish | Parziale | No | No (early stage) |
-| Caricamento RC all'avvio               | `~/.bashrc` / `~/.bash_profile` | `~/.zshrc` | `~/.config/fish/config.fish` | `~/.config/nushell/config.nu` | `~/.profile` | `~/.arkshrc` / `ARKSH_RC` |
-| Autoload plugin all'avvio              | No (manuale in RC) | Si (via plugin manager) | Si (via fisher) | Si (moduli) | No | Si (`~/.arksh/plugins.conf`; gestibile con `plugin autoload set/unset/list`) |
+| Caricamento RC all'avvio               | `~/.bashrc` / `~/.bash_profile` | `~/.zshrc` | `~/.config/fish/config.fish` | `~/.config/nushell/config.nu` | `~/.profile` | `ARKSH_RC`, poi config dir standard, poi fallback `~/.arkshrc` |
+| Autoload plugin all'avvio              | No (manuale in RC) | Si (via plugin manager) | Si (via fisher) | Si (moduli) | No | Si (config dir standard + `plugin autoload set/unset/list`) |
 
 ---
 
@@ -154,8 +157,8 @@ La dimensione più importante per capire il posizionamento di arksh.
 | Binario singolo                | Si     | Si     | No (richiede libs) | Si | Si | Si |
 | Dipendenze a runtime           | libc, readline | libc, ncurses | vari | libc | libc | libc |
 | Scripting cross-platform nativo| No (POSIX non su Windows) | No | Parziale | Si | No | Si (stesso codice) |
-| Adatto come shell di sistema   | Si     | Si     | No     | No      | Si (minimalismo) | No |
-| Adatto come shell interattiva  | Si     | Si (ottima) | Si (ottima) | Si (ottima) | No (minima) | Si (in sviluppo) |
+| Adatto come shell di sistema   | Si     | Si     | No     | No      | Si (minimalismo) | Non ancora |
+| Adatto come shell interattiva  | Si     | Si (ottima) | Si (ottima) | Si (ottima) | No (minima) | Si (gia usabile, ancora in evoluzione) |
 
 ---
 
@@ -176,7 +179,7 @@ Asse 2: Scripting puro                    ←———————————�
 | fish    | UX out-of-the-box eccellente, highlighting nativo  | Rompe POSIX, nessun tipo strutturato           |
 | nushell | Dati strutturati, pipeline tipizzate               | Rottura totale con shell classica, no classi   |
 | dash    | Velocità, POSIX stretto, shell di sistema          | Nessuna funzione interattiva                   |
-| arksh   | Object model + pipeline tipizzate + tipi numerici espliciti + encoding base64 nativo + tipo Matrix per dati tabulari + cestino di sistema via plugin + autoload plugin configurabile + esecuzione diretta di script (`arksh file.arksh`) + compatibilità POSIX + UX interattiva | Ancora in sviluppo, ecosistema piccolo, non ancora adatto come shell di sistema |
+| arksh   | Object model + pipeline tipizzate + namespace di sistema + tipi numerici espliciti + JSON nativo + Matrix/Dict + plugin ABI in C + UX interattiva + base POSIX gia ampia | Ecosistema piccolo, backlog POSIX ancora aperto, non ancora shell di sistema |
 
 ---
 
@@ -188,13 +191,13 @@ Nushell è la shell che si avvicina di più al posizionamento di arksh. Le diffe
 |-------------------------------------|------------------------------------------|------------------------------------------------|
 | Modello dati                        | Tabelle e record strutturati             | Oggetti filesystem + tipi scalari + classi     |
 | Sintassi                            | Propria (rompe completamente con POSIX)  | Shell-compatibile su `;`, `&&`, `\|`, redirection |
-| Compatibilità script POSIX          | Nessuna                                  | Alta (`VAR=val`, `f() {}`, `case`, `shift`, `local`, `trap`, `getopts`, …) |
+| Compatibilità script POSIX          | Nessuna                                  | Parziale avanzata (`VAR=val`, `f() {}`, `case`, `shift`, `local`, `trap`, `getopts`, `$((...))`, …) |
 | Funzioni con parametri nominali     | Si                                       | Si (`function f(a b) do ... endfunction`)      |
 | Funzioni POSIX `f() { ... }`        | No                                       | Si                                             |
 | Classi definibili dall'utente       | No                                       | Si                                             |
 | Estensioni di tipo runtime          | No                                       | Si (`extend`)                                  |
 | Linguaggio implementazione          | Rust                                     | C11 (portabile, embeddable)                    |
-| Plugin in linguaggio nativo         | Si (Rust o via protocollo)               | Si (C, ABI stabile)                            |
+| Plugin in linguaggio nativo         | Si (Rust o via protocollo)               | Si (C, ABI v4 già usata; formalizzazione release ancora aperta) |
 | Integrazione filesystem come oggetti| Parziale (LS come tabella)               | Completa (ogni path è un oggetto interrogabile)|
 | JSON                                | Si (nativo)                              | Si (nativo)                                    |
 | Ereditarietà / OOP                  | No                                       | Si (classi con ereditarietà multipla)          |

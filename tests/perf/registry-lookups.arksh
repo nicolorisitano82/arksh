@@ -1,0 +1,19 @@
+perf reset
+
+class PerfWide do
+  property name = text("perf")
+  method echo = [:self | self -> name]
+endclass
+
+for round in list(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+do
+  type help
+  type PerfWide
+  let home = env() -> HOME
+  let loaded = shell() -> plugins
+  let instance = PerfWide()
+  let echoed = instance -> echo()
+  let total = list(1, 2, 3) |> count()
+done
+
+perf show

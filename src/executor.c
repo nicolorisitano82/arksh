@@ -259,20 +259,7 @@ static int plugin_index_is_active(const ArkshShell *shell, int plugin_index) {
 }
 
 static const ArkshCommandDef *find_registered_command(const ArkshShell *shell, const char *name) {
-  size_t i;
-
-  if (shell == NULL || name == NULL) {
-    return NULL;
-  }
-
-  for (i = 0; i < shell->command_count; ++i) {
-    if (strcmp(shell->commands[i].name, name) == 0 &&
-        (!shell->commands[i].is_plugin_command || plugin_index_is_active(shell, shell->commands[i].owner_plugin_index))) {
-      return &shell->commands[i];
-    }
-  }
-
-  return NULL;
+  return arksh_shell_find_command(shell, name);
 }
 
 static int write_text_file(const char *path, const char *text, int append, char *out, size_t out_size) {

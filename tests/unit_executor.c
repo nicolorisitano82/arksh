@@ -264,6 +264,48 @@ static void test_block_with_param(void) {
   arksh_value_free(&args[0]);
 }
 
+static void test_dynamic_class_member_tables(void) {
+  ArkshClassCommandNode node;
+  const ArkshClassDef *class_def;
+  char body[ARKSH_MAX_LINE];
+  char out[ARKSH_MAX_OUTPUT];
+  size_t used = 0;
+  int i;
+
+  memset(&node, 0, sizeof(node));
+  memset(body, 0, sizeof(body));
+  strcpy(node.name, "DynamicCapacity");
+  strcpy(node.source, "class DynamicCapacity do ... endclass");
+
+  for (i = 1; i <= 33; ++i) {
+    int written = snprintf(body + used, sizeof(body) - used, "property p%02d = %d\n", i, i);
+    if (written < 0 || (size_t) written >= sizeof(body) - used) {
+      EXPECT(0, "dynamic class tables: property body fits");
+      return;
+    }
+    used += (size_t) written;
+  }
+  for (i = 1; i <= 33; ++i) {
+    int written = snprintf(body + used, sizeof(body) - used, "method m%02d = [:self|%d]\n", i, i);
+    if (written < 0 || (size_t) written >= sizeof(body) - used) {
+      EXPECT(0, "dynamic class tables: method body fits");
+      return;
+    }
+    used += (size_t) written;
+  }
+
+  strncpy(node.body, body, sizeof(node.body) - 1);
+  out[0] = '\0';
+  EXPECT(arksh_shell_set_class(g_shell, &node, out, sizeof(out)) == 0, "dynamic class tables: class definition accepted");
+
+  class_def = arksh_shell_find_class(g_shell, "DynamicCapacity");
+  EXPECT(class_def != NULL, "dynamic class tables: class registered");
+  if (class_def != NULL) {
+    EXPECT(class_def->property_count == 33, "dynamic class tables: property_count == 33");
+    EXPECT(class_def->method_count == 33, "dynamic class tables: method_count == 33");
+  }
+}
+
 /* ------------------------------------------------------------------ main */
 
 int main(void) {
@@ -312,6 +354,7 @@ int main(void) {
   /* block execution */
   test_block_no_params();
   test_block_with_param();
+  test_dynamic_class_member_tables();
 
   arksh_shell_destroy(g_shell);
   free(g_shell);

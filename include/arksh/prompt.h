@@ -24,6 +24,7 @@ typedef struct {
   char theme[64];
   char separator[16];
   int use_color;
+  unsigned long generation;
   char left[ARKSH_MAX_SEGMENTS][ARKSH_MAX_SEGMENT_NAME];
   size_t left_count;
   char right[ARKSH_MAX_SEGMENTS][ARKSH_MAX_SEGMENT_NAME];

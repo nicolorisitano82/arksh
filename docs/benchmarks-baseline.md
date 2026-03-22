@@ -37,6 +37,7 @@ Or single cases:
 ```bash
 ./build/arksh_perf_runner ./build/arksh startup command 'perf show'
 ./build/arksh_perf_runner ./build/arksh object-pipeline script tests/perf/object-pipeline.arksh
+./build/arksh_perf_runner ./build/arksh registry-lookups script tests/perf/registry-lookups.arksh
 ./build/arksh_perf_runner ./build/arksh json-structured script tests/perf/json-structured.arksh
 ./build/arksh_perf_runner ./build/arksh function-scope script tests/perf/function-scope.arksh
 ./build/arksh_perf_runner ./build/arksh subshell script tests/perf/subshell.arksh
@@ -198,3 +199,31 @@ Regression strategy after this step:
 - `command-substitution` keeps an allocation-count guard at `calloc_calls <= 90`
 
 The main win of this step is CPU-oriented rather than footprint-oriented: nested object chains and stage arguments no longer bounce through the parser repeatedly, and the perf guard tracks that improvement through a much lower render count on the dedicated chain-heavy workload. This refactor also moved AST handling in sourced and multiline execution paths off the stack, which slightly raised allocation counters but removed a fragile class of stack-pressure crashes; the updated perf guards reflect that new, more stable baseline.
+
+## E12-S8 Delta
+
+`E12-S8` closed the performance epoc with three focused interventions:
+
+- remaining hot-path containers were made dynamic where the old fixed layout still hurt scalability, notably class property/method tables
+- hot registries now use sorted indices plus binary-search lookup for commands, value resolvers, pipeline stages, classes and instances
+- prompt rendering and interactive completion gained lightweight caches with explicit invalidation keyed by shell generations
+
+Additional coverage added in this step:
+
+- dedicated perf workload `tests/perf/registry-lookups.arksh`
+- smoke test for the new perf case
+- direct unit regression on `arksh_shell_set_class()` proving class definitions can now hold more than the old `32` property/method slots without relying on the lexer token budget
+
+Measured results on the current build:
+
+- `startup`: `max_rss_kb=4304`, `calloc_bytes=1949312`
+- `registry-lookups`: `wall_ms=18.616`, `max_rss_kb=58992`
+- `registry-lookups`: `calloc_calls=6718`, `value_copy_calls=531`
+
+Interpretation:
+
+- the indexed lookups remove repeated linear scans from hot runtime paths, but the synthetic `registry-lookups` workload is still dominated by the actual work done around class instantiation, evaluation and value copying
+- the new prompt/completion caches target interactive latency and are intentionally lightweight; they are not fully represented by the current non-interactive perf bundle
+- startup remains within the current guardrail (`calloc_bytes <= 2200000`) even after adding the index structures and cache metadata
+
+With `E12-S8`, the planned `E12` roadmap is complete. Future performance work can now be driven by new measurements instead of structural debt in the core runtime.

@@ -1,5 +1,5 @@
 class Named do
-  property name = text("base")
+  property name = text("readme")
 endclass
 
 class Labelled do
@@ -7,7 +7,6 @@ class Labelled do
 endclass
 
 class Doc extends Named, Labelled do
-  method init = [:self :name | self -> set("name", name)]
 endclass
 
-Doc(text("readme")) -> label()
+Doc() -> label()

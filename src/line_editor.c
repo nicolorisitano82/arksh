@@ -61,8 +61,29 @@ typedef struct {
   int  count;
 } ArkshCompletionMatches;
 
+typedef struct {
+  int valid;
+  const ArkshShell *shell;
+  unsigned long generation;
+  char prefix[ARKSH_MAX_PATH];
+  ArkshCompletionMatches matches;
+} ArkshPrefixCompletionCache;
+
+typedef struct {
+  int valid;
+  const ArkshShell *shell;
+  unsigned long generation;
+  char cwd[ARKSH_MAX_PATH];
+  char receiver_text[ARKSH_MAX_LINE];
+  char prefix[ARKSH_MAX_PATH];
+  ArkshCompletionMatches matches;
+} ArkshMemberCompletionCache;
+
 /* Kill ring: single-slot buffer shared across calls within one session. */
 static char s_kill_buf[ARKSH_MAX_LINE];
+static ArkshPrefixCompletionCache s_command_completion_cache;
+static ArkshPrefixCompletionCache s_stage_completion_cache;
+static ArkshMemberCompletionCache s_member_completion_cache;
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {
   if (dest_size == 0) {
@@ -108,6 +129,83 @@ static int append_match_kind(ArkshCompletionMatches *matches, const char *value,
 
 static int append_match(ArkshCompletionMatches *matches, const char *value) {
   return append_match_kind(matches, value, ARKSH_CMATCH_CMD);
+}
+
+static void append_matches(ArkshCompletionMatches *dest, const ArkshCompletionMatches *src) {
+  int i;
+
+  if (dest == NULL || src == NULL) {
+    return;
+  }
+
+  for (i = 0; i < src->count; ++i) {
+    append_match_kind(dest, src->items[i], (ArkshCompletionKind) src->kinds[i]);
+  }
+}
+
+static void copy_matches(ArkshCompletionMatches *dest, const ArkshCompletionMatches *src) {
+  if (dest == NULL || src == NULL) {
+    return;
+  }
+
+  memcpy(dest, src, sizeof(*dest));
+}
+
+static size_t lower_bound_sorted_names(
+  const ArkshShell *shell,
+  size_t count,
+  const char *prefix,
+  const char *(*name_from_sorted_pos)(const ArkshShell *shell, size_t sorted_pos)
+) {
+  size_t low = 0;
+  size_t high = count;
+
+  while (low < high) {
+    size_t mid = low + (high - low) / 2;
+    const char *name = name_from_sorted_pos(shell, mid);
+
+    if (strcmp(name, prefix) < 0) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+
+  return low;
+}
+
+static const char *command_name_from_sorted_pos(const ArkshShell *shell, size_t sorted_pos) {
+  if (shell == NULL ||
+      shell->command_name_index == NULL ||
+      sorted_pos >= shell->command_count ||
+      shell->command_name_index[sorted_pos] >= shell->command_count) {
+    return "";
+  }
+
+  return shell->commands[shell->command_name_index[sorted_pos]].name;
+}
+
+static const char *stage_name_from_sorted_pos(const ArkshShell *shell, size_t sorted_pos) {
+  if (shell == NULL ||
+      shell->pipeline_stage_name_index == NULL ||
+      sorted_pos >= shell->pipeline_stage_count ||
+      shell->pipeline_stage_name_index[sorted_pos] >= shell->pipeline_stage_count) {
+    return "";
+  }
+
+  return shell->pipeline_stages[shell->pipeline_stage_name_index[sorted_pos]].name;
+}
+
+static int plugin_entry_is_active(const ArkshShell *shell, int plugin_index) {
+  if (shell == NULL || plugin_index < 0) {
+    return 1;
+  }
+
+  if ((size_t) plugin_index >= shell->plugin_count) {
+    return 0;
+  }
+
+  return shell->plugins[plugin_index].active != 0;
 }
 
 static int is_token_delimiter(char c) {
@@ -619,28 +717,66 @@ static void collect_file_matches(ArkshShell *shell, const char *prefix, ArkshCom
 
 static void collect_registered_command_matches(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches) {
   size_t i;
+  ArkshCompletionMatches cached;
 
   if (shell == NULL || prefix == NULL || matches == NULL) {
     return;
   }
 
-  for (i = 0; i < shell->command_count; ++i) {
-    if (starts_with(shell->commands[i].name, prefix)) {
-      append_match_kind(matches, shell->commands[i].name, ARKSH_CMATCH_CMD);
+  if (s_command_completion_cache.valid &&
+      s_command_completion_cache.shell == shell &&
+      s_command_completion_cache.generation == shell->completion_generation &&
+      strcmp(s_command_completion_cache.prefix, prefix) == 0) {
+    append_matches(matches, &s_command_completion_cache.matches);
+    return;
+  }
+
+  memset(&cached, 0, sizeof(cached));
+
+  if (shell->command_name_index != NULL && shell->command_count > 0) {
+    size_t start = prefix[0] == '\0'
+      ? 0
+      : lower_bound_sorted_names(shell, shell->command_count, prefix, command_name_from_sorted_pos);
+
+    for (i = start; i < shell->command_count; ++i) {
+      size_t command_index = shell->command_name_index[i];
+      const ArkshCommandDef *command = &shell->commands[command_index];
+
+      if (!starts_with(command->name, prefix)) {
+        break;
+      }
+      if (command->is_plugin_command && !plugin_entry_is_active(shell, command->owner_plugin_index)) {
+        continue;
+      }
+      append_match_kind(&cached, command->name, ARKSH_CMATCH_CMD);
+    }
+  } else {
+    for (i = 0; i < shell->command_count; ++i) {
+      if (starts_with(shell->commands[i].name, prefix) &&
+          (!shell->commands[i].is_plugin_command || plugin_entry_is_active(shell, shell->commands[i].owner_plugin_index))) {
+        append_match_kind(&cached, shell->commands[i].name, ARKSH_CMATCH_CMD);
+      }
     }
   }
 
   for (i = 0; i < shell->alias_count; ++i) {
     if (starts_with(shell->aliases[i].name, prefix)) {
-      append_match_kind(matches, shell->aliases[i].name, ARKSH_CMATCH_ALIAS);
+      append_match_kind(&cached, shell->aliases[i].name, ARKSH_CMATCH_ALIAS);
     }
   }
 
   for (i = 0; i < shell->function_count; ++i) {
     if (starts_with(shell->functions[i].name, prefix)) {
-      append_match_kind(matches, shell->functions[i].name, ARKSH_CMATCH_FN);
+      append_match_kind(&cached, shell->functions[i].name, ARKSH_CMATCH_FN);
     }
   }
+
+  s_command_completion_cache.valid = 1;
+  s_command_completion_cache.shell = shell;
+  s_command_completion_cache.generation = shell->completion_generation;
+  copy_string(s_command_completion_cache.prefix, sizeof(s_command_completion_cache.prefix), prefix);
+  copy_matches(&s_command_completion_cache.matches, &cached);
+  append_matches(matches, &cached);
 }
 
 static void collect_path_command_matches(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches) {
@@ -895,16 +1031,54 @@ static void collect_file_matches_filtered(ArkshShell *shell, const char *prefix,
    which now includes both built-in (registered at init) and plugin stages. */
 static void collect_stage_matches(ArkshShell *shell, const char *prefix, ArkshCompletionMatches *matches) {
   size_t i;
+  ArkshCompletionMatches cached;
 
   if (shell == NULL || prefix == NULL || matches == NULL) {
     return;
   }
 
-  for (i = 0; i < shell->pipeline_stage_count; ++i) {
-    if (starts_with(shell->pipeline_stages[i].name, prefix)) {
-      append_match_kind(matches, shell->pipeline_stages[i].name, ARKSH_CMATCH_STAGE);
+  if (s_stage_completion_cache.valid &&
+      s_stage_completion_cache.shell == shell &&
+      s_stage_completion_cache.generation == shell->completion_generation &&
+      strcmp(s_stage_completion_cache.prefix, prefix) == 0) {
+    append_matches(matches, &s_stage_completion_cache.matches);
+    return;
+  }
+
+  memset(&cached, 0, sizeof(cached));
+
+  if (shell->pipeline_stage_name_index != NULL && shell->pipeline_stage_count > 0) {
+    size_t start = prefix[0] == '\0'
+      ? 0
+      : lower_bound_sorted_names(shell, shell->pipeline_stage_count, prefix, stage_name_from_sorted_pos);
+
+    for (i = start; i < shell->pipeline_stage_count; ++i) {
+      size_t stage_index = shell->pipeline_stage_name_index[i];
+      const ArkshPipelineStageDef *stage = &shell->pipeline_stages[stage_index];
+
+      if (!starts_with(stage->name, prefix)) {
+        break;
+      }
+      if (stage->is_plugin_stage && !plugin_entry_is_active(shell, stage->owner_plugin_index)) {
+        continue;
+      }
+      append_match_kind(&cached, stage->name, ARKSH_CMATCH_STAGE);
+    }
+  } else {
+    for (i = 0; i < shell->pipeline_stage_count; ++i) {
+      if (starts_with(shell->pipeline_stages[i].name, prefix) &&
+          (!shell->pipeline_stages[i].is_plugin_stage || plugin_entry_is_active(shell, shell->pipeline_stages[i].owner_plugin_index))) {
+        append_match_kind(&cached, shell->pipeline_stages[i].name, ARKSH_CMATCH_STAGE);
+      }
     }
   }
+
+  s_stage_completion_cache.valid = 1;
+  s_stage_completion_cache.shell = shell;
+  s_stage_completion_cache.generation = shell->completion_generation;
+  copy_string(s_stage_completion_cache.prefix, sizeof(s_stage_completion_cache.prefix), prefix);
+  copy_matches(&s_stage_completion_cache.matches, &cached);
+  append_matches(matches, &cached);
 }
 
 /* E5-S6-T3: flag/option completion — static table of known options per built-in.
@@ -965,7 +1139,8 @@ static void collect_registered_command_matches_fuzzy(ArkshShell *shell, const ch
     return;
   }
   for (i = 0; i < shell->command_count; ++i) {
-    if (strstr(shell->commands[i].name, prefix) != NULL) {
+    if (strstr(shell->commands[i].name, prefix) != NULL &&
+        (!shell->commands[i].is_plugin_command || plugin_entry_is_active(shell, shell->commands[i].owner_plugin_index))) {
       append_match_kind(matches, shell->commands[i].name, ARKSH_CMATCH_CMD);
     }
   }
@@ -1106,11 +1281,35 @@ static void collect_member_completion_matches(
   memcpy(receiver_text, buffer + receiver_start, receiver_len);
   receiver_text[receiver_len] = '\0';
 
+  if (s_member_completion_cache.valid &&
+      s_member_completion_cache.shell == shell &&
+      s_member_completion_cache.generation == shell->completion_generation &&
+      strcmp(s_member_completion_cache.cwd, shell->cwd) == 0 &&
+      strcmp(s_member_completion_cache.receiver_text, receiver_text) == 0 &&
+      strcmp(s_member_completion_cache.prefix, prefix) == 0) {
+    copy_matches(matches, &s_member_completion_cache.matches);
+    return;
+  }
+
   if (arksh_shell_collect_member_completions(shell, receiver_text, prefix, matches->items, ARKSH_MAX_COMPLETION_MATCHES, &count) != 0) {
+    s_member_completion_cache.valid = 1;
+    s_member_completion_cache.shell = shell;
+    s_member_completion_cache.generation = shell->completion_generation;
+    copy_string(s_member_completion_cache.cwd, sizeof(s_member_completion_cache.cwd), shell->cwd);
+    copy_string(s_member_completion_cache.receiver_text, sizeof(s_member_completion_cache.receiver_text), receiver_text);
+    copy_string(s_member_completion_cache.prefix, sizeof(s_member_completion_cache.prefix), prefix);
+    memset(&s_member_completion_cache.matches, 0, sizeof(s_member_completion_cache.matches));
     return;
   }
 
   matches->count = (int) count;
+  s_member_completion_cache.valid = 1;
+  s_member_completion_cache.shell = shell;
+  s_member_completion_cache.generation = shell->completion_generation;
+  copy_string(s_member_completion_cache.cwd, sizeof(s_member_completion_cache.cwd), shell->cwd);
+  copy_string(s_member_completion_cache.receiver_text, sizeof(s_member_completion_cache.receiver_text), receiver_text);
+  copy_string(s_member_completion_cache.prefix, sizeof(s_member_completion_cache.prefix), prefix);
+  copy_matches(&s_member_completion_cache.matches, matches);
 }
 
 /* E5-S6-T5: force_list — set to 1 when TAB is pressed twice consecutively.

@@ -32,8 +32,8 @@ extern "C" {
 #define ARKSH_MAX_FUNCTIONS 32
 #define ARKSH_MAX_POSITIONAL_PARAMS 64
 #define ARKSH_MAX_CLASSES 32
-#define ARKSH_MAX_CLASS_PROPERTIES 32
-#define ARKSH_MAX_CLASS_METHODS 32
+#define ARKSH_MAX_CLASS_PROPERTIES 256
+#define ARKSH_MAX_CLASS_METHODS 256
 #define ARKSH_MAX_INSTANCES 128
 
 /* Execution semantics classification for built-in commands.
@@ -136,10 +136,12 @@ typedef struct {
   char name[ARKSH_MAX_NAME];
   char bases[ARKSH_MAX_CLASS_BASES][ARKSH_MAX_NAME];
   int base_count;
-  ArkshClassProperty properties[ARKSH_MAX_CLASS_PROPERTIES];
+  ArkshClassProperty *properties;
   size_t property_count;
-  ArkshClassMethod methods[ARKSH_MAX_CLASS_METHODS];
+  size_t property_capacity;
+  ArkshClassMethod *methods;
   size_t method_count;
+  size_t method_capacity;
   char source[ARKSH_MAX_LINE];
 } ArkshClassDef;
 
@@ -267,6 +269,8 @@ typedef struct ArkshShell {
   ArkshCommandDef *commands;
   size_t command_count;
   size_t command_capacity;
+  size_t *command_name_index;
+  size_t command_name_index_capacity;
   ArkshLoadedPlugin *plugins;
   size_t plugin_count;
   size_t plugin_capacity;
@@ -282,9 +286,13 @@ typedef struct ArkshShell {
   ArkshClassDef *classes;
   size_t class_count;
   size_t class_capacity;
+  size_t *class_name_index;
+  size_t class_name_index_capacity;
   ArkshClassInstance *instances;
   size_t instance_count;
   size_t instance_capacity;
+  size_t *instance_id_index;
+  size_t instance_id_index_capacity;
   int next_instance_id;
   ArkshObjectExtension *extensions;
   size_t extension_count;
@@ -292,9 +300,13 @@ typedef struct ArkshShell {
   ArkshValueResolverDef *value_resolvers;
   size_t value_resolver_count;
   size_t value_resolver_capacity;
+  size_t *value_resolver_name_index;
+  size_t value_resolver_name_index_capacity;
   ArkshPipelineStageDef *pipeline_stages;
   size_t pipeline_stage_count;
   size_t pipeline_stage_capacity;
+  size_t *pipeline_stage_name_index;
+  size_t pipeline_stage_name_index_capacity;
   ArkshAlias *aliases;
   size_t alias_count;
   size_t alias_capacity;
@@ -331,6 +343,7 @@ typedef struct ArkshShell {
   size_t type_descriptor_count;
   size_t type_descriptor_capacity;
   ArkshScopeFrame *scope_frame;
+  unsigned long completion_generation;
 } ArkshShell;
 
 int arksh_shell_init(ArkshShell *shell);
@@ -361,6 +374,7 @@ int arksh_shell_shift_positional(ArkshShell *shell, int count);
 int arksh_shell_clone_subshell(const ArkshShell *source, ArkshShell **out_shell, char *out, size_t out_size);
 int arksh_shell_restore_after_subshell(const ArkshShell *parent, const ArkshShell *subshell, char *out, size_t out_size);
 void arksh_shell_destroy_subshell(ArkshShell *shell);
+const ArkshCommandDef *arksh_shell_find_command(const ArkshShell *shell, const char *name);
 const ArkshShellFunction *arksh_shell_find_function(const ArkshShell *shell, const char *name);
 int arksh_shell_set_function(ArkshShell *shell, const ArkshFunctionCommandNode *function_node);
 const ArkshClassDef *arksh_shell_find_class(const ArkshShell *shell, const char *name);

@@ -8,6 +8,28 @@ Non e un benchmark numerico: e una analisi architetturale del codice attuale, co
 
 La baseline numerica iniziale introdotta in `E12-S1` e documentata in [docs/benchmarks-baseline.md](/Users/nicolo/Desktop/oosh/docs/benchmarks-baseline.md).
 
+## Stato di avanzamento reale
+
+Lo studio qui sotto ha guidato l'epoca `E12`, che oggi risulta completata.
+
+Interventi effettivamente implementati:
+
+- `E12-S1`: baseline, contatori `perf` e benchmark ripetibili
+- `E12-S2`: scratch arena per executor ed espansioni
+- `E12-S3`: layout piu leggero per `ArkshValue`
+- `E12-S4`: layout piu leggero per `ArkshShell`
+- `E12-S5`: scope frame locali per funzioni e block
+- `E12-S6`: subshell e command substitution piu leggere
+- `E12-S7`: meno parse/render ricorsivi nelle chain `->`
+- `E12-S8`: lookup indicizzati, cache leggere per prompt/completion e completamento dei contenitori dinamici rimasti sul path caldo
+
+Restano comunque opportunita ulteriori, ma non piu come blocchi architetturali dell'epoca `E12`:
+
+- ridurre il costo dei benchmark piu pesanti su `object-chain`, `registry-lookups` e `json-structured`
+- introdurre cache o memoization piu mirate solo dove i numeri lo giustificano
+- migliorare ancora il lexer/parser per ridurre il numero di token e stringhe temporanee nei costrutti molto grandi
+- aggiungere benchmark interattivi piu specifici per line editor e prompt
+
 ## Sintesi esecutiva
 
 I due problemi principali oggi sono:

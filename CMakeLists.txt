@@ -115,6 +115,7 @@ else()
     COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> startup command "perf show"
     COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> object-pipeline script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/object-pipeline.arksh"
     COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> object-chain script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/object-chain.arksh"
+    COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> registry-lookups script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/registry-lookups.arksh"
     COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> json-structured script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/json-structured.arksh"
     COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> function-scope script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/function-scope.arksh"
     COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> subshell script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/subshell.arksh"
@@ -391,6 +392,12 @@ if(BUILD_TESTING)
     PASS_REGULAR_EXPRESSION "case=startup"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   )
+  add_test(NAME arksh_perf_registry_lookup_smoke
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> registry-lookups script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/registry-lookups.arksh")
+  set_tests_properties(arksh_perf_registry_lookup_smoke PROPERTIES
+    PASS_REGULAR_EXPRESSION "case=registry-lookups"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
   add_test(NAME arksh_perf_startup_base_drop
     COMMAND arksh_perf_runner $<TARGET_FILE:arksh> startup command "perf show" "calloc_bytes<=2200000")
   add_test(NAME arksh_perf_object_pipeline_footprint_drop
@@ -413,6 +420,7 @@ if(BUILD_TESTING)
     arksh_perf_function_scope_alloc_drop
     arksh_perf_subshell_alloc_drop
     arksh_perf_command_subst_alloc_drop
+    arksh_perf_registry_lookup_smoke
     PROPERTIES
       WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   )

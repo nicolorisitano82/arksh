@@ -995,7 +995,7 @@ Stato story: `[ ]`
 
 ## E12. Prestazioni e footprint CPU/memoria
 
-Stato epoca: `[~]`
+Stato epoca: `[x]`
 
 Obiettivo: ridurre CPU time, numero di allocazioni, copie profonde e memoria residente del core di `arksh`, seguendo il piano descritto in [docs/studio-cpu-memoria.md](/Users/nicolo/Desktop/oosh/docs/studio-cpu-memoria.md).
 
@@ -1066,149 +1066,63 @@ Stato story: `[x]`
 
 ### E12-S8. Ottimizzazioni mirate e indicizzazione
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E12-S8-T1` rendere dinamici i contenitori core ancora statici con impatto reale su memoria e scalabilità
-- `[ ]` `E12-S8-T2` introdurre lookup piu efficienti per registry consultati spesso: comandi, type resolver, pipeline stage, classi e istanze
-- `[ ]` `E12-S8-T3` valutare cache leggere per completion e prompt con invalidazione esplicita
-- `[ ]` `E12-S8-T4` documentare i guadagni finali e aggiornare `docs/studio-cpu-memoria.md` con lo stato di avanzamento reale
+- `[x]` `E12-S8-T1` rendere dinamici i contenitori core ancora statici con impatto reale su memoria e scalabilità
+- `[x]` `E12-S8-T2` introdurre lookup piu efficienti per registry consultati spesso: comandi, type resolver, pipeline stage, classi e istanze
+- `[x]` `E12-S8-T3` valutare cache leggere per completion e prompt con invalidazione esplicita
+- `[x]` `E12-S8-T4` documentare i guadagni finali e aggiornare `docs/studio-cpu-memoria.md` con lo stato di avanzamento reale
 
 ---
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E12 `[x]`
 **In corso:** nessuna
-**Aperte:** E9 (release), E10 (HTTP plugin), E11 (POSIX core), E12 (performance e footprint: resta `E12-S8`)
+**Aperte:** E9 (release), E10 (HTTP plugin), E11 (POSIX core)
 
-> **Completati in E6:** S1 (path/fs), S2 (custom types), S3 (pipeline stages), S4 (shell integration), S5 (numeric types), S6 (Dict), S7 (base64), S8 (Matrix), S9 (trash plugin), S10 (plugin autoload). E6 chiusa.
-> **Extra:** esecuzione diretta di script `arksh file.arksh [args]` aggiunta a `main.c`.
-> **E7-S1:** parser/serializer robusti — offset errori, `\uXXXX`, ctrl chars, leading zeros, depth limit, MATRIX→JSON, NaN→null. 213/213 test passati.
-> **Extra:** script di esempio `examples/scripts/13-matrix-type.arksh` aggiunto.
+### Priorità 1 — chiudere il POSIX core rimasto aperto (E11)
 
----
+Questa è la priorità più alta se l'obiettivo resta usare `arksh` come shell di sistema.
+Le parti più chiaramente mancanti oggi sono:
 
-### Percorso A — qualità e CI (E8)
+1. `E11-S4` — `[[ ]]` con `=~` e pattern glob
+2. `E11-S6` — completare `getopts`, aggiungere `ulimit` e `umask`
+3. `E11-S8` — here-string `<<<`
+4. `E11-S9` — sostituzione di processo `<()` / `>()`
 
-~~Completato.~~ ~~`E8-S1`~~ `[x]`  ~~`E8-S2`~~ `[x]`  ~~`E8-S3`~~ `[x]`  ~~`E8-S4`~~ `[x]`
+Nota operativa:
 
-### Percorso B — compatibilità POSIX (E1-S6, E1-S7)
+- `E11-S1`, `E11-S2`, `E11-S3`, `E11-S5` e `E11-S7` hanno gia copertura parziale o sostanziale nel codice e nella suite test, ma vanno riallineati story-per-story nel backlog prima di considerarli chiusi formalmente
 
-~~Completato.~~
+### Priorità 2 — portare il progetto a livello distribuzione (E9)
 
-### Percorso C — tab completion avanzata (E5-S6)
+Dopo il POSIX core, il valore più alto è chiudere packaging e release:
 
-~~Completato.~~
+1. `E9-S2` — packaging target (`Homebrew`, pacchetto Linux, strategia Windows)
+2. `E9-S3` — ABI plugin e versioning
+3. `E9-S4` — documentazione finale e troubleshooting
+4. `E9-S5` — release process, changelog e criteri `1.0`
 
-### Percorso D — pipeline object più ricca (E6-S3)
+### Priorità 3 — plugin HTTP ufficiale (E10)
 
-~~Completato.~~
+`E10-S1` resta importante ma non blocca il core shell. Conviene affrontarla:
 
-### Percorso E — tipi numerici espliciti (E6-S5)
+- dopo `E9-S3`, se vuoi un'ABI plugin più stabile prima di pubblicare un plugin ufficiale
+- oppure in parallelo al packaging, se il focus si sposta sulle integrazioni API
 
-~~Completato.~~ ~~`E6-S5-T1`~~ `[x]`  ~~`E6-S5-T2`~~ `[x]`  ~~`E6-S5-T3`~~ `[x]`  ~~`E6-S5-T4`~~ `[x]`  ~~`E6-S5-T5`~~ `[x]`
+### Ordine raccomandato dei prossimi sprint
 
-### Percorso F — tipo Dict (E6-S6)
-
-~~Completato.~~ ~~`E6-S6-T1`~~ `[x]`  ~~`E6-S6-T2`~~ `[x]`  ~~`E6-S6-T3`~~ `[x]`  ~~`E6-S6-T4`~~ `[x]`  ~~`E6-S6-T5`~~ `[x]`  ~~`E6-S6-T6`~~ `[x]`
-
-~~Abilita strutture dati chiave-valore native; prerequisito naturale per E7 (JSON avanzato).~~
-
-1. ~~`E6-S6-T1` (struttura interna `ARKSH_VALUE_DICT`)~~
-2. ~~`E6-S6-T2` (resolver `Dict()`)~~
-3. ~~`E6-S6-T3` (metodi di scrittura: `set`, `delete`)~~
-4. ~~`E6-S6-T4` (proprietà e metodi di lettura: `get`, `has`, `keys`, `values`, `count`)~~
-5. ~~`E6-S6-T5` (bridge JSON: `to_json` / `from_json`)~~
-6. ~~`E6-S6-T6` (test)~~
-
-### Percorso G — JSON robusto (E7)
-
-Prerequisito naturale per script di automazione e integrazione con API esterne.
-
-~~Completato.~~
-
-1. ~~`E7-S1-T1` (diagnostica parser con posizione/offset dell'errore)~~ `[x]`
-2. ~~`E7-S1-T2` (casi edge del parser — `\uXXXX`, ctrl chars, leading zeros, depth limit)~~ `[x]`
-3. ~~`E7-S1-T3` (casi edge del serializer — MATRIX→JSON, ctrl→`\uXXXX`, NaN→null)~~ `[x]`
-4. ~~`E7-S2-T1` (strutture annidate oltre `ARKSH_MAX_COLLECTION_ITEMS`)~~ `[x]`
-5. ~~`E7-S3-T1` (query e trasformazioni sui valori JSON: `get_path`, `set_path`, `pick`, `merge`, `pluck`)~~ `[x]`
-
-### Percorso H — plugin HTTP (E10)
-
-Aggiunge chiamate HTTP/HTTPS native ad arksh. Richiede libcurl; non blocca nessun'altra
-epoca. Sblocca integrazioni con API esterne direttamente dagli script.
-
-1. `E10-S1-T1` (scaffold plugin + CMake + rilevamento libcurl)
-2. `E10-S1-T2` (resolver `http()` e request builder)
-3. `E10-S1-T3` (metodo `send()` + typed-map risposta)
-4. `E10-S1-T4` (metodi `body_as_json`, `body_as_text`, `raise_on_error`)
-5. `E10-S1-T5` (stage pipeline: `body_as_json`, `body_as_text`, `save_to`)
-6. `E10-S1-T6` (errori, timeout, redirect, proxy)
-7. `E10-S1-T7` (test con mock server)
-
-### ~~Percorso I — stage di encoding (E6-S7)~~ Completato
-
-~~Basso costo, nessuna dipendenza esterna, utile per automazione e integrazione API.~~
-
-1. ~~`E6-S7-T1` (stage `base64_encode`)~~
-2. ~~`E6-S7-T2` (stage `base64_decode`)~~
-3. ~~`E6-S7-T3` (test)~~
-
-### ~~Percorso L — tipo Matrix (E6-S8)~~ Completato
-
-~~`E6-S8-T1`~~ ~~`E6-S8-T2`~~ ~~`E6-S8-T3`~~ ~~`E6-S8-T4`~~ ~~`E6-S8-T5`~~ ~~`E6-S8-T6`~~ ~~`E6-S8-T7`~~
-
-### ~~Percorso N — plugin autoload (E6-S10)~~ Completato
-
-~~`E6-S10-T1`~~ ~~`E6-S10-T2`~~ ~~`E6-S10-T3`~~ ~~`E6-S10-T4`~~ ~~`E6-S10-T5`~~ ~~`E6-S10-T6`~~
-
----
-
-### ~~Percorso M — cestino di sistema (E6-S9)~~ Completato
-
-~~Integrazione con il cestino nativo del sistema operativo (Trash macOS, XDG Linux, Recycle Bin Windows).~~
-~~Nessuna implementazione propria: ogni operazione delega all'API nativa della piattaforma corrente.~~
-
-1. ~~`E6-S9-T1` (layer platform nel plugin: macOS Foundation, Linux XDG + gio, Windows Shell32)~~
-2. ~~`E6-S9-T2` (metodo `-> trash()` su oggetti `file`, `directory`, `path`)~~
-3. ~~`E6-S9-T3` (stage pipeline `each_trash` per cestinare una lista di oggetti)~~
-4. ~~`E6-S9-T4` (namespace `trash()` con `count`, `items`, `empty()`, `restore(name)`)~~
-5. ~~`E6-S9-T5` (3 test CMake: load, count, method presence — 208/208 pass)~~
-
-### Percorso O — POSIX core (E11)
-
-Prerequisito per usare arksh come shell di sistema. Sblocca la compatibilità con script esistenti e strumenti che assumono `sh`/`bash`. Vedi `docs/arksh-come-shell-di-sistema.md`.
-
-Ordine consigliato:
-
-1. `E11-S1` (flag di modalità: `set -e`, `-u`, `-o pipefail`, `-x`)
-2. `E11-S2` (aritmetica `$(( ))`)
-3. `E11-S3` (`[ ]` completo con tutti i primari POSIX)
-4. `E11-S7` (`local` nelle funzioni — scope isolato)
-5. `E11-S5` (subshell `()` e gruppi `{}`)
-6. `E11-S4` (`[[ ]]` con `=~` e glob)
-7. `E11-S6` (`getopts`, `ulimit`, `umask`)
-8. `E11-S8` (here-string `<<<`)
-9. `E11-S9` (sostituzione di processo `<()` / `>()`)
-
-Note: `E11-S7` prima di `E11-S5` perché l'introduzione dello stack di frame variabili è un prerequisito per il corretto isolamento delle subshell.
-
-### Percorso P — performance e footprint (E12)
-
-Nuova epoca dedicata a CPU, allocazioni e memoria residente, derivata da [docs/studio-cpu-memoria.md](/Users/nicolo/Desktop/oosh/docs/studio-cpu-memoria.md).
-
-Stato corrente: `E12-S1` .. `E12-S7` completate, resta aperta solo `E12-S8`.
-
-Ordine consigliato:
-
-1. `E12-S1` (baseline e benchmark)
-2. `E12-S2` (scratch arena)
-3. `E12-S3` (snellimento `ArkshValue`)
-4. `E12-S4` (snellimento `ArkshShell`)
-5. `E12-S5` (scope frame per funzioni e block)
-6. `E12-S6` (subshell e `$(...)` meno costose)
-7. `E12-S7` (meno parse/render ricorsivi)
-8. `E12-S8` (ottimizzazioni mirate e indicizzazione)
+1. `E11-S4`
+2. `E11-S6`
+3. `E11-S8`
+4. `E11-S9`
+5. audit backlog su `E11-S1`, `E11-S2`, `E11-S3`, `E11-S5`, `E11-S7`
+6. `E9-S2`
+7. `E9-S3`
+8. `E9-S4`
+9. `E9-S5`
+10. `E10-S1`
 
 ---
 

@@ -25,6 +25,7 @@
 
 /* E1-S6-T1: per-signal pending flags set by the async signal handler. */
 static volatile sig_atomic_t s_pending_traps[ARKSH_TRAP_COUNT];
+static unsigned long s_next_shell_generation = 1u;
 
 /* Mapping from ArkshTrapKind to POSIX signal number (0 for pseudo-signals). */
 static const struct { const char *name; ArkshTrapKind kind; int signum; }
@@ -124,6 +125,227 @@ static int grow_heap_array(
   *items = grown;
   *capacity = next_capacity;
   return 0;
+}
+
+static void mark_completion_cache_dirty(ArkshShell *shell) {
+  if (shell == NULL) {
+    return;
+  }
+  shell->completion_generation++;
+  if (shell->completion_generation == 0) {
+    shell->completion_generation = 1;
+  }
+}
+
+static const char *command_name_at(const ArkshShell *shell, size_t index) {
+  return shell != NULL ? shell->commands[index].name : NULL;
+}
+
+static const char *resolver_name_at(const ArkshShell *shell, size_t index) {
+  return shell != NULL ? shell->value_resolvers[index].name : NULL;
+}
+
+static const char *stage_name_at(const ArkshShell *shell, size_t index) {
+  return shell != NULL ? shell->pipeline_stages[index].name : NULL;
+}
+
+static const char *class_name_at(const ArkshShell *shell, size_t index) {
+  return shell != NULL ? shell->classes[index].name : NULL;
+}
+
+static int instance_id_at(const ArkshShell *shell, size_t index) {
+  return shell != NULL ? shell->instances[index].id : 0;
+}
+
+static int rebuild_sorted_name_index(
+  const ArkshShell *shell,
+  size_t **indices,
+  size_t *capacity,
+  size_t count,
+  size_t max_capacity,
+  const char *(*name_at)(const ArkshShell *shell, size_t index)
+) {
+  size_t i;
+
+  if (indices == NULL || capacity == NULL || name_at == NULL) {
+    return 1;
+  }
+  if (count == 0) {
+    return 0;
+  }
+  if (grow_heap_array((void **) indices, capacity, count, sizeof((*indices)[0]), max_capacity) != 0) {
+    return 1;
+  }
+
+  for (i = 0; i < count; ++i) {
+    size_t current = i;
+
+    (*indices)[i] = i;
+    while (current > 0) {
+      const char *left_name = name_at(shell, (*indices)[current - 1]);
+      const char *right_name = name_at(shell, (*indices)[current]);
+
+      if (strcmp(left_name, right_name) <= 0) {
+        break;
+      }
+
+      {
+        size_t swap = (*indices)[current - 1];
+        (*indices)[current - 1] = (*indices)[current];
+        (*indices)[current] = swap;
+      }
+      current--;
+    }
+  }
+
+  return 0;
+}
+
+static int rebuild_sorted_id_index(
+  const ArkshShell *shell,
+  size_t **indices,
+  size_t *capacity,
+  size_t count,
+  size_t max_capacity
+) {
+  size_t i;
+
+  if (indices == NULL || capacity == NULL) {
+    return 1;
+  }
+  if (count == 0) {
+    return 0;
+  }
+  if (grow_heap_array((void **) indices, capacity, count, sizeof((*indices)[0]), max_capacity) != 0) {
+    return 1;
+  }
+
+  for (i = 0; i < count; ++i) {
+    size_t current = i;
+
+    (*indices)[i] = i;
+    while (current > 0) {
+      int left_id = instance_id_at(shell, (*indices)[current - 1]);
+      int right_id = instance_id_at(shell, (*indices)[current]);
+
+      if (left_id <= right_id) {
+        break;
+      }
+
+      {
+        size_t swap = (*indices)[current - 1];
+        (*indices)[current - 1] = (*indices)[current];
+        (*indices)[current] = swap;
+      }
+      current--;
+    }
+  }
+
+  return 0;
+}
+
+static int rebuild_command_name_index(ArkshShell *shell) {
+  return rebuild_sorted_name_index(shell, &shell->command_name_index, &shell->command_name_index_capacity,
+                                   shell->command_count, ARKSH_MAX_COMMANDS, command_name_at);
+}
+
+static int rebuild_value_resolver_name_index(ArkshShell *shell) {
+  return rebuild_sorted_name_index(shell, &shell->value_resolver_name_index, &shell->value_resolver_name_index_capacity,
+                                   shell->value_resolver_count, ARKSH_MAX_VALUE_RESOLVERS, resolver_name_at);
+}
+
+static int rebuild_pipeline_stage_name_index(ArkshShell *shell) {
+  return rebuild_sorted_name_index(shell, &shell->pipeline_stage_name_index, &shell->pipeline_stage_name_index_capacity,
+                                   shell->pipeline_stage_count, ARKSH_MAX_PIPELINE_STAGE_HANDLERS, stage_name_at);
+}
+
+static int rebuild_class_name_index(ArkshShell *shell) {
+  return rebuild_sorted_name_index(shell, &shell->class_name_index, &shell->class_name_index_capacity,
+                                   shell->class_count, ARKSH_MAX_CLASSES, class_name_at);
+}
+
+static int rebuild_instance_id_index(ArkshShell *shell) {
+  return rebuild_sorted_id_index(shell, &shell->instance_id_index, &shell->instance_id_index_capacity,
+                                 shell->instance_count, ARKSH_MAX_INSTANCES);
+}
+
+static int rebuild_all_lookup_indices(ArkshShell *shell) {
+  if (shell == NULL) {
+    return 1;
+  }
+  return rebuild_command_name_index(shell) != 0 ||
+         rebuild_value_resolver_name_index(shell) != 0 ||
+         rebuild_pipeline_stage_name_index(shell) != 0 ||
+         rebuild_class_name_index(shell) != 0 ||
+         rebuild_instance_id_index(shell) != 0;
+}
+
+static int find_name_index_entry(
+  const ArkshShell *shell,
+  const size_t *indices,
+  size_t count,
+  const char *name,
+  const char *(*name_at)(const ArkshShell *shell, size_t index),
+  size_t *out_index
+) {
+  size_t left = 0;
+  size_t right;
+
+  if (shell == NULL || indices == NULL || name == NULL || name_at == NULL || out_index == NULL || count == 0) {
+    return 1;
+  }
+
+  right = count;
+  while (left < right) {
+    size_t mid = left + (right - left) / 2u;
+    const char *mid_name = name_at(shell, indices[mid]);
+    int cmp = strcmp(name, mid_name);
+
+    if (cmp == 0) {
+      *out_index = indices[mid];
+      return 0;
+    }
+    if (cmp < 0) {
+      right = mid;
+    } else {
+      left = mid + 1u;
+    }
+  }
+
+  return 1;
+}
+
+static int find_instance_id_index_entry(
+  const ArkshShell *shell,
+  const size_t *indices,
+  size_t count,
+  int id,
+  size_t *out_index
+) {
+  size_t left = 0;
+  size_t right;
+
+  if (shell == NULL || indices == NULL || out_index == NULL || count == 0 || id <= 0) {
+    return 1;
+  }
+
+  right = count;
+  while (left < right) {
+    size_t mid = left + (right - left) / 2u;
+    int mid_id = instance_id_at(shell, indices[mid]);
+
+    if (mid_id == id) {
+      *out_index = indices[mid];
+      return 0;
+    }
+    if (id < mid_id) {
+      right = mid;
+    } else {
+      left = mid + 1u;
+    }
+  }
+
+  return 1;
 }
 
 static int append_text(char *dest, size_t dest_size, const char *src) {
@@ -603,64 +825,56 @@ static const ArkshShellFunction *find_function_entry_const(const ArkshShell *she
 }
 
 static ArkshClassDef *find_class_entry(ArkshShell *shell, const char *name) {
-  size_t i;
+  size_t index;
 
   if (shell == NULL || name == NULL) {
     return NULL;
   }
 
-  for (i = 0; i < shell->class_count; ++i) {
-    if (strcmp(shell->classes[i].name, name) == 0) {
-      return &shell->classes[i];
-    }
+  if (find_name_index_entry(shell, shell->class_name_index, shell->class_count, name, class_name_at, &index) == 0) {
+    return &shell->classes[index];
   }
 
   return NULL;
 }
 
 static const ArkshClassDef *find_class_entry_const(const ArkshShell *shell, const char *name) {
-  size_t i;
+  size_t index;
 
   if (shell == NULL || name == NULL) {
     return NULL;
   }
 
-  for (i = 0; i < shell->class_count; ++i) {
-    if (strcmp(shell->classes[i].name, name) == 0) {
-      return &shell->classes[i];
-    }
+  if (find_name_index_entry(shell, shell->class_name_index, shell->class_count, name, class_name_at, &index) == 0) {
+    return &shell->classes[index];
   }
 
   return NULL;
 }
 
 static ArkshClassInstance *find_instance_entry(ArkshShell *shell, int id) {
-  size_t i;
+  size_t index;
 
   if (shell == NULL || id <= 0) {
     return NULL;
   }
 
-  for (i = 0; i < shell->instance_count; ++i) {
-    if (shell->instances[i].id == id) {
-      return &shell->instances[i];
-    }
+  if (find_instance_id_index_entry(shell, shell->instance_id_index, shell->instance_count, id, &index) == 0) {
+    return &shell->instances[index];
   }
 
   return NULL;
 }
 
 static const ArkshClassInstance *find_instance_entry_const(const ArkshShell *shell, int id) {
-  size_t i;
+  size_t index;
 
   if (shell == NULL || id <= 0) {
     return NULL;
   }
 
-  for (i = 0; i < shell->instance_count; ++i) {
-    if (shell->instances[i].id == id) {
-      return &shell->instances[i];
-    }
+  if (find_instance_id_index_entry(shell, shell->instance_id_index, shell->instance_count, id, &index) == 0) {
+    return &shell->instances[index];
   }
 
   return NULL;
@@ -711,20 +925,7 @@ static int plugin_index_is_active(const ArkshShell *shell, int plugin_index) {
 }
 
 static const ArkshCommandDef *find_registered_command(const ArkshShell *shell, const char *name) {
-  size_t i;
-
-  if (shell == NULL || name == NULL) {
-    return NULL;
-  }
-
-  for (i = 0; i < shell->command_count; ++i) {
-    if (strcmp(shell->commands[i].name, name) == 0 &&
-        (!shell->commands[i].is_plugin_command || plugin_index_is_active(shell, shell->commands[i].owner_plugin_index))) {
-      return &shell->commands[i];
-    }
-  }
-
-  return NULL;
+  return arksh_shell_find_command(shell, name);
 }
 
 static ArkshScopedVar *find_scoped_var_entry(ArkshScopeFrame *frame, const char *name) {
@@ -1115,40 +1316,61 @@ int arksh_shell_shift_positional(ArkshShell *shell, int count) {
   return 0;
 }
 
-const ArkshValueResolverDef *arksh_shell_find_value_resolver(const ArkshShell *shell, const char *name) {
-  size_t i;
+const ArkshCommandDef *arksh_shell_find_command(const ArkshShell *shell, const char *name) {
+  size_t index;
 
   if (shell == NULL || name == NULL) {
     return NULL;
   }
 
-  for (i = 0; i < shell->value_resolver_count; ++i) {
-    if (strcmp(shell->value_resolvers[i].name, name) == 0 &&
-        (!shell->value_resolvers[i].is_plugin_resolver ||
-         plugin_index_is_active(shell, shell->value_resolvers[i].owner_plugin_index))) {
-      return &shell->value_resolvers[i];
-    }
+  if (find_name_index_entry(shell, shell->command_name_index, shell->command_count, name, command_name_at, &index) != 0) {
+    return NULL;
   }
 
-  return NULL;
+  if (shell->commands[index].is_plugin_command &&
+      !plugin_index_is_active(shell, shell->commands[index].owner_plugin_index)) {
+    return NULL;
+  }
+
+  return &shell->commands[index];
+}
+
+const ArkshValueResolverDef *arksh_shell_find_value_resolver(const ArkshShell *shell, const char *name) {
+  size_t index;
+
+  if (shell == NULL || name == NULL) {
+    return NULL;
+  }
+
+  if (find_name_index_entry(shell, shell->value_resolver_name_index, shell->value_resolver_count, name, resolver_name_at, &index) != 0) {
+    return NULL;
+  }
+
+  if (shell->value_resolvers[index].is_plugin_resolver &&
+      !plugin_index_is_active(shell, shell->value_resolvers[index].owner_plugin_index)) {
+    return NULL;
+  }
+
+  return &shell->value_resolvers[index];
 }
 
 const ArkshPipelineStageDef *arksh_shell_find_pipeline_stage(const ArkshShell *shell, const char *name) {
-  size_t i;
+  size_t index;
 
   if (shell == NULL || name == NULL) {
     return NULL;
   }
 
-  for (i = 0; i < shell->pipeline_stage_count; ++i) {
-    if (strcmp(shell->pipeline_stages[i].name, name) == 0 &&
-        (!shell->pipeline_stages[i].is_plugin_stage ||
-         plugin_index_is_active(shell, shell->pipeline_stages[i].owner_plugin_index))) {
-      return &shell->pipeline_stages[i];
-    }
+  if (find_name_index_entry(shell, shell->pipeline_stage_name_index, shell->pipeline_stage_count, name, stage_name_at, &index) != 0) {
+    return NULL;
   }
 
-  return NULL;
+  if (shell->pipeline_stages[index].is_plugin_stage &&
+      !plugin_index_is_active(shell, shell->pipeline_stages[index].owner_plugin_index)) {
+    return NULL;
+  }
+
+  return &shell->pipeline_stages[index];
 }
 
 static ArkshLoadedPlugin *find_loaded_plugin(ArkshShell *shell, const char *query) {
@@ -1315,6 +1537,8 @@ int arksh_shell_unset_var(ArkshShell *shell, const char *name) {
 }
 
 int arksh_shell_set_binding(ArkshShell *shell, const char *name, const ArkshValue *value) {
+  int status;
+
   if (shell == NULL || !is_valid_identifier(name) || value == NULL) {
     return 1;
   }
@@ -1335,7 +1559,11 @@ int arksh_shell_set_binding(ArkshShell *shell, const char *name, const ArkshValu
 
     arksh_value_free(&entry->value);
     entry->deleted = 0;
-    return arksh_value_copy(&entry->value, value);
+    status = arksh_value_copy(&entry->value, value);
+    if (status == 0) {
+      mark_completion_cache_dirty(shell);
+    }
+    return status;
   }
 
   {
@@ -1353,7 +1581,11 @@ int arksh_shell_set_binding(ArkshShell *shell, const char *name, const ArkshValu
     }
 
     arksh_value_free(&entry->value);
-    return arksh_value_copy(&entry->value, value);
+    status = arksh_value_copy(&entry->value, value);
+    if (status == 0) {
+      mark_completion_cache_dirty(shell);
+    }
+    return status;
   }
 }
 
@@ -1379,6 +1611,7 @@ int arksh_shell_unset_binding(ArkshShell *shell, const char *name) {
     }
     arksh_value_free(&entry->value);
     entry->deleted = 1;
+    mark_completion_cache_dirty(shell);
     return 0;
   }
 
@@ -1391,6 +1624,7 @@ int arksh_shell_unset_binding(ArkshShell *shell, const char *name) {
         memmove(&shell->bindings[i], &shell->bindings[i + 1], remaining * sizeof(shell->bindings[i]));
       }
       shell->binding_count--;
+      mark_completion_cache_dirty(shell);
       return 0;
     }
   }
@@ -1424,6 +1658,7 @@ int arksh_shell_set_function(ArkshShell *shell, const ArkshFunctionCommandNode *
   }
   copy_string(entry->body, sizeof(entry->body), function_node->body);
   copy_string(entry->source, sizeof(entry->source), function_node->source);
+  mark_completion_cache_dirty(shell);
   return 0;
 }
 
@@ -1442,6 +1677,10 @@ int arksh_shell_register_value_resolver(ArkshShell *shell, const char *name, con
       shell->value_resolvers[i].fn = fn;
       shell->value_resolvers[i].is_plugin_resolver = is_plugin_resolver;
       shell->value_resolvers[i].owner_plugin_index = is_plugin_resolver ? shell->loading_plugin_index : -1;
+      if (rebuild_value_resolver_name_index(shell) != 0) {
+        return 1;
+      }
+      mark_completion_cache_dirty(shell);
       return 0;
     }
   }
@@ -1459,6 +1698,12 @@ int arksh_shell_register_value_resolver(ArkshShell *shell, const char *name, con
   shell->value_resolvers[shell->value_resolver_count].is_plugin_resolver = is_plugin_resolver;
   shell->value_resolvers[shell->value_resolver_count].owner_plugin_index = is_plugin_resolver ? shell->loading_plugin_index : -1;
   shell->value_resolver_count++;
+  if (rebuild_value_resolver_name_index(shell) != 0) {
+    shell->value_resolver_count--;
+    memset(&shell->value_resolvers[shell->value_resolver_count], 0, sizeof(shell->value_resolvers[shell->value_resolver_count]));
+    return 1;
+  }
+  mark_completion_cache_dirty(shell);
   return 0;
 }
 
@@ -1480,6 +1725,10 @@ int arksh_shell_register_pipeline_stage(ArkshShell *shell, const char *name, con
       }
       shell->pipeline_stages[i].is_plugin_stage = is_plugin_stage;
       shell->pipeline_stages[i].owner_plugin_index = is_plugin_stage ? shell->loading_plugin_index : -1;
+      if (rebuild_pipeline_stage_name_index(shell) != 0) {
+        return 1;
+      }
+      mark_completion_cache_dirty(shell);
       return 0;
     }
   }
@@ -1497,6 +1746,12 @@ int arksh_shell_register_pipeline_stage(ArkshShell *shell, const char *name, con
   shell->pipeline_stages[shell->pipeline_stage_count].is_plugin_stage = is_plugin_stage;
   shell->pipeline_stages[shell->pipeline_stage_count].owner_plugin_index = is_plugin_stage ? shell->loading_plugin_index : -1;
   shell->pipeline_stage_count++;
+  if (rebuild_pipeline_stage_name_index(shell) != 0) {
+    shell->pipeline_stage_count--;
+    memset(&shell->pipeline_stages[shell->pipeline_stage_count], 0, sizeof(shell->pipeline_stages[shell->pipeline_stage_count]));
+    return 1;
+  }
+  mark_completion_cache_dirty(shell);
   return 0;
 }
 
@@ -2043,6 +2298,7 @@ static int register_extension_common(
   entry->method_fn = method_fn;
   entry->is_plugin_extension = is_plugin_extension;
   entry->owner_plugin_index = is_plugin_extension ? shell->loading_plugin_index : -1;
+  mark_completion_cache_dirty(shell);
   return 0;
 }
 
@@ -2109,6 +2365,7 @@ int arksh_shell_register_type_descriptor(ArkshShell *shell, const char *type_nam
   copy_string(shell->type_descriptors[shell->type_descriptor_count].description,
               ARKSH_MAX_DESCRIPTION, description != NULL ? description : "");
   shell->type_descriptor_count++;
+  mark_completion_cache_dirty(shell);
   return 0;
 }
 
@@ -2440,6 +2697,7 @@ int arksh_shell_set_alias(ArkshShell *shell, const char *name, const char *value
   }
 
   copy_string(entry->value, sizeof(entry->value), value == NULL ? "" : value);
+  mark_completion_cache_dirty(shell);
   return 0;
 }
 
@@ -2458,6 +2716,7 @@ int arksh_shell_unset_alias(ArkshShell *shell, const char *name) {
         memmove(&shell->aliases[i], &shell->aliases[i + 1], remaining * sizeof(shell->aliases[i]));
       }
       shell->alias_count--;
+      mark_completion_cache_dirty(shell);
       return 0;
     }
   }
@@ -2584,6 +2843,8 @@ static void free_class_definition_contents(ArkshClassDef *class_def) {
   for (i = 0; i < class_def->property_count; ++i) {
     arksh_value_free(&class_def->properties[i].default_value);
   }
+  free(class_def->properties);
+  free(class_def->methods);
   memset(class_def, 0, sizeof(*class_def));
 }
 
@@ -2602,6 +2863,13 @@ static int copy_class_definition_for_subshell(ArkshClassDef *dest, const ArkshCl
     copy_string(dest->bases[i], sizeof(dest->bases[i]), src->bases[i]);
   }
 
+  if (src->property_count > 0 &&
+      grow_heap_array((void **) &dest->properties, &dest->property_capacity,
+                      src->property_count, sizeof(dest->properties[0]),
+                      0) != 0) {
+    free_class_definition_contents(dest);
+    return 1;
+  }
   dest->property_count = src->property_count;
   for (i = 0; i < src->property_count; ++i) {
     copy_string(dest->properties[i].name, sizeof(dest->properties[i].name), src->properties[i].name);
@@ -2611,6 +2879,13 @@ static int copy_class_definition_for_subshell(ArkshClassDef *dest, const ArkshCl
     }
   }
 
+  if (src->method_count > 0 &&
+      grow_heap_array((void **) &dest->methods, &dest->method_capacity,
+                      src->method_count, sizeof(dest->methods[0]),
+                      0) != 0) {
+    free_class_definition_contents(dest);
+    return 1;
+  }
   dest->method_count = src->method_count;
   for (i = 0; i < src->method_count; ++i) {
     copy_string(dest->methods[i].name, sizeof(dest->methods[i].name), src->methods[i].name);
@@ -2827,6 +3102,8 @@ int arksh_shell_clone_subshell(const ArkshShell *source, ArkshShell **out_shell,
   clone->commands = NULL;
   clone->command_count = 0;
   clone->command_capacity = 0;
+  clone->command_name_index = NULL;
+  clone->command_name_index_capacity = 0;
   clone->plugins = NULL;
   clone->plugin_count = 0;
   clone->plugin_capacity = 0;
@@ -2836,18 +3113,26 @@ int arksh_shell_clone_subshell(const ArkshShell *source, ArkshShell **out_shell,
   clone->classes = NULL;
   clone->class_count = 0;
   clone->class_capacity = 0;
+  clone->class_name_index = NULL;
+  clone->class_name_index_capacity = 0;
   clone->instances = NULL;
   clone->instance_count = 0;
   clone->instance_capacity = 0;
+  clone->instance_id_index = NULL;
+  clone->instance_id_index_capacity = 0;
   clone->extensions = NULL;
   clone->extension_count = 0;
   clone->extension_capacity = 0;
   clone->value_resolvers = NULL;
   clone->value_resolver_count = 0;
   clone->value_resolver_capacity = 0;
+  clone->value_resolver_name_index = NULL;
+  clone->value_resolver_name_index_capacity = 0;
   clone->pipeline_stages = NULL;
   clone->pipeline_stage_count = 0;
   clone->pipeline_stage_capacity = 0;
+  clone->pipeline_stage_name_index = NULL;
+  clone->pipeline_stage_name_index_capacity = 0;
   clone->aliases = NULL;
   clone->alias_count = 0;
   clone->alias_capacity = 0;
@@ -2992,6 +3277,11 @@ int arksh_shell_clone_subshell(const ArkshShell *source, ArkshShell **out_shell,
     arksh_shell_destroy_subshell(clone);
     return 1;
   }
+  if (rebuild_all_lookup_indices(clone) != 0) {
+    snprintf(out, out_size, "unable to rebuild subshell lookup indices");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
 
   *out_shell = clone;
   out[0] = '\0';
@@ -3050,13 +3340,18 @@ void arksh_shell_destroy_subshell(ArkshShell *shell) {
 
   arksh_scratch_arena_destroy(&shell->scratch);
   free(shell->commands);
+  free(shell->command_name_index);
   free(shell->plugins);
   free(shell->functions);
   free(shell->classes);
+  free(shell->class_name_index);
   free(shell->instances);
+  free(shell->instance_id_index);
   free(shell->extensions);
   free(shell->value_resolvers);
+  free(shell->value_resolver_name_index);
   free(shell->pipeline_stages);
+  free(shell->pipeline_stage_name_index);
   free(shell->aliases);
   free(shell->jobs);
   free(shell->traps);
@@ -3389,7 +3684,9 @@ static int class_definition_add_property(ArkshClassDef *class_def, const char *n
     }
   }
 
-  if (class_def->property_count >= ARKSH_MAX_CLASS_PROPERTIES) {
+  if (grow_heap_array((void **) &class_def->properties, &class_def->property_capacity,
+                      class_def->property_count + 1, sizeof(class_def->properties[0]),
+                      0) != 0) {
     return 1;
   }
 
@@ -3415,7 +3712,9 @@ static int class_definition_add_method(ArkshClassDef *class_def, const char *nam
     }
   }
 
-  if (class_def->method_count >= ARKSH_MAX_CLASS_METHODS) {
+  if (grow_heap_array((void **) &class_def->methods, &class_def->method_capacity,
+                      class_def->method_count + 1, sizeof(class_def->methods[0]),
+                      0) != 0) {
     return 1;
   }
 
@@ -3612,6 +3911,16 @@ int arksh_shell_set_class(ArkshShell *shell, const ArkshClassCommandNode *class_
 
   *entry = *candidate;
   free(candidate);
+  if (rebuild_class_name_index(shell) != 0) {
+    free_class_definition_contents(entry);
+    memset(entry, 0, sizeof(*entry));
+    if (shell->class_count > 0 && entry == &shell->classes[shell->class_count - 1]) {
+      shell->class_count--;
+    }
+    snprintf(out, out_size, "unable to rebuild class lookup index");
+    return 1;
+  }
+  mark_completion_cache_dirty(shell);
   out[0] = '\0';
   return 0;
 }
@@ -3661,6 +3970,8 @@ static int rollback_last_instance(ArkshShell *shell) {
   arksh_value_free(&shell->instances[shell->instance_count - 1].fields);
   memset(&shell->instances[shell->instance_count - 1], 0, sizeof(shell->instances[shell->instance_count - 1]));
   shell->instance_count--;
+  rebuild_instance_id_index(shell);
+  mark_completion_cache_dirty(shell);
   return 0;
 }
 
@@ -3763,7 +4074,14 @@ int arksh_shell_instantiate_class(
   }
 
   arksh_value_set_instance(out_value, name, instance->id);
+  if (rebuild_instance_id_index(shell) != 0) {
+    rollback_last_instance(shell);
+    snprintf(out, out_size, "unable to rebuild instance lookup index");
+    free(instance_value);
+    return 1;
+  }
   free(instance_value);
+  mark_completion_cache_dirty(shell);
   out[0] = '\0';
   return 0;
 }
@@ -7500,21 +7818,21 @@ static int command_help(ArkshShell *shell, int argc, char **argv, char *out, siz
   }
 
   /* help <name> — search across all categories */
-  for (i = 0; i < shell->command_count; ++i) {
-    if (strcmp(shell->commands[i].name, topic) == 0) {
-      snprintf(out + strlen(out), out_size - strlen(out), "%s  [command]\n  %s\n", shell->commands[i].name, shell->commands[i].description);
+  {
+    const ArkshCommandDef *command = arksh_shell_find_command(shell, topic);
+    const ArkshValueResolverDef *resolver = arksh_shell_find_value_resolver(shell, topic);
+    const ArkshPipelineStageDef *stage = arksh_shell_find_pipeline_stage(shell, topic);
+
+    if (command != NULL) {
+      snprintf(out + strlen(out), out_size - strlen(out), "%s  [command]\n  %s\n", command->name, command->description);
       found = 1;
     }
-  }
-  for (i = 0; i < shell->value_resolver_count; ++i) {
-    if (strcmp(shell->value_resolvers[i].name, topic) == 0) {
-      snprintf(out + strlen(out), out_size - strlen(out), "%s  [resolver]\n  %s\n", shell->value_resolvers[i].name, shell->value_resolvers[i].description);
+    if (resolver != NULL) {
+      snprintf(out + strlen(out), out_size - strlen(out), "%s  [resolver]\n  %s\n", resolver->name, resolver->description);
       found = 1;
     }
-  }
-  for (i = 0; i < shell->pipeline_stage_count; ++i) {
-    if (strcmp(shell->pipeline_stages[i].name, topic) == 0) {
-      snprintf(out + strlen(out), out_size - strlen(out), "%s  [stage]\n  %s\n", shell->pipeline_stages[i].name, shell->pipeline_stages[i].description);
+    if (stage != NULL) {
+      snprintf(out + strlen(out), out_size - strlen(out), "%s  [stage]\n  %s\n", stage->name, stage->description);
       found = 1;
     }
   }
@@ -7840,6 +8158,7 @@ static int command_plugin(ArkshShell *shell, int argc, char **argv, char *out, s
       return 1;
     }
     plugin->active = 1;
+    mark_completion_cache_dirty(shell);
     snprintf(out, out_size, "plugin enabled: %s", plugin->name);
     return 0;
   }
@@ -7851,6 +8170,7 @@ static int command_plugin(ArkshShell *shell, int argc, char **argv, char *out, s
       return 1;
     }
     plugin->active = 0;
+    mark_completion_cache_dirty(shell);
     snprintf(out, out_size, "plugin disabled: %s", plugin->name);
     return 0;
   }
@@ -9416,18 +9736,17 @@ static int register_builtin(ArkshShell *shell, const char *name, const char *des
    bypassing any user function that has the same name.  Useful inside
    override functions, e.g. `function cd(dir) do ... ; builtin cd $dir ; done`. */
 static int command_builtin(ArkshShell *shell, int argc, char *argv[], char *out, size_t out_size) {
-  size_t i;
+  const ArkshCommandDef *command;
 
   if (argc < 2) {
     snprintf(out, out_size, "usage: builtin <command> [args...]");
     return 1;
   }
 
-  for (i = 0; i < shell->command_count; ++i) {
-    if (strcmp(shell->commands[i].name, argv[1]) == 0) {
-      /* Call the built-in with argv shifted: argv[1] becomes argv[0]. */
-      return shell->commands[i].fn(shell, argc - 1, argv + 1, out, out_size);
-    }
+  command = arksh_shell_find_command(shell, argv[1]);
+  if (command != NULL) {
+    /* Call the built-in with argv shifted: argv[1] becomes argv[0]. */
+    return command->fn(shell, argc - 1, argv + 1, out, out_size);
   }
 
   snprintf(out, out_size, "builtin: %s: not a shell built-in", argv[1]);
@@ -11190,6 +11509,10 @@ int arksh_shell_init(ArkshShell *shell) {
   shell->next_job_id = 1;
   shell->loading_plugin_index = -1;
   shell->last_bg_pid = -1;
+  shell->completion_generation = s_next_shell_generation++;
+  if (shell->completion_generation == 0) {
+    shell->completion_generation = s_next_shell_generation++;
+  }
   arksh_scratch_arena_init(&shell->scratch);
   shell->traps = (ArkshTrapEntry *) calloc(ARKSH_TRAP_COUNT, sizeof(*shell->traps));
   if (shell->traps == NULL) {
@@ -11238,6 +11561,10 @@ int arksh_shell_init(ArkshShell *shell) {
     return 1;
   }
 
+  if (rebuild_all_lookup_indices(shell) != 0) {
+    return 1;
+  }
+
   return try_load_default_rc(shell);
 }
 
@@ -11281,15 +11608,20 @@ void arksh_shell_destroy(ArkshShell *shell) {
 
   arksh_scratch_arena_destroy(&shell->scratch);
   free(shell->commands);
+  free(shell->command_name_index);
   free(shell->plugins);
   free(shell->vars);
   free(shell->bindings);
   free(shell->functions);
   free(shell->classes);
+  free(shell->class_name_index);
   free(shell->instances);
+  free(shell->instance_id_index);
   free(shell->extensions);
   free(shell->value_resolvers);
+  free(shell->value_resolver_name_index);
   free(shell->pipeline_stages);
+  free(shell->pipeline_stage_name_index);
   free(shell->aliases);
   free(shell->history);
   free(shell->jobs);
@@ -11326,6 +11658,12 @@ int arksh_shell_register_command(ArkshShell *shell, const char *name, const char
      buffer and cannot directly modify shell-internal state. */
   shell->commands[shell->command_count].kind = ARKSH_BUILTIN_PURE;
   shell->command_count++;
+  if (rebuild_command_name_index(shell) != 0) {
+    shell->command_count--;
+    memset(&shell->commands[shell->command_count], 0, sizeof(shell->commands[shell->command_count]));
+    return 1;
+  }
+  mark_completion_cache_dirty(shell);
   return 0;
 }
 
@@ -11547,6 +11885,10 @@ int arksh_shell_load_config(ArkshShell *shell, const char *path, char *out, size
     return 1;
   }
 
+  config.generation = shell->prompt.generation + 1u;
+  if (config.generation == 0) {
+    config.generation = 1u;
+  }
   shell->prompt = config;
 
   for (i = 0; i < shell->prompt.plugin_count; ++i) {

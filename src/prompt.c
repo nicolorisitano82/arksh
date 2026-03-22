@@ -16,6 +16,21 @@ static void copy_string(char *dest, size_t dest_size, const char *src) {
   snprintf(dest, dest_size, "%s", src == NULL ? "" : src);
 }
 
+typedef struct {
+  int valid;
+  const struct ArkshShell *shell;
+  const ArkshPromptConfig *config;
+  unsigned long generation;
+  unsigned long shell_generation;
+  int last_status;
+  size_t plugin_count;
+  time_t second;
+  char cwd[ARKSH_MAX_PATH];
+  char rendered[ARKSH_MAX_OUTPUT];
+} ArkshPromptRenderCache;
+
+static ArkshPromptRenderCache s_prompt_cache;
+
 static void trim_in_place(char *text) {
   size_t start = 0;
   size_t end;
@@ -258,6 +273,7 @@ void arksh_prompt_config_init(ArkshPromptConfig *config) {
   }
 
   memset(config, 0, sizeof(*config));
+  config->generation = 1u;
   copy_string(config->theme, sizeof(config->theme), "default");
   copy_string(config->separator, sizeof(config->separator), " | ");
   config->use_color = 1;
@@ -340,9 +356,25 @@ int arksh_prompt_config_load(ArkshPromptConfig *config, const char *path) {
 void arksh_prompt_render(const ArkshPromptConfig *config, const struct ArkshShell *shell, char *out, size_t out_size) {
   char left[ARKSH_MAX_OUTPUT];
   char right[ARKSH_MAX_OUTPUT];
+  time_t now_second;
   size_t i;
 
   if (config == NULL || shell == NULL || out == NULL || out_size == 0) {
+    return;
+  }
+
+  now_second = time(NULL);
+  if (now_second != (time_t) -1 &&
+      s_prompt_cache.valid &&
+      s_prompt_cache.shell == shell &&
+      s_prompt_cache.config == config &&
+      s_prompt_cache.generation == config->generation &&
+      s_prompt_cache.shell_generation == shell->completion_generation &&
+      s_prompt_cache.last_status == shell->last_status &&
+      s_prompt_cache.plugin_count == shell->plugin_count &&
+      s_prompt_cache.second == now_second &&
+      strcmp(s_prompt_cache.cwd, shell->cwd) == 0) {
+    copy_string(out, out_size, s_prompt_cache.rendered);
     return;
   }
 
@@ -366,4 +398,15 @@ void arksh_prompt_render(const ArkshPromptConfig *config, const struct ArkshShel
   } else {
     snprintf(out, out_size, "[%s] %s > ", config->theme, left);
   }
+
+  s_prompt_cache.valid = 1;
+  s_prompt_cache.shell = shell;
+  s_prompt_cache.config = config;
+  s_prompt_cache.generation = config->generation;
+  s_prompt_cache.shell_generation = shell->completion_generation;
+  s_prompt_cache.last_status = shell->last_status;
+  s_prompt_cache.plugin_count = shell->plugin_count;
+  s_prompt_cache.second = now_second;
+  copy_string(s_prompt_cache.cwd, sizeof(s_prompt_cache.cwd), shell->cwd);
+  copy_string(s_prompt_cache.rendered, sizeof(s_prompt_cache.rendered), out);
 }
