@@ -562,7 +562,7 @@ registrazione in `shell.c`.
 
 ### E6-S8. Tipo Matrix — struttura dati matriciale ispirata ai DataFrame
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
 Introduce `Matrix` come tipo di primo livello nell'object model di arksh: una tabella
 bidimensionale con colonne nominate e righe eterogenee, ispirata ai DataFrame di pandas.
@@ -630,13 +630,13 @@ di item massimali; il 99% degli usi reali resterà ampiamente sotto.
 
 **Task**
 
-- `[ ]` `E6-S8-T1` **Struttura interna** — aggiungere `ARKSH_VALUE_MATRIX` a `ArkshValueKind` e `ArkshMatrix` a `ArkshValue` in `object.h`; aggiornare `arksh_value_init` (zero i campi), `arksh_value_free` (ricorsivo sugli item), `arksh_value_copy` (deep copy riga per riga), `arksh_value_render` (formato tabella con intestazioni), `value_is_truthy` (`row_count > 0`); aggiungere `arksh_value_kind_name` → `"matrix"`
-- `[ ]` `E6-S8-T2` **Resolver `Matrix(col...)`** — registrare il resolver in `shell.c`; senza argomenti crea matrice 0×0; con argomenti stringa crea matrice con quelle intestazioni e zero righe; errore se un argomento non è stringa (`"Matrix() expects string column names"`)
-- `[ ]` `E6-S8-T3` **Metodi di mutazione** — implementare su `ARKSH_VALUE_OBJECT` di tipo matrix o come property handler: `add_row(v1, v2, ...)` → nuova matrice con riga aggiunta in coda (errore se argc ≠ col_count); `drop_row(n)` → nuova matrice senza la riga n; `rename_col(old, new)` → nuova matrice con colonna rinominata; tutti i metodi restituiscono una nuova istanza, non mutano il receiver
-- `[ ]` `E6-S8-T4` **Accesso e selezione** — proprietà `rows`, `cols`, `col_names`; metodi: `row(n)` → mappa chiave-valore della riga n; `col(name)` → `ArkshValue` lista degli item di quella colonna (errore se colonna inesistente); `select(c1, c2, ...)` → nuova matrice con solo le colonne indicate (errore se nome sconosciuto); `where(col, op, val)` → nuova matrice con le righe che soddisfano `item[col] op val` (operatori supportati: `==`, `!=`, `<`, `<=`, `>`, `>=`)
-- `[ ]` `E6-S8-T5` **Interoperabilità e serializzazione** — `to_maps` → lista di mappe (usa `ArkshValueMap` esistente, una per riga); `from_maps(list)` → costruisce matrice da lista di mappe omogenee (le chiavi della prima mappa diventano intestazioni, errore se una riga ha chiavi diverse); `to_csv` → stringa CSV RFC 4180 con header; `from_csv(str)` → parsa CSV (prima riga = intestazioni), usa il parser interno; `to_json` → array JSON di oggetti; `type` → `"matrix"`
-- `[ ]` `E6-S8-T6` **Stage pipeline** — aggiungere `|> transpose` (scambia righe e colonne, col_count e row_count si scambiano, i nomi diventano `"row_0"`, `"row_1"`, …); `|> fill_na(col, val)` sostituisce item vuoti/stringa-vuota in una colonna con `val`; entrambi gli stage operano su `ARKSH_VALUE_MATRIX` e restituiscono una nuova matrice
-- `[ ]` `E6-S8-T7` **Test** — matrice 0×0: `Matrix() -> rows` → `0`; matrice 2×3 dopo due `add_row`: `-> cols` → `3`, `-> col("age")` → lista corretta; `-> select("name")` → matrice 2×1; `-> where("age", ">", 26)` → matrice 1×3; `-> to_maps` → lista di 2 mappe; round-trip `-> to_csv |> Matrix() -> from_csv`: uguale alla matrice originale; `-> to_json` → stringa JSON valida; errore su colonna inesistente; test golden con `source`
+- `[x]` `E6-S8-T1` **Struttura interna** — `ARKSH_VALUE_MATRIX` + `ArkshMatrixCell` + `ArkshMatrix` heap-allocated (256 righe × 32 col) in `object.h`; `arksh_value_free`, `arksh_value_copy`, `arksh_value_render` (tabella ASCII), `value_is_truthy` (`row_count > 0`), `arksh_value_kind_name` → `"matrix"`, `arksh_value_set_matrix`
+- `[x]` `E6-S8-T2` **Resolver `Matrix(col...)`** — registrato in `shell.c`; senza argomenti crea matrice 0×0; con argomenti stringa crea matrice con quelle intestazioni e zero righe; `parse_extension_target` aggiornato per `"matrix"` → `ARKSH_VALUE_MATRIX`
+- `[x]` `E6-S8-T3` **Metodi di mutazione** — `add_row(v1, v2, ...)`, `drop_row(n)`, `rename_col(old, new)`; tutti immutabili (restituiscono nuova istanza)
+- `[x]` `E6-S8-T4` **Accesso e selezione** — proprietà `rows`, `cols`, `col_names`, `type`; metodi `row(n)`, `col(name)`, `select(c1, c2, ...)`, `where(col, op, val)` (operatori: `==` `!=` `<` `<=` `>` `>=`)
+- `[x]` `E6-S8-T5` **Interoperabilità e serializzazione** — `to_maps()`, `from_maps(list)`, `to_csv()`, `from_csv(str)` (CSV RFC 4180), `to_json()` (array JSON di oggetti)
+- `[x]` `E6-S8-T6` **Stage pipeline** — `|> transpose` (nomi colonne → `"row_0"`, `"row_1"`, …); `|> fill_na(col, val)` sostituisce celle vuote in una colonna
+- `[x]` `E6-S8-T7` **Test** — golden `tests/fixtures/golden/matrix-types.arksh`; test CTest `arksh_golden_matrix_types`; 212/212 passati
 
 ---
 
@@ -993,10 +993,11 @@ Stato story: `[ ]`
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E8 `[x]`
-**In corso:** E6 (S1–S7 `[x]`, S9 `[x]` come plugin, S10 `[x]` autoload, S8 aperta)
-**Aperte:** E6 (S8), E7 (JSON), E9 (release), E10 (HTTP plugin), E11 (POSIX core)
+**In corso:** E6 `[x]` — tutte le story completate
+**Aperte:** E7 (JSON), E9 (release), E10 (HTTP plugin), E11 (POSIX core)
 
-> **Completati in E6:** S1 (path/fs), S2 (custom types), S3 (pipeline stages), S4 (shell integration), S5 (numeric types), S6 (Dict), S7 (base64), S9 (trash plugin), S10 (plugin autoload). Rimane solo S8 (Matrix).
+> **Completati in E6:** S1 (path/fs), S2 (custom types), S3 (pipeline stages), S4 (shell integration), S5 (numeric types), S6 (Dict), S7 (base64), S8 (Matrix), S9 (trash plugin), S10 (plugin autoload). E6 chiusa.
+> **Extra:** esecuzione diretta di script `arksh file.arksh [args]` aggiunta a `main.c`.
 
 ---
 
@@ -1064,18 +1065,9 @@ epoca. Sblocca integrazioni con API esterne direttamente dagli script.
 2. ~~`E6-S7-T2` (stage `base64_decode`)~~
 3. ~~`E6-S7-T3` (test)~~
 
-### Percorso L — tipo Matrix (E6-S8)
+### ~~Percorso L — tipo Matrix (E6-S8)~~ Completato
 
-Struttura dati matriciale con colonne nominate ispirata ai DataFrame di pandas.
-Prerequisito suggerito: E6-S6 (Dict) per interoperabilità `to_maps`/`from_maps`.
-
-1. `E6-S8-T1` (struttura interna `ARKSH_VALUE_MATRIX` + `ArkshMatrix` + ciclo vita)
-2. `E6-S8-T2` (resolver `Matrix(col...)` — costruzione con intestazioni)
-3. `E6-S8-T3` (metodi di mutazione: `add_row`, `drop_row`, `rename_col`)
-4. `E6-S8-T4` (accesso e selezione: `row(n)`, `col(name)`, `select(...)`, `where(col, op, val)`)
-5. `E6-S8-T5` (interoperabilità: `to_maps`, `from_maps`, `to_csv`, `from_csv`, `to_json`)
-6. `E6-S8-T6` (stage pipeline: `transpose`, `fill_na`)
-7. `E6-S8-T7` (test golden + unit)
+~~`E6-S8-T1`~~ ~~`E6-S8-T2`~~ ~~`E6-S8-T3`~~ ~~`E6-S8-T4`~~ ~~`E6-S8-T5`~~ ~~`E6-S8-T6`~~ ~~`E6-S8-T7`~~
 
 ### ~~Percorso N — plugin autoload (E6-S10)~~ Completato
 

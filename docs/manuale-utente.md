@@ -34,6 +34,7 @@ Versione di riferimento: attuale (marzo 2026)
    - 6.10 [env, proc, shell](#610-env-proc-shell)
    - 6.11 [Base64 encoding](#611-base64-encoding)
    - 6.12 [Cestino di sistema (plugin)](#612-cestino-di-sistema-plugin)
+   - 6.13 [Matrix — dati tabulari](#613-matrix--dati-tabulari)
 7. [Pipeline oggetti (|>)](#7-pipeline-oggetti-)
    - 7.1 [Concetto e sintassi](#71-concetto-e-sintassi)
    - 7.2 [Bridge shell/object](#72-bridge-shellobject)
@@ -1221,6 +1222,79 @@ t -> restore("vecchio-file.txt")
 | `trash() -> items` | Si | Si | Solo conteggio |
 | `trash() -> empty()` | Si | Si (rm Trash files+info) | Si (SHEmptyRecycleBinW) |
 | `trash() -> restore(n)` | No | Si (via .trashinfo) | No |
+
+---
+
+### 6.13 Tipo Matrix — dati tabulari
+
+`Matrix` è un tipo nativo di arksh per rappresentare tabelle bidimensionali con colonne nominate. Ogni operazione restituisce una nuova istanza (immutabilità).
+
+**Costruzione**
+
+```arksh
+let m = Matrix("name", "age", "score")    # matrice vuota con intestazioni
+let m2 = m -> add_row("alice", 30, 95.5)
+let m3 = m2 -> add_row("bob", 25, 87.0)
+```
+
+**Proprietà**
+
+```arksh
+m3 -> rows        # 2  (numero di righe)
+m3 -> cols        # 3  (numero di colonne)
+m3 -> col_names   # ["name", "age", "score"]
+m3 -> type        # "matrix"
+```
+
+**Accesso e selezione**
+
+```arksh
+let r0    = m3 -> row(0)              # mappa {name: "alice", age: 30, score: 95.5}
+let ages  = m3 -> col("age")          # lista [30, 25]
+let sub   = m3 -> select("name", "score")   # matrice 2×2
+let young = m3 -> where("age", "<", 30)     # matrice 1×3 (solo bob)
+```
+
+Operatori supportati da `where`: `==`, `!=`, `<`, `<=`, `>`, `>=`.
+
+**Mutazione (immutabile — ogni metodo restituisce una nuova istanza)**
+
+```arksh
+let m4 = m3 -> drop_row(0)            # rimuove la prima riga
+let m5 = m3 -> rename_col("score", "punteggio")
+```
+
+**Interoperabilità**
+
+```arksh
+let maps = m3 -> to_maps()            # lista di mappe [{name: "alice", ...}, ...]
+let m6   = Matrix() -> from_maps(maps)
+
+let csv  = m3 -> to_csv()             # stringa CSV RFC 4180 con intestazioni
+let m7   = Matrix() -> from_csv(csv)
+
+let json = m3 -> to_json()            # array JSON: [{"name": "alice", ...}, ...]
+```
+
+**Stage pipeline**
+
+```arksh
+let mt = m3 |> transpose              # scambia righe e colonne; nuovi nomi colonna: "row_0", "row_1", …
+let mf = m3 |> fill_na("score", "0") # sostituisce celle vuote nella colonna "score" con "0"
+```
+
+**Rendering**
+
+`-> print()` produce una tabella allineata:
+
+```
+name   age  score
+-----  ---  -----
+alice  30   95.5
+bob    25   87
+```
+
+**Limiti**: max 256 righe × 32 colonne per istanza; valori celle troncati a 128 caratteri.
 
 ---
 
