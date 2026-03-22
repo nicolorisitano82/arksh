@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "arksh/perf.h"
@@ -36,6 +37,52 @@ static void copy_string(char *dest, size_t dest_size, const char *src) {
   }
 
   snprintf(dest, dest_size, "%s", src == NULL ? "" : src);
+}
+
+static int grow_heap_array(void **items, size_t *capacity, size_t required, size_t item_size, size_t max_capacity) {
+  size_t next_capacity;
+  void *grown;
+
+  if (items == NULL || capacity == NULL || item_size == 0) {
+    return 1;
+  }
+  if (required == 0) {
+    return 0;
+  }
+  if (*capacity >= required) {
+    return 0;
+  }
+  if (max_capacity > 0 && required > max_capacity) {
+    return 1;
+  }
+
+  next_capacity = (*capacity == 0) ? 4u : *capacity;
+  while (next_capacity < required) {
+    size_t doubled = next_capacity * 2u;
+
+    if (doubled <= next_capacity) {
+      next_capacity = required;
+      break;
+    }
+    next_capacity = doubled;
+  }
+  if (max_capacity > 0 && next_capacity > max_capacity) {
+    next_capacity = max_capacity;
+  }
+  if (next_capacity < required) {
+    return 1;
+  }
+
+  grown = realloc(*items, next_capacity * item_size);
+  if (grown == NULL) {
+    return 1;
+  }
+  if (next_capacity > *capacity) {
+    memset((char *) grown + (*capacity * item_size), 0, (next_capacity - *capacity) * item_size);
+  }
+  *items = grown;
+  *capacity = next_capacity;
+  return 0;
 }
 
 static int join_plugin_path(const char *directory, const char *name, char *out, size_t out_size) {
@@ -240,7 +287,9 @@ int arksh_shell_load_plugin(ArkshShell *shell, const char *path, char *out, size
     return 1;
   }
 
-  if (shell->plugin_count >= ARKSH_MAX_PLUGINS) {
+  if (grow_heap_array((void **) &shell->plugins, &shell->plugin_capacity,
+                      shell->plugin_count + 1, sizeof(shell->plugins[0]),
+                      ARKSH_MAX_PLUGINS) != 0) {
     snprintf(out, out_size, "plugin limit reached");
     return 1;
   }

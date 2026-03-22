@@ -44,7 +44,7 @@ static double point_get_coord(const ArkshValue *point, const char *key) {
   }
   /* STRING fallback (e.g. after JSON roundtrip) */
   if (entry->kind == ARKSH_VALUE_STRING) {
-    return atof(entry->text);
+    return atof(arksh_value_item_text_cstr(entry));
   }
   return 0.0;
 }

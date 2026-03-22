@@ -520,19 +520,19 @@ static int object_method_trash(
     snprintf(error, error_size, "trash() is only valid on filesystem objects");
     return 1;
   }
-  if (!receiver->object.exists) {
-    snprintf(error, error_size, "trash(): path does not exist: %s", receiver->object.path);
+  if (!arksh_value_object_ref(receiver)->exists) {
+    snprintf(error, error_size, "trash(): path does not exist: %s", arksh_value_object_ref(receiver)->path);
     return 1;
   }
 
-  if (platform_trash_item(receiver->object.path, trash_dest, sizeof(trash_dest), error, error_size) != 0) {
+  if (platform_trash_item(arksh_value_object_ref(receiver)->path, trash_dest, sizeof(trash_dest), error, error_size) != 0) {
     return 1;
   }
 
   if (trash_dest[0] != '\0') {
     arksh_value_set_string(out_value, trash_dest);
   } else {
-    arksh_value_set_string(out_value, receiver->object.path);
+    arksh_value_set_string(out_value, arksh_value_object_ref(receiver)->path);
   }
   return 0;
 }
@@ -568,9 +568,9 @@ static int stage_each_trash(
     const char *path = NULL;
 
     if (item->kind == ARKSH_VALUE_OBJECT) {
-      path = item->object.path;
+      path = arksh_value_item_object_ref(item)->path;
     } else if (item->kind == ARKSH_VALUE_STRING) {
-      path = item->text;
+      path = arksh_value_item_text_cstr(item);
     } else {
       snprintf(item_error, sizeof(item_error), "item %zu: not a path or object", i);
       failed++;

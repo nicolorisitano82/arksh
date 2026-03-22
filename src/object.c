@@ -45,6 +45,189 @@ static ArkshValueItem *allocate_value_item(char *error, size_t error_size) {
   return item;
 }
 
+static char *duplicate_string_owned(const char *src) {
+  size_t length;
+  char *copy;
+
+  if (src == NULL || src[0] == '\0') {
+    return NULL;
+  }
+
+  length = strlen(src);
+  copy = (char *) calloc(length + 1, sizeof(*copy));
+  if (copy == NULL) {
+    return NULL;
+  }
+  memcpy(copy, src, length);
+  copy[length] = '\0';
+  return copy;
+}
+
+static ArkshObject *duplicate_object_owned(const ArkshObject *src) {
+  ArkshObject *copy;
+
+  if (src == NULL) {
+    return NULL;
+  }
+
+  copy = (ArkshObject *) calloc(1, sizeof(*copy));
+  if (copy == NULL) {
+    return NULL;
+  }
+  *copy = *src;
+  return copy;
+}
+
+static ArkshBlock *duplicate_block_owned(const ArkshBlock *src) {
+  ArkshBlock *copy;
+
+  if (src == NULL) {
+    return NULL;
+  }
+
+  copy = (ArkshBlock *) calloc(1, sizeof(*copy));
+  if (copy == NULL) {
+    return NULL;
+  }
+  *copy = *src;
+  return copy;
+}
+
+static void free_item_scalar_payload(ArkshValueItem *item) {
+  if (item == NULL) {
+    return;
+  }
+
+  free(item->text);
+  item->text = NULL;
+  free(item->object);
+  item->object = NULL;
+  free(item->block);
+  item->block = NULL;
+}
+
+static void free_value_scalar_payload(ArkshValue *value) {
+  if (value == NULL) {
+    return;
+  }
+
+  free(value->text);
+  value->text = NULL;
+  free(value->object);
+  value->object = NULL;
+  free(value->block);
+  value->block = NULL;
+}
+
+static int assign_value_text(ArkshValue *value, const char *text) {
+  char *copy;
+
+  if (value == NULL) {
+    return 1;
+  }
+
+  copy = duplicate_string_owned(text);
+  free(value->text);
+  value->text = copy;
+  if (text != NULL && text[0] != '\0' && value->text == NULL) {
+    return 1;
+  }
+  return 0;
+}
+
+static int assign_item_text(ArkshValueItem *item, const char *text) {
+  char *copy;
+
+  if (item == NULL) {
+    return 1;
+  }
+
+  copy = duplicate_string_owned(text);
+  free(item->text);
+  item->text = copy;
+  if (text != NULL && text[0] != '\0' && item->text == NULL) {
+    return 1;
+  }
+  return 0;
+}
+
+static int assign_value_object(ArkshValue *value, const ArkshObject *object) {
+  ArkshObject *copy;
+
+  if (value == NULL) {
+    return 1;
+  }
+
+  copy = duplicate_object_owned(object);
+  free(value->object);
+  value->object = copy;
+  if (object != NULL && value->object == NULL) {
+    return 1;
+  }
+  return 0;
+}
+
+static int assign_item_object(ArkshValueItem *item, const ArkshObject *object) {
+  ArkshObject *copy;
+
+  if (item == NULL) {
+    return 1;
+  }
+
+  copy = duplicate_object_owned(object);
+  free(item->object);
+  item->object = copy;
+  if (object != NULL && item->object == NULL) {
+    return 1;
+  }
+  return 0;
+}
+
+static int assign_value_block(ArkshValue *value, const ArkshBlock *block) {
+  ArkshBlock *copy;
+
+  if (value == NULL) {
+    return 1;
+  }
+
+  copy = duplicate_block_owned(block);
+  free(value->block);
+  value->block = copy;
+  if (block != NULL && value->block == NULL) {
+    return 1;
+  }
+  return 0;
+}
+
+static int assign_item_block(ArkshValueItem *item, const ArkshBlock *block) {
+  ArkshBlock *copy;
+
+  if (item == NULL) {
+    return 1;
+  }
+
+  copy = duplicate_block_owned(block);
+  free(item->block);
+  item->block = copy;
+  if (block != NULL && item->block == NULL) {
+    return 1;
+  }
+  return 0;
+}
+
+static const ArkshObject EMPTY_OBJECT_VALUE = {0};
+static const ArkshBlock EMPTY_BLOCK_VALUE = {0};
+static const unsigned int ARKSH_VALUE_SIGNATURE = 0x41564c55u;
+static const unsigned int ARKSH_VALUE_ITEM_SIGNATURE = 0x41564954u;
+
+static int value_is_initialized(const ArkshValue *value) {
+  return value != NULL && value->signature == ARKSH_VALUE_SIGNATURE;
+}
+
+static int item_is_initialized(const ArkshValueItem *item) {
+  return item != NULL && item->signature == ARKSH_VALUE_ITEM_SIGNATURE;
+}
+
 static int ensure_list_capacity(ArkshValue *value, size_t min_capacity) {
   ArkshValueItem *items;
   size_t new_capacity;
@@ -564,13 +747,23 @@ void arksh_value_item_free(ArkshValueItem *item) {
     return;
   }
 
+  if (!item_is_initialized(item)) {
+    memset(item, 0, sizeof(*item));
+    item->signature = ARKSH_VALUE_ITEM_SIGNATURE;
+    item->kind = ARKSH_VALUE_EMPTY;
+    return;
+  }
+
   if (item->nested != NULL) {
     arksh_value_free(item->nested);
     free(item->nested);
     item->nested = NULL;
   }
 
+  free_item_scalar_payload(item);
+
   memset(item, 0, sizeof(*item));
+  item->signature = ARKSH_VALUE_ITEM_SIGNATURE;
   item->kind = ARKSH_VALUE_EMPTY;
 }
 
@@ -578,6 +771,13 @@ void arksh_value_free(ArkshValue *value) {
   size_t i;
 
   if (value == NULL) {
+    return;
+  }
+
+  if (!value_is_initialized(value)) {
+    memset(value, 0, sizeof(*value));
+    value->signature = ARKSH_VALUE_SIGNATURE;
+    value->kind = ARKSH_VALUE_EMPTY;
     return;
   }
 
@@ -595,7 +795,10 @@ void arksh_value_free(ArkshValue *value) {
     free(value->matrix);
   }
 
+  free_value_scalar_payload(value);
+
   memset(value, 0, sizeof(*value));
+  value->signature = ARKSH_VALUE_SIGNATURE;
   value->kind = ARKSH_VALUE_EMPTY;
 }
 
@@ -607,13 +810,24 @@ int arksh_value_item_copy(ArkshValueItem *dest, const ArkshValueItem *src) {
     return 1;
   }
 
-  arksh_value_item_init(dest);
+  if (dest == src) {
+    return 0;
+  }
+
+  if (item_is_initialized(dest)) {
+    arksh_value_item_free(dest);
+  } else {
+    arksh_value_item_init(dest);
+  }
   dest->kind = src->kind;
   dest->number = src->number;
   dest->boolean = src->boolean;
-  dest->object = src->object;
-  dest->block = src->block;
-  copy_string(dest->text, sizeof(dest->text), src->text);
+  if (assign_item_object(dest, src->object) != 0 ||
+      assign_item_block(dest, src->block) != 0 ||
+      assign_item_text(dest, src->text) != 0) {
+    arksh_value_item_free(dest);
+    return 1;
+  }
 
   if ((src->kind == ARKSH_VALUE_LIST || src->kind == ARKSH_VALUE_MAP || src->kind == ARKSH_VALUE_DICT) && src->nested != NULL) {
     dest->nested = (ArkshValue *) calloc(1, sizeof(*dest->nested));
@@ -643,13 +857,20 @@ int arksh_value_copy(ArkshValue *dest, const ArkshValue *src) {
     return 0;
   }
 
-  arksh_value_free(dest);
+  if (value_is_initialized(dest)) {
+    arksh_value_free(dest);
+  } else {
+    arksh_value_init(dest);
+  }
   dest->kind = src->kind;
   dest->number = src->number;
   dest->boolean = src->boolean;
-  dest->object = src->object;
-  dest->block = src->block;
-  copy_string(dest->text, sizeof(dest->text), src->text);
+  if (assign_value_object(dest, src->object) != 0 ||
+      assign_value_block(dest, src->block) != 0 ||
+      assign_value_text(dest, src->text) != 0) {
+    arksh_value_free(dest);
+    return 1;
+  }
 
   if (src->kind == ARKSH_VALUE_LIST) {
     if (src->list.count > 0 && ensure_list_capacity(dest, src->list.count) != 0) {
@@ -695,13 +916,20 @@ int arksh_value_item_set_from_value(ArkshValueItem *item, const ArkshValue *valu
     return 1;
   }
 
-  arksh_value_item_init(item);
+  if (item_is_initialized(item)) {
+    arksh_value_item_free(item);
+  } else {
+    arksh_value_item_init(item);
+  }
   item->kind = value->kind;
   item->number = value->number;
   item->boolean = value->boolean;
-  item->object = value->object;
-  item->block = value->block;
-  copy_string(item->text, sizeof(item->text), value->text);
+  if (assign_item_object(item, value->object) != 0 ||
+      assign_item_block(item, value->block) != 0 ||
+      assign_item_text(item, value->text) != 0) {
+    arksh_value_item_free(item);
+    return 1;
+  }
 
   if (value->kind == ARKSH_VALUE_LIST || value->kind == ARKSH_VALUE_MAP || value->kind == ARKSH_VALUE_DICT) {
     item->nested = (ArkshValue *) calloc(1, sizeof(*item->nested));
@@ -725,7 +953,7 @@ static int value_item_to_json_text(const ArkshValueItem *item, char *out, size_t
 
   switch (item->kind) {
     case ARKSH_VALUE_STRING:
-      return append_json_escaped_string(out, out_size, item->text);
+      return append_json_escaped_string(out, out_size, arksh_value_item_text_cstr(item));
     case ARKSH_VALUE_NUMBER:
       format_number_json(item->number, out, out_size);
       return 0;
@@ -733,15 +961,15 @@ static int value_item_to_json_text(const ArkshValueItem *item, char *out, size_t
       copy_string(out, out_size, item->boolean ? "true" : "false");
       return 0;
     case ARKSH_VALUE_OBJECT:
-      return append_json_escaped_string(out, out_size, item->object.path);
+      return append_json_escaped_string(out, out_size, arksh_value_item_object_ref(item)->path);
     case ARKSH_VALUE_BLOCK:
-      return append_json_escaped_string(out, out_size, item->block.source);
+      return append_json_escaped_string(out, out_size, arksh_value_item_block_ref(item)->source);
     case ARKSH_VALUE_CLASS:
-      return append_json_escaped_string(out, out_size, item->text);
+      return append_json_escaped_string(out, out_size, arksh_value_item_text_cstr(item));
     case ARKSH_VALUE_INSTANCE: {
       char label[ARKSH_MAX_OUTPUT];
 
-      snprintf(label, sizeof(label), "%s#%d", item->text, (int) item->number);
+      snprintf(label, sizeof(label), "%s#%d", arksh_value_item_text_cstr(item), (int) item->number);
       return append_json_escaped_string(out, out_size, label);
     }
     case ARKSH_VALUE_EMPTY:
@@ -780,7 +1008,7 @@ static int value_to_json_text(const ArkshValue *value, char *out, size_t out_siz
 
   switch (value->kind) {
     case ARKSH_VALUE_STRING:
-      return append_json_escaped_string(out, out_size, value->text);
+      return append_json_escaped_string(out, out_size, arksh_value_text_cstr(value));
     case ARKSH_VALUE_NUMBER:
       format_number_json(value->number, out, out_size);
       return 0;
@@ -788,15 +1016,15 @@ static int value_to_json_text(const ArkshValue *value, char *out, size_t out_siz
       copy_string(out, out_size, value->boolean ? "true" : "false");
       return 0;
     case ARKSH_VALUE_OBJECT:
-      return append_json_escaped_string(out, out_size, value->object.path);
+      return append_json_escaped_string(out, out_size, arksh_value_object_ref(value)->path);
     case ARKSH_VALUE_BLOCK:
-      return append_json_escaped_string(out, out_size, value->block.source);
+      return append_json_escaped_string(out, out_size, arksh_value_block_ref(value)->source);
     case ARKSH_VALUE_CLASS:
-      return append_json_escaped_string(out, out_size, value->text);
+      return append_json_escaped_string(out, out_size, arksh_value_text_cstr(value));
     case ARKSH_VALUE_INSTANCE: {
       char label[ARKSH_MAX_OUTPUT];
 
-      snprintf(label, sizeof(label), "%s#%d", value->text, (int) value->number);
+      snprintf(label, sizeof(label), "%s#%d", arksh_value_text_cstr(value), (int) value->number);
       return append_json_escaped_string(out, out_size, label);
     }
     case ARKSH_VALUE_EMPTY:
@@ -1064,6 +1292,25 @@ static int json_parse_string(const char **cursor, char *out, size_t out_size, ch
   return 0;
 }
 
+static int json_parse_string_alloc(const char **cursor, char **out_text, char *error, size_t error_size) {
+  char buffer[ARKSH_MAX_OUTPUT];
+
+  if (out_text == NULL) {
+    return 1;
+  }
+
+  *out_text = NULL;
+  if (json_parse_string(cursor, buffer, sizeof(buffer), error, error_size) != 0) {
+    return 1;
+  }
+  *out_text = duplicate_string_owned(buffer);
+  if (buffer[0] != '\0' && *out_text == NULL) {
+    snprintf(error, error_size, "out of memory");
+    return 1;
+  }
+  return 0;
+}
+
 static int json_is_number_delimiter(char c) {
   return c == '\0' || c == ',' || c == ']' || c == '}' || c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
@@ -1306,10 +1553,13 @@ static int json_parse_value_internal(const char **cursor, ArkshValue *out_value,
   arksh_value_init(out_value);
   json_skip_ws(cursor);
   if (**cursor == '"') {
-    if (json_parse_string(cursor, out_value->text, sizeof(out_value->text), error, error_size) != 0) {
+    char *parsed_text = NULL;
+
+    if (json_parse_string_alloc(cursor, &parsed_text, error, error_size) != 0) {
       return 1;
     }
     out_value->kind = ARKSH_VALUE_STRING;
+    out_value->text = parsed_text;
     return 0;
   }
   if (**cursor == '[') {
@@ -1368,7 +1618,7 @@ static int render_list_item_brief(const ArkshValueItem *item, char *out, size_t 
   out[0] = '\0';
   switch (item->kind) {
     case ARKSH_VALUE_STRING:
-      copy_string(out, out_size, item->text);
+      copy_string(out, out_size, arksh_value_item_text_cstr(item));
       return 0;
     case ARKSH_VALUE_NUMBER:
       format_number(item->number, out, out_size);
@@ -1377,10 +1627,16 @@ static int render_list_item_brief(const ArkshValueItem *item, char *out, size_t 
       copy_string(out, out_size, item->boolean ? "true" : "false");
       return 0;
     case ARKSH_VALUE_OBJECT:
-      snprintf(out, out_size, "%s\t%s", arksh_object_kind_name(item->object.kind), item->object.path);
+      snprintf(
+        out,
+        out_size,
+        "%s\t%s",
+        arksh_object_kind_name(arksh_value_item_object_ref(item)->kind),
+        arksh_value_item_object_ref(item)->path
+      );
       return 0;
     case ARKSH_VALUE_BLOCK:
-      copy_string(out, out_size, item->block.source);
+      copy_string(out, out_size, arksh_value_item_block_ref(item)->source);
       return 0;
     case ARKSH_VALUE_EMPTY:
       copy_string(out, out_size, "");
@@ -1467,6 +1723,7 @@ void arksh_value_init(ArkshValue *value) {
   }
 
   memset(value, 0, sizeof(*value));
+  value->signature = ARKSH_VALUE_SIGNATURE;
   value->kind = ARKSH_VALUE_EMPTY;
 }
 
@@ -1476,7 +1733,32 @@ void arksh_value_item_init(ArkshValueItem *item) {
   }
 
   memset(item, 0, sizeof(*item));
+  item->signature = ARKSH_VALUE_ITEM_SIGNATURE;
   item->kind = ARKSH_VALUE_EMPTY;
+}
+
+const char *arksh_value_text_cstr(const ArkshValue *value) {
+  return (value != NULL && value->text != NULL) ? value->text : "";
+}
+
+const char *arksh_value_item_text_cstr(const ArkshValueItem *item) {
+  return (item != NULL && item->text != NULL) ? item->text : "";
+}
+
+const ArkshObject *arksh_value_object_ref(const ArkshValue *value) {
+  return (value != NULL && value->object != NULL) ? value->object : &EMPTY_OBJECT_VALUE;
+}
+
+const ArkshObject *arksh_value_item_object_ref(const ArkshValueItem *item) {
+  return (item != NULL && item->object != NULL) ? item->object : &EMPTY_OBJECT_VALUE;
+}
+
+const ArkshBlock *arksh_value_block_ref(const ArkshValue *value) {
+  return (value != NULL && value->block != NULL) ? value->block : &EMPTY_BLOCK_VALUE;
+}
+
+const ArkshBlock *arksh_value_item_block_ref(const ArkshValueItem *item) {
+  return (item != NULL && item->block != NULL) ? item->block : &EMPTY_BLOCK_VALUE;
 }
 
 void arksh_value_set_string(ArkshValue *value, const char *text) {
@@ -1484,9 +1766,15 @@ void arksh_value_set_string(ArkshValue *value, const char *text) {
     return;
   }
 
-  arksh_value_init(value);
+  if (value_is_initialized(value)) {
+    arksh_value_free(value);
+  } else {
+    arksh_value_init(value);
+  }
   value->kind = ARKSH_VALUE_STRING;
-  copy_string(value->text, sizeof(value->text), text);
+  if (assign_value_text(value, text) != 0) {
+    arksh_value_init(value);
+  }
 }
 
 void arksh_value_set_number(ArkshValue *value, double number) {
@@ -1494,7 +1782,11 @@ void arksh_value_set_number(ArkshValue *value, double number) {
     return;
   }
 
-  arksh_value_init(value);
+  if (value_is_initialized(value)) {
+    arksh_value_free(value);
+  } else {
+    arksh_value_init(value);
+  }
   value->kind = ARKSH_VALUE_NUMBER;
   value->number = number;
 }
@@ -1502,28 +1794,28 @@ void arksh_value_set_number(ArkshValue *value, double number) {
 /* E6-S5: explicit numeric sub-kind setters */
 void arksh_value_set_integer(ArkshValue *value, double number) {
   if (value == NULL) { return; }
-  arksh_value_init(value);
+  if (value_is_initialized(value)) arksh_value_free(value); else arksh_value_init(value);
   value->kind = ARKSH_VALUE_INTEGER;
   value->number = (double)(long long) number;
 }
 
 void arksh_value_set_float(ArkshValue *value, double number) {
   if (value == NULL) { return; }
-  arksh_value_init(value);
+  if (value_is_initialized(value)) arksh_value_free(value); else arksh_value_init(value);
   value->kind = ARKSH_VALUE_FLOAT;
   value->number = (double)(float) number;
 }
 
 void arksh_value_set_double(ArkshValue *value, double number) {
   if (value == NULL) { return; }
-  arksh_value_init(value);
+  if (value_is_initialized(value)) arksh_value_free(value); else arksh_value_init(value);
   value->kind = ARKSH_VALUE_DOUBLE;
   value->number = number;
 }
 
 void arksh_value_set_imaginary(ArkshValue *value, double number) {
   if (value == NULL) { return; }
-  arksh_value_init(value);
+  if (value_is_initialized(value)) arksh_value_free(value); else arksh_value_init(value);
   value->kind = ARKSH_VALUE_IMAGINARY;
   value->number = number;
 }
@@ -1533,7 +1825,11 @@ void arksh_value_set_boolean(ArkshValue *value, int boolean) {
     return;
   }
 
-  arksh_value_init(value);
+  if (value_is_initialized(value)) {
+    arksh_value_free(value);
+  } else {
+    arksh_value_init(value);
+  }
   value->kind = ARKSH_VALUE_BOOLEAN;
   value->boolean = boolean ? 1 : 0;
 }
@@ -1543,10 +1839,14 @@ void arksh_value_set_object(ArkshValue *value, const ArkshObject *object) {
     return;
   }
 
-  arksh_value_init(value);
+  if (value_is_initialized(value)) {
+    arksh_value_free(value);
+  } else {
+    arksh_value_init(value);
+  }
   value->kind = ARKSH_VALUE_OBJECT;
-  if (object != NULL) {
-    value->object = *object;
+  if (assign_value_object(value, object) != 0) {
+    arksh_value_init(value);
   }
 }
 
@@ -1555,10 +1855,14 @@ void arksh_value_set_block(ArkshValue *value, const ArkshBlock *block) {
     return;
   }
 
-  arksh_value_init(value);
+  if (value_is_initialized(value)) {
+    arksh_value_free(value);
+  } else {
+    arksh_value_init(value);
+  }
   value->kind = ARKSH_VALUE_BLOCK;
-  if (block != NULL) {
-    value->block = *block;
+  if (assign_value_block(value, block) != 0) {
+    arksh_value_init(value);
   }
 }
 
@@ -1567,9 +1871,15 @@ void arksh_value_set_class(ArkshValue *value, const char *class_name) {
     return;
   }
 
-  arksh_value_init(value);
+  if (value_is_initialized(value)) {
+    arksh_value_free(value);
+  } else {
+    arksh_value_init(value);
+  }
   value->kind = ARKSH_VALUE_CLASS;
-  copy_string(value->text, sizeof(value->text), class_name);
+  if (assign_value_text(value, class_name) != 0) {
+    arksh_value_init(value);
+  }
 }
 
 void arksh_value_set_instance(ArkshValue *value, const char *class_name, int instance_id) {
@@ -1577,9 +1887,16 @@ void arksh_value_set_instance(ArkshValue *value, const char *class_name, int ins
     return;
   }
 
-  arksh_value_init(value);
+  if (value_is_initialized(value)) {
+    arksh_value_free(value);
+  } else {
+    arksh_value_init(value);
+  }
   value->kind = ARKSH_VALUE_INSTANCE;
-  copy_string(value->text, sizeof(value->text), class_name);
+  if (assign_value_text(value, class_name) != 0) {
+    arksh_value_init(value);
+    return;
+  }
   value->number = (double) instance_id;
 }
 
@@ -1588,7 +1905,11 @@ void arksh_value_set_map(ArkshValue *value) {
     return;
   }
 
-  arksh_value_init(value);
+  if (value_is_initialized(value)) {
+    arksh_value_free(value);
+  } else {
+    arksh_value_init(value);
+  }
   value->kind = ARKSH_VALUE_MAP;
 }
 
@@ -1598,8 +1919,60 @@ void arksh_value_set_dict(ArkshValue *value) {
     return;
   }
 
-  arksh_value_init(value);
+  if (value_is_initialized(value)) {
+    arksh_value_free(value);
+  } else {
+    arksh_value_init(value);
+  }
   value->kind = ARKSH_VALUE_DICT;
+}
+
+void arksh_value_item_set_string(ArkshValueItem *item, const char *text) {
+  if (item == NULL) {
+    return;
+  }
+
+  if (item_is_initialized(item)) {
+    arksh_value_item_free(item);
+  } else {
+    arksh_value_item_init(item);
+  }
+  item->kind = ARKSH_VALUE_STRING;
+  if (assign_item_text(item, text) != 0) {
+    arksh_value_item_init(item);
+  }
+}
+
+void arksh_value_item_set_object(ArkshValueItem *item, const ArkshObject *object) {
+  if (item == NULL) {
+    return;
+  }
+
+  if (item_is_initialized(item)) {
+    arksh_value_item_free(item);
+  } else {
+    arksh_value_item_init(item);
+  }
+  item->kind = ARKSH_VALUE_OBJECT;
+  if (assign_item_object(item, object) != 0) {
+    arksh_value_item_init(item);
+  }
+}
+
+void arksh_value_item_set_block(ArkshValueItem *item, const ArkshBlock *block) {
+  if (item == NULL) {
+    return;
+  }
+
+  if (item_is_initialized(item)) {
+    arksh_value_item_free(item);
+  } else {
+    arksh_value_item_init(item);
+  }
+  item->kind = ARKSH_VALUE_BLOCK;
+  if (assign_item_block(item, block) != 0) {
+    arksh_value_item_init(item);
+  }
 }
 
 /* E6-S8 */
@@ -1656,13 +2029,20 @@ int arksh_value_set_from_item(ArkshValue *value, const ArkshValueItem *item) {
     return 1;
   }
 
-  arksh_value_init(value);
+  if (value_is_initialized(value)) {
+    arksh_value_free(value);
+  } else {
+    arksh_value_init(value);
+  }
   value->kind = item->kind;
   value->number = item->number;
   value->boolean = item->boolean;
-  value->object = item->object;
-  value->block = item->block;
-  copy_string(value->text, sizeof(value->text), item->text);
+  if (assign_value_object(value, item->object) != 0 ||
+      assign_value_block(value, item->block) != 0 ||
+      assign_value_text(value, item->text) != 0) {
+    arksh_value_free(value);
+    return 1;
+  }
 
   if ((item->kind == ARKSH_VALUE_LIST || item->kind == ARKSH_VALUE_MAP || item->kind == ARKSH_VALUE_DICT) && item->nested != NULL) {
     return arksh_value_copy(value, item->nested);
@@ -1792,7 +2172,7 @@ int arksh_value_item_render(const ArkshValueItem *item, char *out, size_t out_si
   out[0] = '\0';
   switch (item->kind) {
     case ARKSH_VALUE_STRING:
-      copy_string(out, out_size, item->text);
+      copy_string(out, out_size, arksh_value_item_text_cstr(item));
       return 0;
     case ARKSH_VALUE_NUMBER:
       format_number(item->number, out, out_size);
@@ -1801,15 +2181,15 @@ int arksh_value_item_render(const ArkshValueItem *item, char *out, size_t out_si
       copy_string(out, out_size, item->boolean ? "true" : "false");
       return 0;
     case ARKSH_VALUE_OBJECT:
-      return arksh_object_call_method(&item->object, "describe", 0, NULL, out, out_size);
+      return arksh_object_call_method(arksh_value_item_object_ref(item), "describe", 0, NULL, out, out_size);
     case ARKSH_VALUE_BLOCK:
-      copy_string(out, out_size, item->block.source);
+      copy_string(out, out_size, arksh_value_item_block_ref(item)->source);
       return 0;
     case ARKSH_VALUE_CLASS:
-      snprintf(out, out_size, "class %s", item->text);
+      snprintf(out, out_size, "class %s", arksh_value_item_text_cstr(item));
       return 0;
     case ARKSH_VALUE_INSTANCE:
-      snprintf(out, out_size, "%s#%d", item->text, (int) item->number);
+      snprintf(out, out_size, "%s#%d", arksh_value_item_text_cstr(item), (int) item->number);
       return 0;
     case ARKSH_VALUE_EMPTY:
       copy_string(out, out_size, "");
@@ -1848,7 +2228,7 @@ int arksh_value_render(const ArkshValue *value, char *out, size_t out_size) {
 
   switch (value->kind) {
     case ARKSH_VALUE_STRING:
-      copy_string(out, out_size, value->text);
+      copy_string(out, out_size, arksh_value_text_cstr(value));
       return 0;
     case ARKSH_VALUE_NUMBER:
       format_number(value->number, out, out_size);
@@ -1857,15 +2237,15 @@ int arksh_value_render(const ArkshValue *value, char *out, size_t out_size) {
       copy_string(out, out_size, value->boolean ? "true" : "false");
       return 0;
     case ARKSH_VALUE_OBJECT:
-      return arksh_object_call_method(&value->object, "describe", 0, NULL, out, out_size);
+      return arksh_object_call_method(arksh_value_object_ref(value), "describe", 0, NULL, out, out_size);
     case ARKSH_VALUE_BLOCK:
-      copy_string(out, out_size, value->block.source);
+      copy_string(out, out_size, arksh_value_block_ref(value)->source);
       return 0;
     case ARKSH_VALUE_CLASS:
-      snprintf(out, out_size, "class %s", value->text);
+      snprintf(out, out_size, "class %s", arksh_value_text_cstr(value));
       return 0;
     case ARKSH_VALUE_INSTANCE:
-      snprintf(out, out_size, "%s#%d", value->text, (int) value->number);
+      snprintf(out, out_size, "%s#%d", arksh_value_text_cstr(value), (int) value->number);
       return 0;
     case ARKSH_VALUE_LIST:
       if (value->list.count == 0) {
@@ -2299,7 +2679,7 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
     if (value->kind == ARKSH_VALUE_OBJECT) {
       char rendered[ARKSH_MAX_OUTPUT];
 
-      if (arksh_object_get_property(&value->object, "type", rendered, sizeof(rendered)) != 0) {
+      if (arksh_object_get_property(arksh_value_object_ref(value), "type", rendered, sizeof(rendered)) != 0) {
         snprintf(error, error_size, "unknown property: %s", property);
         return 1;
       }
@@ -2311,7 +2691,7 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
     if (value->kind == ARKSH_VALUE_MAP) {
       const ArkshValueItem *type_entry = arksh_value_map_get_item(value, "__type__");
       if (type_entry != NULL && type_entry->kind == ARKSH_VALUE_STRING) {
-        arksh_value_set_string(out_value, type_entry->text);
+        arksh_value_set_string(out_value, arksh_value_item_text_cstr(type_entry));
         return 0;
       }
     }
@@ -2333,11 +2713,11 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
   switch (value->kind) {
     case ARKSH_VALUE_STRING:
       if (strcmp(property, "text") == 0) {
-        arksh_value_set_string(out_value, value->text);
+        arksh_value_set_string(out_value, arksh_value_text_cstr(value));
         return 0;
       }
       if (strcmp(property, "length") == 0) {
-        arksh_value_set_number(out_value, (double) strlen(value->text));
+        arksh_value_set_number(out_value, (double) strlen(arksh_value_text_cstr(value)));
         return 0;
       }
       break;
@@ -2435,22 +2815,23 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
       }
       break;
     case ARKSH_VALUE_OBJECT: {
+      const ArkshObject *object_ref = arksh_value_object_ref(value);
       char rendered[ARKSH_MAX_OUTPUT];
 
       if (strcmp(property, "child_count") == 0 &&
-          (value->object.kind == ARKSH_OBJECT_DIRECTORY || value->object.kind == ARKSH_OBJECT_MOUNT_POINT)) {
+          (object_ref->kind == ARKSH_OBJECT_DIRECTORY || object_ref->kind == ARKSH_OBJECT_MOUNT_POINT)) {
         char child_names[ARKSH_MAX_COLLECTION_ITEMS][ARKSH_MAX_PATH];
         size_t count = 0;
 
-        if (arksh_platform_list_children_names(value->object.path, child_names, ARKSH_MAX_COLLECTION_ITEMS, &count) != 0) {
-          snprintf(error, error_size, "unable to count children for %s", value->object.path);
+        if (arksh_platform_list_children_names(object_ref->path, child_names, ARKSH_MAX_COLLECTION_ITEMS, &count) != 0) {
+          snprintf(error, error_size, "unable to count children for %s", object_ref->path);
           return 1;
         }
         arksh_value_set_number(out_value, (double) count);
         return 0;
       }
 
-      if (arksh_object_get_property(&value->object, property, rendered, sizeof(rendered)) == 0) {
+      if (arksh_object_get_property(object_ref, property, rendered, sizeof(rendered)) == 0) {
         arksh_value_set_string(out_value, rendered);
         return 0;
       }
@@ -2458,19 +2839,20 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
     }
     case ARKSH_VALUE_BLOCK:
       if (strcmp(property, "arity") == 0) {
-        arksh_value_set_number(out_value, (double) value->block.param_count);
+        arksh_value_set_number(out_value, (double) arksh_value_block_ref(value)->param_count);
         return 0;
       }
       if (strcmp(property, "source") == 0) {
-        arksh_value_set_string(out_value, value->block.source);
+        arksh_value_set_string(out_value, arksh_value_block_ref(value)->source);
         return 0;
       }
       if (strcmp(property, "body") == 0) {
-        arksh_value_set_string(out_value, value->block.body);
+        arksh_value_set_string(out_value, arksh_value_block_ref(value)->body);
         return 0;
       }
       if (strcmp(property, "params") == 0) {
         size_t i;
+        const ArkshBlock *block_ref = arksh_value_block_ref(value);
         ArkshValue *params = allocate_value(error, error_size);
 
         if (params == NULL) {
@@ -2478,7 +2860,7 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
         }
         arksh_value_init(params);
         params->kind = ARKSH_VALUE_LIST;
-        for (i = 0; i < (size_t) value->block.param_count; ++i) {
+        for (i = 0; i < (size_t) block_ref->param_count; ++i) {
           ArkshValue *param = allocate_value(error, error_size);
 
           if (param == NULL) {
@@ -2486,7 +2868,7 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
             free(params);
             return 1;
           }
-          arksh_value_set_string(param, value->block.params[i]);
+          arksh_value_set_string(param, block_ref->params[i]);
           if (arksh_value_list_append_value(params, param) != 0) {
             arksh_value_free(param);
             free(param);
@@ -2505,7 +2887,7 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
       break;
     case ARKSH_VALUE_CLASS:
       if (strcmp(property, "name") == 0) {
-        arksh_value_set_string(out_value, value->text);
+        arksh_value_set_string(out_value, arksh_value_text_cstr(value));
         return 0;
       }
       break;
@@ -2515,7 +2897,7 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
         return 0;
       }
       if (strcmp(property, "class") == 0 || strcmp(property, "class_name") == 0) {
-        arksh_value_set_string(out_value, value->text);
+        arksh_value_set_string(out_value, arksh_value_text_cstr(value));
         return 0;
       }
       break;
@@ -2695,11 +3077,16 @@ int arksh_value_item_get_property_value(const ArkshValueItem *item, const char *
 
   arksh_value_init(temp_value);
   temp_value->kind = item->kind;
-  copy_string(temp_value->text, sizeof(temp_value->text), item->text);
   temp_value->number = item->number;
   temp_value->boolean = item->boolean;
-  temp_value->object = item->object;
-  temp_value->block = item->block;
+  if (assign_value_text(temp_value, item->text) != 0 ||
+      assign_value_object(temp_value, item->object) != 0 ||
+      assign_value_block(temp_value, item->block) != 0) {
+    arksh_value_free(temp_value);
+    free(temp_value);
+    snprintf(error, error_size, "out of memory");
+    return 1;
+  }
   status = arksh_value_get_property_value(temp_value, property, out_value, error, error_size);
   arksh_value_free(temp_value);
   free(temp_value);
@@ -2817,6 +3204,7 @@ int arksh_object_call_method_value(const ArkshObject *object, const char *method
 
     for (i = 0; i < child_count && i < ARKSH_MAX_COLLECTION_ITEMS; ++i) {
       char child_path[ARKSH_MAX_PATH];
+      ArkshObject child_object;
       ArkshValueItem *item = allocate_value_item(error, error_size);
 
       if (item == NULL) {
@@ -2829,11 +3217,14 @@ int arksh_object_call_method_value(const ArkshObject *object, const char *method
       }
 
       arksh_value_item_init(item);
-      item->kind = ARKSH_VALUE_OBJECT;
-      if (arksh_object_resolve(object->path, child_path, &item->object) == 0 && arksh_value_list_append_item(out_value, item) == 0) {
+      if (arksh_object_resolve(object->path, child_path, &child_object) == 0) {
+        arksh_value_item_set_object(item, &child_object);
+      }
+      if (item->kind == ARKSH_VALUE_OBJECT && arksh_value_list_append_item(out_value, item) == 0) {
         free(item);
         continue;
       }
+      arksh_value_item_free(item);
       free(item);
     }
 
@@ -2842,24 +3233,27 @@ int arksh_object_call_method_value(const ArkshObject *object, const char *method
 
   if (strcmp(method, "parent") == 0) {
     char parent[ARKSH_MAX_PATH];
+    ArkshObject parent_object;
 
     arksh_platform_dirname(object->path, parent, sizeof(parent));
-    if (arksh_object_resolve(object->path, parent, &out_value->object) != 0) {
+    if (arksh_object_resolve(object->path, parent, &parent_object) != 0) {
       snprintf(error, error_size, "unable to resolve parent for %s", object->path);
       return 1;
     }
 
-    out_value->kind = ARKSH_VALUE_OBJECT;
+    arksh_value_set_object(out_value, &parent_object);
     return 0;
   }
 
   if (strcmp(method, "read_text") == 0 || strcmp(method, "describe") == 0) {
-    if (arksh_object_call_method(object, method, argc, argv, out_value->text, sizeof(out_value->text)) != 0) {
-      copy_string(error, error_size, out_value->text);
+    char rendered[ARKSH_MAX_OUTPUT];
+
+    if (arksh_object_call_method(object, method, argc, argv, rendered, sizeof(rendered)) != 0) {
+      copy_string(error, error_size, rendered);
       return 1;
     }
 
-    out_value->kind = ARKSH_VALUE_STRING;
+    arksh_value_set_string(out_value, rendered);
     return 0;
   }
 

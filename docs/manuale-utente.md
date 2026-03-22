@@ -63,6 +63,12 @@ Esecuzione dei test:
 ctest --test-dir build --output-on-failure
 ```
 
+Benchmark prestazionali ripetibili:
+
+```bash
+cmake --build build --target arksh_perf
+```
+
 ## 3. Modello mentale
 
 ARKsh ha due modalità complementari.
@@ -103,6 +109,32 @@ Un path può essere usato come receiver:
 README.md -> size
 README.md -> parent()
 ```
+
+### 3.4 Profilazione leggera e benchmark
+
+ARKsh include un piccolo sistema di telemetria utile per il lavoro su CPU, allocazioni e memoria.
+
+Comandi disponibili:
+
+```text
+perf show
+perf status
+perf on
+perf off
+perf reset
+```
+
+Esempi:
+
+```bash
+./build/arksh -c 'perf show'
+./build/arksh -c 'perf on ; perf reset ; . -> children() |> count() ; perf show'
+ARKSH_PERF=1 ./build/arksh -c '. -> children() |> where(type == "file") |> sort(size desc)'
+```
+
+I workload benchmark ripetibili vivono in `tests/perf/`, e il target CMake `arksh_perf` li esegue in sequenza.
+
+La baseline iniziale è documentata in [benchmarks-baseline.md](benchmarks-baseline.md).
 
 ## 4. Sintassi di base
 

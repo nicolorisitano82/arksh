@@ -49,6 +49,12 @@ cmake -S . -B build
 cmake --build build
 ```
 
+Run the repeatable performance bundle:
+
+```bash
+cmake --build build --target arksh_perf
+```
+
 Verified manual fallback on macOS:
 
 ```bash
@@ -79,7 +85,28 @@ On Linux, replace `-dynamiclib -undefined dynamic_lookup` with `-shared -fPIC`. 
 ./build/arksh -c 'shell() -> plugins |> count()'
 ./build/arksh -c 'true && text("ok") -> print()'
 ./build/arksh -c 'sleep 1 & jobs'
+./build/arksh -c 'perf on ; perf reset ; . -> children() |> count() ; perf show'
 ```
+
+## Performance Work
+
+ARKsh now ships a small profiling surface intended for optimization work on CPU time, allocations, and memory footprint.
+
+Useful commands:
+
+```bash
+./build/arksh -c 'perf show'
+./build/arksh -c 'perf on ; perf reset ; . -> type ; perf show'
+ARKSH_PERF=1 ./build/arksh -c '. -> children() |> where(type == "file") |> sort(size desc)'
+```
+
+Repeatable benchmark workloads live under `tests/perf/`, and the CMake target below runs the bundle:
+
+```bash
+cmake --build build --target arksh_perf
+```
+
+The initial measured baseline is documented in [docs/benchmarks-baseline.md](docs/benchmarks-baseline.md).
 
 ## Example Scripts
 

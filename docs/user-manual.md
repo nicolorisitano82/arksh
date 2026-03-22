@@ -63,6 +63,12 @@ Run the test suite:
 ctest --test-dir build --output-on-failure
 ```
 
+Run the repeatable performance bundle:
+
+```bash
+cmake --build build --target arksh_perf
+```
+
 ## 3. Mental Model
 
 ARKsh has two complementary execution styles.
@@ -103,6 +109,32 @@ A path can be used as a receiver:
 README.md -> size
 README.md -> parent()
 ```
+
+### 3.4 Lightweight profiling and benchmarks
+
+ARKsh includes a small telemetry surface for CPU, allocation, and memory work.
+
+Available commands:
+
+```text
+perf show
+perf status
+perf on
+perf off
+perf reset
+```
+
+Examples:
+
+```bash
+./build/arksh -c 'perf show'
+./build/arksh -c 'perf on ; perf reset ; . -> children() |> count() ; perf show'
+ARKSH_PERF=1 ./build/arksh -c '. -> children() |> where(type == "file") |> sort(size desc)'
+```
+
+Repeatable benchmark workloads live in `tests/perf/`, and the `arksh_perf` CMake target runs the bundle.
+
+The initial baseline is documented in [benchmarks-baseline.md](benchmarks-baseline.md).
 
 ## 4. Core Syntax
 

@@ -104,7 +104,7 @@ static int sample_directory_tag(ArkshShell *shell, const ArkshValue *receiver, A
     return 1;
   }
 
-  if (receiver->kind != ARKSH_VALUE_OBJECT || receiver->object.kind != ARKSH_OBJECT_DIRECTORY) {
+  if (receiver->kind != ARKSH_VALUE_OBJECT || arksh_value_object_ref(receiver)->kind != ARKSH_OBJECT_DIRECTORY) {
     snprintf(error, error_size, "sample_tag is only valid on directory objects");
     return 1;
   }
@@ -148,8 +148,8 @@ static int sample_object_label(
     sizeof(rendered),
     "%s:%s:%s",
     prefix,
-    arksh_object_kind_name(receiver->object.kind),
-    receiver->object.path
+    arksh_object_kind_name(arksh_value_object_ref(receiver)->kind),
+    arksh_value_object_ref(receiver)->path
   );
   arksh_value_set_string(out_value, rendered);
   return 0;

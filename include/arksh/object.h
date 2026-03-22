@@ -94,12 +94,13 @@ typedef struct {
 typedef struct ArkshValue ArkshValue;
 
 typedef struct {
+  unsigned int signature;
   ArkshValueKind kind;
-  char text[ARKSH_MAX_VALUE_TEXT];
+  char *text;
   double number;
   int boolean;
-  ArkshObject object;
-  ArkshBlock block;
+  ArkshObject *object;
+  ArkshBlock *block;
   ArkshValue *nested;
 } ArkshValueItem;
 
@@ -121,12 +122,13 @@ typedef struct {
 } ArkshValueMap;
 
 struct ArkshValue {
+  unsigned int signature;
   ArkshValueKind kind;
-  char text[ARKSH_MAX_OUTPUT];
+  char *text;
   double number;
   int boolean;
-  ArkshObject object;
-  ArkshBlock block;
+  ArkshObject *object;
+  ArkshBlock *block;
   ArkshValueList list;
   ArkshValueMap map;
   /* E6-S8: heap-allocated matrix; NULL unless kind == ARKSH_VALUE_MATRIX */
@@ -141,6 +143,12 @@ void arksh_value_free(ArkshValue *value);
 void arksh_value_item_free(ArkshValueItem *item);
 int arksh_value_copy(ArkshValue *dest, const ArkshValue *src);
 int arksh_value_item_copy(ArkshValueItem *dest, const ArkshValueItem *src);
+const char *arksh_value_text_cstr(const ArkshValue *value);
+const char *arksh_value_item_text_cstr(const ArkshValueItem *item);
+const ArkshObject *arksh_value_object_ref(const ArkshValue *value);
+const ArkshObject *arksh_value_item_object_ref(const ArkshValueItem *item);
+const ArkshBlock *arksh_value_block_ref(const ArkshValue *value);
+const ArkshBlock *arksh_value_item_block_ref(const ArkshValueItem *item);
 void arksh_value_set_string(ArkshValue *value, const char *text);
 void arksh_value_set_number(ArkshValue *value, double number);
 /* E6-S5: explicit numeric sub-kind setters */
@@ -156,6 +164,9 @@ void arksh_value_set_instance(ArkshValue *value, const char *class_name, int ins
 void arksh_value_set_map(ArkshValue *value);
 /* E6-S6: create an empty Dict value (immutable key-value dictionary). */
 void arksh_value_set_dict(ArkshValue *value);
+void arksh_value_item_set_string(ArkshValueItem *item, const char *text);
+void arksh_value_item_set_object(ArkshValueItem *item, const ArkshObject *object);
+void arksh_value_item_set_block(ArkshValueItem *item, const ArkshBlock *block);
 /* E6-S8: create an empty Matrix value with the given column names. */
 void arksh_value_set_matrix(ArkshValue *value, const char **col_names, size_t col_count);
 /* E6-S2-T1: create a MAP value tagged with a custom type name.

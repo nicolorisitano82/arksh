@@ -183,7 +183,7 @@ static void test_set_string(void) {
   arksh_value_init(&v);
   arksh_value_set_string(&v, "hello");
   EXPECT(v.kind == ARKSH_VALUE_STRING, "set_string: kind == STRING");
-  EXPECT(strcmp(v.text, "hello") == 0,  "set_string: text == 'hello'");
+  EXPECT(strcmp(arksh_value_text_cstr(&v), "hello") == 0,  "set_string: text == 'hello'");
   arksh_value_free(&v);
 }
 
@@ -192,7 +192,7 @@ static void test_set_string_empty(void) {
   arksh_value_init(&v);
   arksh_value_set_string(&v, "");
   EXPECT(v.kind == ARKSH_VALUE_STRING, "set_string empty: kind == STRING");
-  EXPECT(v.text[0] == '\0', "set_string empty: text is empty");
+  EXPECT(arksh_value_text_cstr(&v)[0] == '\0', "set_string empty: text is empty");
   arksh_value_free(&v);
 }
 
@@ -237,7 +237,7 @@ static void test_set_class(void) {
   arksh_value_init(&v);
   arksh_value_set_class(&v, "MyClass");
   EXPECT(v.kind == ARKSH_VALUE_CLASS, "set_class: kind == CLASS");
-  EXPECT(strcmp(v.text, "MyClass") == 0, "set_class: text == 'MyClass'");
+  EXPECT(strcmp(arksh_value_text_cstr(&v), "MyClass") == 0, "set_class: text == 'MyClass'");
   arksh_value_free(&v);
 }
 
@@ -266,7 +266,7 @@ static void test_set_typed_map(void) {
   /* type name stored as "__type__" entry */
   const ArkshValueItem *ti = arksh_value_map_get_item(&v, "__type__");
   EXPECT(ti != NULL, "set_typed_map: __type__ entry exists");
-  EXPECT(ti != NULL && strcmp(ti->text, "Point") == 0, "set_typed_map: __type__ == 'Point'");
+  EXPECT(ti != NULL && strcmp(arksh_value_item_text_cstr(ti), "Point") == 0, "set_typed_map: __type__ == 'Point'");
   arksh_value_free(&v);
 }
 
@@ -314,7 +314,7 @@ static void test_list_append_value(void) {
   int rc = arksh_value_list_append_value(&list, &item);
   EXPECT(rc == 0, "list append: rc == 0");
   EXPECT(list.list.count == 1, "list append: count == 1");
-  EXPECT(strcmp(list.list.items[0].text, "alpha") == 0, "list append: first item text == 'alpha'");
+  EXPECT(strcmp(arksh_value_item_text_cstr(&list.list.items[0]), "alpha") == 0, "list append: first item text == 'alpha'");
 
   arksh_value_free(&item);
   arksh_value_free(&list);
@@ -355,7 +355,7 @@ static void test_map_set_get(void) {
 
   const ArkshValueItem *got = arksh_value_map_get_item(&map, "key1");
   EXPECT(got != NULL, "map get: entry found");
-  EXPECT(got != NULL && strcmp(got->text, "mapval") == 0, "map get: text == 'mapval'");
+  EXPECT(got != NULL && strcmp(arksh_value_item_text_cstr(got), "mapval") == 0, "map get: text == 'mapval'");
 
   arksh_value_free(&entry);
   arksh_value_free(&map);
@@ -376,7 +376,7 @@ static void test_map_overwrite(void) {
 
   EXPECT(map.map.count == 1, "map overwrite: count stays 1");
   const ArkshValueItem *got = arksh_value_map_get_item(&map, "k");
-  EXPECT(got != NULL && strcmp(got->text, "second") == 0, "map overwrite: value updated");
+  EXPECT(got != NULL && strcmp(arksh_value_item_text_cstr(got), "second") == 0, "map overwrite: value updated");
 
   arksh_value_free(&v1);
   arksh_value_free(&v2);
@@ -495,9 +495,9 @@ static void test_map_pick_selected_keys(void) {
   name_entry = arksh_value_map_get_item(&picked, "name");
   count_entry = arksh_value_map_get_item(&picked, "count");
   type_entry = arksh_value_map_get_item(&picked, "__type__");
-  EXPECT(name_entry != NULL && strcmp(name_entry->text, "arksh") == 0, "pick: name preserved");
+  EXPECT(name_entry != NULL && strcmp(arksh_value_item_text_cstr(name_entry), "arksh") == 0, "pick: name preserved");
   EXPECT(count_entry == NULL, "pick: count omitted");
-  EXPECT(type_entry != NULL && strcmp(type_entry->text, "demo") == 0, "pick: __type__ preserved");
+  EXPECT(type_entry != NULL && strcmp(arksh_value_item_text_cstr(type_entry), "demo") == 0, "pick: __type__ preserved");
 
   arksh_value_free(&picked);
   arksh_value_free(&count_value);
@@ -537,8 +537,8 @@ static void test_map_merge_override(void) {
   EXPECT(arksh_value_merge(&left, &right, &merged, error, sizeof(error)) == 0, "merge: rc == 0");
   name_entry = arksh_value_map_get_item(&merged, "name");
   status_entry = arksh_value_map_get_item(&merged, "status");
-  EXPECT(name_entry != NULL && strcmp(name_entry->text, "new") == 0, "merge: right value overrides");
-  EXPECT(status_entry != NULL && strcmp(status_entry->text, "ok") == 0, "merge: new key added");
+  EXPECT(name_entry != NULL && strcmp(arksh_value_item_text_cstr(name_entry), "new") == 0, "merge: right value overrides");
+  EXPECT(status_entry != NULL && strcmp(arksh_value_item_text_cstr(status_entry), "ok") == 0, "merge: new key added");
 
   arksh_value_free(&merged);
   arksh_value_free(&status_right);
@@ -603,7 +603,7 @@ static void test_value_to_item_roundtrip(void) {
   EXPECT(rc1 == 0, "value->item conversion: rc == 0");
   EXPECT(rc2 == 0, "item->value conversion: rc == 0");
   EXPECT(dst.kind == ARKSH_VALUE_STRING, "roundtrip: dst kind == STRING");
-  EXPECT(strcmp(dst.text, "roundtrip") == 0, "roundtrip: dst text == 'roundtrip'");
+  EXPECT(strcmp(arksh_value_text_cstr(&dst), "roundtrip") == 0, "roundtrip: dst text == 'roundtrip'");
 
   arksh_value_free(&src);
   arksh_value_item_free(&item);
@@ -628,7 +628,7 @@ static void test_json_string_roundtrip(void) {
 
   int rc2 = arksh_value_parse_json(json, &parsed, error, sizeof(error));
   EXPECT(rc2 == 0, "json string: parse_json rc == 0");
-  EXPECT(strcmp(parsed.text, "hello") == 0, "json string: roundtrip text == 'hello'");
+  EXPECT(strcmp(arksh_value_text_cstr(&parsed), "hello") == 0, "json string: roundtrip text == 'hello'");
 
   arksh_value_free(&v);
   arksh_value_free(&parsed);
@@ -705,7 +705,7 @@ static void test_json_unicode_ascii(void) {
   int rc = arksh_value_parse_json("\"\\u0041\"", &v, error, sizeof(error));
   EXPECT(rc == 0, "json unicode ascii: rc == 0");
   EXPECT(v.kind == ARKSH_VALUE_STRING, "json unicode ascii: kind == STRING");
-  EXPECT(strcmp(v.text, "A") == 0, "json unicode ascii: text == 'A'");
+  EXPECT(strcmp(arksh_value_text_cstr(&v), "A") == 0, "json unicode ascii: text == 'A'");
   arksh_value_free(&v);
 }
 
@@ -717,8 +717,8 @@ static void test_json_unicode_multibyte(void) {
   int rc = arksh_value_parse_json("\"\\u00e9\"", &v, error, sizeof(error));
   EXPECT(rc == 0, "json unicode multibyte: rc == 0");
   EXPECT(v.kind == ARKSH_VALUE_STRING, "json unicode multibyte: kind == STRING");
-  EXPECT((unsigned char) v.text[0] == 0xC3, "json unicode multibyte: byte 0 == 0xC3");
-  EXPECT((unsigned char) v.text[1] == 0xA9, "json unicode multibyte: byte 1 == 0xA9");
+  EXPECT((unsigned char) arksh_value_text_cstr(&v)[0] == 0xC3, "json unicode multibyte: byte 0 == 0xC3");
+  EXPECT((unsigned char) arksh_value_text_cstr(&v)[1] == 0xA9, "json unicode multibyte: byte 1 == 0xA9");
   arksh_value_free(&v);
 }
 
@@ -761,12 +761,19 @@ static void test_json_control_char_escaped_in_output(void) {
   char json[64];
   arksh_value_init(&v);
   /* string containing a tab (0x09) and a raw 0x01 */
-  v.kind = ARKSH_VALUE_STRING;
-  v.text[0] = '\x01'; v.text[1] = '\0';
+  {
+    char raw[2] = {'\x01', '\0'};
+    arksh_value_set_string(&v, raw);
+  }
   int rc = arksh_value_to_json(&v, json, sizeof(json));
   EXPECT(rc == 0, "json ctrl escaped: to_json rc == 0");
   EXPECT(strstr(json, "\\u0001") != NULL, "json ctrl escaped: contains \\u0001");
   arksh_value_free(&v);
+}
+
+static void test_value_layout_sizes(void) {
+  EXPECT(sizeof(ArkshValue) <= 128, "layout: ArkshValue stays compact");
+  EXPECT(sizeof(ArkshValueItem) <= 64, "layout: ArkshValueItem stays compact");
 }
 
 static void test_json_matrix_to_json(void) {
@@ -937,6 +944,7 @@ int main(void) {
   test_item_init_is_empty();
   test_value_kind_names();
   test_object_kind_names();
+  test_value_layout_sizes();
 
   /* setters */
   test_set_string();

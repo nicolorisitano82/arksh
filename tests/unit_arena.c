@@ -92,10 +92,15 @@ static void test_scratch_frame_reuses_inner_space(void) {
   free(shell);
 }
 
+static void test_shell_layout_sizes(void) {
+  EXPECT(sizeof(ArkshShell) <= 32768, "layout: ArkshShell stays compact");
+}
+
 int main(void) {
   test_arena_reset_zeroes_reused_memory();
   test_arena_large_alloc();
   test_scratch_frame_reuses_inner_space();
+  test_shell_layout_sizes();
 
   if (g_failures != 0) {
     fprintf(stderr, "arena tests failed: %d\n", g_failures);

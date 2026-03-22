@@ -35,6 +35,10 @@ extend object method label = [:it :prefix | prefix]
 extend
 let
 history
+perf show
+perf reset
+perf on
+perf off
 jobs
 true && text("ok") -> print()
 sleep 5 & jobs
@@ -255,6 +259,24 @@ Note pratiche:
 - `<<-EOF ... EOF` rimuove i tab iniziali dal body
 - `3>`, `n>&m` e `n<&m` permettono redirection e duplicazione su file descriptor arbitrari
 - i fd custom oltre `0/1/2` sono verificati sui build POSIX
+
+### 1.5.1 Profilazione leggera supportata
+
+```text
+perf show
+perf status
+perf on
+perf off
+perf reset
+```
+
+Uso tipico:
+
+```text
+perf on ; perf reset ; . -> children() |> count() ; perf show
+```
+
+Con `ARKSH_PERF=1` la telemetria viene attivata fin dall'avvio del processo, utile per benchmark di startup e per il runner `arksh_perf_runner`.
 
 ### 1.6 Startup file supportato
 

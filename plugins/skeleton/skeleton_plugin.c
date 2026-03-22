@@ -124,8 +124,11 @@ static int skeleton_object_badge(
    * - leggere stato esterno
    * - trasformare il valore in un oggetto o valore piu ricco
    */
-  snprintf(out_value->text, sizeof(out_value->text), "skeleton:%s", rendered);
-  out_value->kind = ARKSH_VALUE_STRING;
+  {
+    char result[ARKSH_MAX_OUTPUT];
+    snprintf(result, sizeof(result), "skeleton:%s", rendered);
+    arksh_value_set_string(out_value, result);
+  }
   return 0;
 }
 
@@ -163,8 +166,11 @@ static int skeleton_object_action(
    * - invocare API esterne o logica di business
    * - restituire stringa, numero, bool, lista o oggetto
    */
-  snprintf(out_value->text, sizeof(out_value->text), "stub:%s:%s", action_text, receiver_text);
-  out_value->kind = ARKSH_VALUE_STRING;
+  {
+    char result[ARKSH_MAX_OUTPUT];
+    snprintf(result, sizeof(result), "stub:%s:%s", action_text, receiver_text);
+    arksh_value_set_string(out_value, result);
+  }
   return 0;
 }
 
