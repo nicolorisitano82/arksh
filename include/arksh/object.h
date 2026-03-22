@@ -175,6 +175,10 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
 int arksh_value_get_property(const ArkshValue *value, const char *property, char *out, size_t out_size);
 int arksh_value_item_get_property_value(const ArkshValueItem *item, const char *property, ArkshValue *out_value, char *error, size_t error_size);
 int arksh_value_item_get_property(const ArkshValueItem *item, const char *property, char *out, size_t out_size);
+int arksh_value_get_path(const ArkshValue *value, const char *path, ArkshValue *out_value, int *out_found, char *error, size_t error_size);
+int arksh_value_set_path(const ArkshValue *value, const char *path, const ArkshValue *replacement, ArkshValue *out_value, char *error, size_t error_size);
+int arksh_value_pick(const ArkshValue *value, int key_count, const char keys[][ARKSH_MAX_NAME], ArkshValue *out_value, char *error, size_t error_size);
+int arksh_value_merge(const ArkshValue *left, const ArkshValue *right, ArkshValue *out_value, char *error, size_t error_size);
 int arksh_value_to_json(const ArkshValue *value, char *out, size_t out_size);
 int arksh_value_parse_json(const char *text, ArkshValue *out_value, char *error, size_t error_size);
 int arksh_object_resolve(const char *cwd, const char *selector, ArkshObject *out_object);

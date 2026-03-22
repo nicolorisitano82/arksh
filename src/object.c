@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -275,6 +276,286 @@ static int append_json_escaped_string(char *out, size_t out_size, const char *te
   }
 
   return append_char(out, out_size, &length, '"');
+}
+
+#define ARKSH_MAX_VALUE_PATH_SEGMENTS 128
+
+typedef struct {
+  char text[ARKSH_MAX_NAME];
+  int bracketed;
+} ArkshValuePathSegment;
+
+static int value_is_map_like(const ArkshValue *value) {
+  return value != NULL && (value->kind == ARKSH_VALUE_MAP || value->kind == ARKSH_VALUE_DICT);
+}
+
+static ArkshValueKind map_like_kind_for(const ArkshValue *value) {
+  if (value != NULL && value->kind == ARKSH_VALUE_DICT) {
+    return ARKSH_VALUE_DICT;
+  }
+  return ARKSH_VALUE_MAP;
+}
+
+static void set_map_like_kind(ArkshValue *value, ArkshValueKind kind) {
+  if (kind == ARKSH_VALUE_DICT) {
+    arksh_value_set_dict(value);
+  } else {
+    arksh_value_set_map(value);
+  }
+}
+
+static int parse_path_index(const char *text, size_t *out_index) {
+  size_t value = 0;
+  size_t i;
+
+  if (text == NULL || text[0] == '\0' || out_index == NULL) {
+    return 1;
+  }
+
+  for (i = 0; text[i] != '\0'; ++i) {
+    unsigned char c = (unsigned char) text[i];
+    if (!isdigit(c)) {
+      return 1;
+    }
+    value = value * 10u + (size_t) (c - '0');
+  }
+
+  *out_index = value;
+  return 0;
+}
+
+static int parse_value_path_segments(
+  const char *path,
+  ArkshValuePathSegment segments[],
+  size_t max_segments,
+  size_t *out_count,
+  char *error,
+  size_t error_size
+) {
+  const char *cursor;
+  size_t count = 0;
+
+  if (path == NULL || segments == NULL || max_segments == 0 || out_count == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+
+  cursor = path;
+  while (*cursor != '\0' && isspace((unsigned char) *cursor)) {
+    cursor++;
+  }
+
+  while (*cursor != '\0') {
+    size_t len = 0;
+
+    while (*cursor == '.') {
+      cursor++;
+    }
+    if (*cursor == '\0') {
+      break;
+    }
+    if (count >= max_segments) {
+      snprintf(error, error_size, "value path is too deep");
+      return 1;
+    }
+
+    memset(&segments[count], 0, sizeof(segments[count]));
+    if (*cursor == '[') {
+      cursor++;
+      segments[count].bracketed = 1;
+      while (*cursor != '\0' && *cursor != ']') {
+        if (len + 1 >= sizeof(segments[count].text)) {
+          snprintf(error, error_size, "value path segment is too long");
+          return 1;
+        }
+        segments[count].text[len++] = *cursor++;
+      }
+      if (*cursor != ']') {
+        snprintf(error, error_size, "unterminated [index] in value path");
+        return 1;
+      }
+      cursor++;
+      if (segments[count].text[0] == '\0') {
+        snprintf(error, error_size, "empty [index] in value path");
+        return 1;
+      }
+      count++;
+      continue;
+    }
+
+    while (*cursor != '\0' && *cursor != '.' && *cursor != '[') {
+      if (len + 1 >= sizeof(segments[count].text)) {
+        snprintf(error, error_size, "value path segment is too long");
+        return 1;
+      }
+      segments[count].text[len++] = *cursor++;
+    }
+
+    if (segments[count].text[0] == '\0') {
+      snprintf(error, error_size, "empty segment in value path");
+      return 1;
+    }
+    count++;
+  }
+
+  if (count == 0) {
+    snprintf(error, error_size, "value path must not be empty");
+    return 1;
+  }
+
+  *out_count = count;
+  return 0;
+}
+
+static int replace_value_item(ArkshValueItem *item, const ArkshValue *value) {
+  if (item == NULL || value == NULL) {
+    return 1;
+  }
+
+  arksh_value_item_free(item);
+  return arksh_value_item_set_from_value(item, value);
+}
+
+static int set_path_recursive(
+  const ArkshValue *current,
+  ArkshValueKind default_kind,
+  const ArkshValuePathSegment segments[],
+  size_t segment_count,
+  size_t segment_index,
+  const ArkshValue *replacement,
+  ArkshValue *out_value,
+  char *error,
+  size_t error_size
+) {
+  const ArkshValue *base = current;
+  ArkshValue temp_base;
+
+  if (segments == NULL || replacement == NULL || out_value == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+
+  if (segment_index >= segment_count) {
+    return arksh_value_copy(out_value, replacement);
+  }
+
+  arksh_value_init(&temp_base);
+  if (base == NULL || base->kind == ARKSH_VALUE_EMPTY) {
+    if (segments[segment_index].bracketed) {
+      snprintf(error, error_size, "set_path() cannot auto-create a list at [%s]", segments[segment_index].text);
+      return 1;
+    }
+    set_map_like_kind(&temp_base, default_kind);
+    base = &temp_base;
+  }
+
+  if (value_is_map_like(base)) {
+    const ArkshValueItem *entry = arksh_value_map_get_item(base, segments[segment_index].text);
+    ArkshValue nested;
+    ArkshValue updated;
+    int status;
+
+    arksh_value_init(&nested);
+    arksh_value_init(&updated);
+    if (entry != NULL && arksh_value_set_from_item(&nested, entry) != 0) {
+      arksh_value_free(&temp_base);
+      snprintf(error, error_size, "set_path() failed to copy nested value");
+      return 1;
+    }
+
+    status = set_path_recursive(
+      entry != NULL ? &nested : NULL,
+      map_like_kind_for(base),
+      segments,
+      segment_count,
+      segment_index + 1,
+      replacement,
+      &updated,
+      error,
+      error_size
+    );
+    if (status != 0) {
+      arksh_value_free(&nested);
+      arksh_value_free(&updated);
+      arksh_value_free(&temp_base);
+      return 1;
+    }
+
+    if (arksh_value_copy(out_value, base) != 0 || arksh_value_map_set(out_value, segments[segment_index].text, &updated) != 0) {
+      arksh_value_free(&nested);
+      arksh_value_free(&updated);
+      arksh_value_free(&temp_base);
+      snprintf(error, error_size, "set_path() failed to update map");
+      return 1;
+    }
+
+    arksh_value_free(&nested);
+    arksh_value_free(&updated);
+    arksh_value_free(&temp_base);
+    return 0;
+  }
+
+  if (base->kind == ARKSH_VALUE_LIST) {
+    size_t index;
+    ArkshValue nested;
+    ArkshValue updated;
+
+    if (parse_path_index(segments[segment_index].text, &index) != 0) {
+      arksh_value_free(&temp_base);
+      snprintf(error, error_size, "set_path() expected a list index, got %s", segments[segment_index].text);
+      return 1;
+    }
+    if (index >= base->list.count) {
+      arksh_value_free(&temp_base);
+      snprintf(error, error_size, "set_path() list index out of range: %s", segments[segment_index].text);
+      return 1;
+    }
+    if (arksh_value_copy(out_value, base) != 0) {
+      arksh_value_free(&temp_base);
+      snprintf(error, error_size, "set_path() failed to copy list");
+      return 1;
+    }
+    if (segment_index + 1 == segment_count) {
+      if (replace_value_item(&out_value->list.items[index], replacement) != 0) {
+        arksh_value_free(&temp_base);
+        snprintf(error, error_size, "set_path() failed to replace list item");
+        return 1;
+      }
+      arksh_value_free(&temp_base);
+      return 0;
+    }
+
+    arksh_value_init(&nested);
+    arksh_value_init(&updated);
+    if (arksh_value_set_from_item(&nested, &base->list.items[index]) != 0) {
+      arksh_value_free(out_value);
+      arksh_value_free(&temp_base);
+      snprintf(error, error_size, "set_path() failed to copy list item");
+      return 1;
+    }
+    if (set_path_recursive(&nested, ARKSH_VALUE_MAP, segments, segment_count, segment_index + 1, replacement, &updated, error, error_size) != 0) {
+      arksh_value_free(&nested);
+      arksh_value_free(&updated);
+      arksh_value_free(out_value);
+      arksh_value_free(&temp_base);
+      return 1;
+    }
+    if (replace_value_item(&out_value->list.items[index], &updated) != 0) {
+      arksh_value_free(&nested);
+      arksh_value_free(&updated);
+      arksh_value_free(out_value);
+      arksh_value_free(&temp_base);
+      snprintf(error, error_size, "set_path() failed to update list item");
+      return 1;
+    }
+
+    arksh_value_free(&nested);
+    arksh_value_free(&updated);
+    arksh_value_free(&temp_base);
+    return 0;
+  }
+
+  arksh_value_free(&temp_base);
+  snprintf(error, error_size, "set_path() cannot descend into a %s value", arksh_value_kind_name(base->kind));
+  return 1;
 }
 
 void arksh_value_item_free(ArkshValueItem *item) {
@@ -1780,6 +2061,220 @@ int arksh_value_parse_json(const char *text, ArkshValue *out_value, char *error,
     offset = (size_t) (cursor - text);
     snprintf(error, error_size, "unexpected trailing JSON content (at offset %zu)", offset);
     return 1;
+  }
+
+  return 0;
+}
+
+int arksh_value_get_path(
+  const ArkshValue *value,
+  const char *path,
+  ArkshValue *out_value,
+  int *out_found,
+  char *error,
+  size_t error_size
+) {
+  ArkshValuePathSegment segments[ARKSH_MAX_VALUE_PATH_SEGMENTS];
+  size_t segment_count;
+  size_t i;
+  ArkshValue current;
+  ArkshValue next;
+  int found = 1;
+
+  if (value == NULL || path == NULL || out_value == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+
+  error[0] = '\0';
+  if (parse_value_path_segments(path, segments, ARKSH_MAX_VALUE_PATH_SEGMENTS, &segment_count, error, error_size) != 0) {
+    return 1;
+  }
+
+  arksh_value_init(&current);
+  arksh_value_init(&next);
+  if (arksh_value_copy(&current, value) != 0) {
+    snprintf(error, error_size, "unable to copy value for path lookup");
+    return 1;
+  }
+
+  for (i = 0; i < segment_count; ++i) {
+    if (value_is_map_like(&current)) {
+      const ArkshValueItem *entry = arksh_value_map_get_item(&current, segments[i].text);
+
+      if (entry == NULL) {
+        found = 0;
+        break;
+      }
+      arksh_value_free(&next);
+      if (arksh_value_set_from_item(&next, entry) != 0) {
+        arksh_value_free(&current);
+        snprintf(error, error_size, "unable to read nested value at %s", segments[i].text);
+        return 1;
+      }
+    } else if (current.kind == ARKSH_VALUE_LIST) {
+      size_t index;
+
+      if (parse_path_index(segments[i].text, &index) != 0) {
+        found = 0;
+        break;
+      }
+      if (index >= current.list.count) {
+        found = 0;
+        break;
+      }
+      arksh_value_free(&next);
+      if (arksh_value_set_from_item(&next, &current.list.items[index]) != 0) {
+        arksh_value_free(&current);
+        snprintf(error, error_size, "unable to read list item at %s", segments[i].text);
+        return 1;
+      }
+    } else {
+      found = 0;
+      break;
+    }
+
+    arksh_value_free(&current);
+    if (arksh_value_copy(&current, &next) != 0) {
+      arksh_value_free(&next);
+      snprintf(error, error_size, "unable to continue nested path lookup");
+      return 1;
+    }
+  }
+
+  if (!found) {
+    arksh_value_init(out_value);
+    if (out_found != NULL) {
+      *out_found = 0;
+    }
+    arksh_value_free(&current);
+    arksh_value_free(&next);
+    return 0;
+  }
+
+  if (arksh_value_copy(out_value, &current) != 0) {
+    arksh_value_free(&current);
+    arksh_value_free(&next);
+    snprintf(error, error_size, "unable to copy nested value");
+    return 1;
+  }
+  if (out_found != NULL) {
+    *out_found = 1;
+  }
+
+  arksh_value_free(&current);
+  arksh_value_free(&next);
+  return 0;
+}
+
+int arksh_value_set_path(
+  const ArkshValue *value,
+  const char *path,
+  const ArkshValue *replacement,
+  ArkshValue *out_value,
+  char *error,
+  size_t error_size
+) {
+  ArkshValuePathSegment segments[ARKSH_MAX_VALUE_PATH_SEGMENTS];
+  size_t segment_count;
+
+  if (value == NULL || path == NULL || replacement == NULL || out_value == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+  if (!value_is_map_like(value)) {
+    snprintf(error, error_size, "set_path() is only valid on map or dict values");
+    return 1;
+  }
+  if (parse_value_path_segments(path, segments, ARKSH_MAX_VALUE_PATH_SEGMENTS, &segment_count, error, error_size) != 0) {
+    return 1;
+  }
+  return set_path_recursive(value, map_like_kind_for(value), segments, segment_count, 0, replacement, out_value, error, error_size);
+}
+
+int arksh_value_pick(
+  const ArkshValue *value,
+  int key_count,
+  const char keys[][ARKSH_MAX_NAME],
+  ArkshValue *out_value,
+  char *error,
+  size_t error_size
+) {
+  int i;
+  const ArkshValueItem *type_entry;
+
+  if (value == NULL || key_count < 0 || (key_count > 0 && keys == NULL) || out_value == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+  if (!value_is_map_like(value)) {
+    snprintf(error, error_size, "pick() is only valid on map or dict values");
+    return 1;
+  }
+
+  set_map_like_kind(out_value, map_like_kind_for(value));
+  if (value->kind == ARKSH_VALUE_MAP) {
+    type_entry = arksh_value_map_get_item(value, "__type__");
+    if (type_entry != NULL) {
+      ArkshValue type_value;
+
+      arksh_value_init(&type_value);
+      if (arksh_value_set_from_item(&type_value, type_entry) != 0 || arksh_value_map_set(out_value, "__type__", &type_value) != 0) {
+        arksh_value_free(&type_value);
+        snprintf(error, error_size, "pick() failed to preserve type tag");
+        return 1;
+      }
+      arksh_value_free(&type_value);
+    }
+  }
+
+  for (i = 0; i < key_count; ++i) {
+    const ArkshValueItem *entry = arksh_value_map_get_item(value, keys[i]);
+    ArkshValue entry_value;
+
+    if (entry == NULL) {
+      continue;
+    }
+    arksh_value_init(&entry_value);
+    if (arksh_value_set_from_item(&entry_value, entry) != 0 || arksh_value_map_set(out_value, keys[i], &entry_value) != 0) {
+      arksh_value_free(&entry_value);
+      snprintf(error, error_size, "pick() failed for key %s", keys[i]);
+      return 1;
+    }
+    arksh_value_free(&entry_value);
+  }
+
+  return 0;
+}
+
+int arksh_value_merge(
+  const ArkshValue *left,
+  const ArkshValue *right,
+  ArkshValue *out_value,
+  char *error,
+  size_t error_size
+) {
+  size_t i;
+
+  if (left == NULL || right == NULL || out_value == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+  if (!value_is_map_like(left) || !value_is_map_like(right)) {
+    snprintf(error, error_size, "merge() expects map or dict values");
+    return 1;
+  }
+  if (arksh_value_copy(out_value, left) != 0) {
+    snprintf(error, error_size, "merge() failed to copy base value");
+    return 1;
+  }
+  for (i = 0; i < right->map.count; ++i) {
+    ArkshValue entry_value;
+
+    arksh_value_init(&entry_value);
+    if (arksh_value_set_from_item(&entry_value, &right->map.entries[i].value) != 0 ||
+        arksh_value_map_set(out_value, right->map.entries[i].key, &entry_value) != 0) {
+      arksh_value_free(&entry_value);
+      snprintf(error, error_size, "merge() failed at key %s", right->map.entries[i].key);
+      return 1;
+    }
+    arksh_value_free(&entry_value);
   }
 
   return 0;

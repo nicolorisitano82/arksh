@@ -91,6 +91,10 @@ capture_lines("ls -1") |> each(render())
 let files = . -> children()
 files |> where(is_file) |> each(get_name)
 data.json -> read_json()
+data.json -> read_json() -> get_path("a[2].b")
+let data = data.json -> read_json()
+data -> set_path("meta.version", number(2))
+list(map("profile", map("name", "alpha")), map("profile", map("name", "beta"))) |> pluck("profile.name")
 . -> child_count
 README.md -> label("doc")
 Named() -> type
@@ -500,6 +504,11 @@ Metodi:
 - `read_text(limit)`
 - `read_json()`
 - `write_json(binding)`
+- `get_path(path)`
+- `has_path(path)`
+- `set_path(path, value)`
+- `pick(key1, key2, ...)`
+- `merge(other)`
 - `read_bytes(limit)`
 - `parent()`
 - `describe()`

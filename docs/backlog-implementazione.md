@@ -727,7 +727,7 @@ Obiettivo: permettere all'utente di configurare quali plugin vengono caricati au
 
 ## E7. JSON e dati strutturati a livello prodotto
 
-Stato epoca: `[ ]`
+Stato epoca: `[x]`
 
 ### E7-S1. Parser/serializer robusti
 
@@ -747,11 +747,11 @@ Stato story: `[x]`
 
 ### E7-S3. Query e trasformazioni
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E7-S3-T1` aggiungere accesso piu comodo a mappe annidate
-- `[ ]` `E7-S3-T2` aggiungere helper di trasformazione dati strutturati
-- `[ ]` `E7-S3-T3` testare round-trip file -> value -> transform -> file
+- `[x]` `E7-S3-T1` aggiungere accesso piu comodo a mappe annidate — aggiunti `get_path(path)`, `has_path(path)` e `set_path(path, value)` per `map`/`dict`; supportano segmenti con `.` e indici `[n]` per strutture JSON annidate
+- `[x]` `E7-S3-T2` aggiungere helper di trasformazione dati strutturati — aggiunti `pick(k1, ...)`, `merge(other)` e lo stage pipeline `pluck("path")` per proiettare campi annidati da liste di mappe/dict
+- `[x]` `E7-S3-T3` testare round-trip file -> value -> transform -> file — golden `tests/fixtures/golden/json-query-transform.arksh`, test runtime `arksh_json_get_path` / `arksh_pipeline_pluck` e unit test object model su `get_path`, `set_path`, `pick`, `merge`
 
 ---
 
@@ -992,9 +992,9 @@ Stato story: `[ ]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E8 `[x]`
-**In corso:** E7 `[~]` — S1 completata
-**Aperte:** E7-S3, E9 (release), E10 (HTTP plugin), E11 (POSIX core)
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`
+**In corso:** nessuna
+**Aperte:** E9 (release), E10 (HTTP plugin), E11 (POSIX core)
 
 > **Completati in E6:** S1 (path/fs), S2 (custom types), S3 (pipeline stages), S4 (shell integration), S5 (numeric types), S6 (Dict), S7 (base64), S8 (Matrix), S9 (trash plugin), S10 (plugin autoload). E6 chiusa.
 > **Extra:** esecuzione diretta di script `arksh file.arksh [args]` aggiunta a `main.c`.
@@ -1040,11 +1040,13 @@ Stato story: `[ ]`
 
 Prerequisito naturale per script di automazione e integrazione con API esterne.
 
+~~Completato.~~
+
 1. ~~`E7-S1-T1` (diagnostica parser con posizione/offset dell'errore)~~ `[x]`
 2. ~~`E7-S1-T2` (casi edge del parser — `\uXXXX`, ctrl chars, leading zeros, depth limit)~~ `[x]`
 3. ~~`E7-S1-T3` (casi edge del serializer — MATRIX→JSON, ctrl→`\uXXXX`, NaN→null)~~ `[x]`
 4. ~~`E7-S2-T1` (strutture annidate oltre `ARKSH_MAX_COLLECTION_ITEMS`)~~ `[x]`
-5. `E7-S3-T1` (stage `jq`-like o `select` per query su valori JSON)
+5. ~~`E7-S3-T1` (query e trasformazioni sui valori JSON: `get_path`, `set_path`, `pick`, `merge`, `pluck`)~~ `[x]`
 
 ### Percorso H — plugin HTTP (E10)
 

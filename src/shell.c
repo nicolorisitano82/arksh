@@ -1074,13 +1074,13 @@ static void collect_builtin_member_completions(
     "type", "value_type", "value", "count", "length"
   };
   static const char *map_methods[] = {
-    "keys", "values", "entries", "get", "has"
+    "keys", "values", "entries", "get", "has", "get_path", "has_path", "set_path", "pick", "merge"
   };
   static const char *dict_properties[] = {
     "type", "value_type", "value", "count", "length", "keys", "values"
   };
   static const char *dict_methods[] = {
-    "get", "has", "set", "delete", "to_json", "from_json"
+    "get", "has", "set", "delete", "to_json", "from_json", "get_path", "has_path", "set_path", "pick", "merge"
   };
   static const char *class_properties[] = {
     "type", "value_type", "value", "name", "source", "bases", "base_count", "properties", "property_count", "methods", "method_count"
@@ -1990,6 +1990,10 @@ static const char *job_state_name(ArkshJobState state) {
     default:
       return "running";
   }
+}
+
+static int value_is_map_like(const ArkshValue *value) {
+  return value != NULL && (value->kind == ARKSH_VALUE_MAP || value->kind == ARKSH_VALUE_DICT);
 }
 
 static int render_argument_key(const ArkshValue *value, char *out, size_t out_size, char *error, size_t error_size) {
@@ -4088,6 +4092,155 @@ static int map_method_has(
   return 0;
 }
 
+static int map_like_method_get_path(
+  ArkshShell *shell,
+  const ArkshValue *receiver,
+  int argc,
+  const ArkshValue *args,
+  ArkshValue *out_value,
+  char *out,
+  size_t out_size
+) {
+  char path[ARKSH_MAX_OUTPUT];
+  int found = 0;
+
+  (void) shell;
+
+  if (receiver == NULL || out_value == NULL || !value_is_map_like(receiver)) {
+    snprintf(out, out_size, "get_path() is only valid on map or dict values");
+    return 1;
+  }
+  if (argc != 1) {
+    snprintf(out, out_size, "get_path() expects exactly one path argument");
+    return 1;
+  }
+  if (render_argument_key(&args[0], path, sizeof(path), out, out_size) != 0) {
+    return 1;
+  }
+  if (arksh_value_get_path(receiver, path, out_value, &found, out, out_size) != 0) {
+    return 1;
+  }
+  if (!found) {
+    arksh_value_init(out_value);
+  }
+  return 0;
+}
+
+static int map_like_method_has_path(
+  ArkshShell *shell,
+  const ArkshValue *receiver,
+  int argc,
+  const ArkshValue *args,
+  ArkshValue *out_value,
+  char *out,
+  size_t out_size
+) {
+  char path[ARKSH_MAX_OUTPUT];
+  ArkshValue resolved;
+  int found = 0;
+
+  (void) shell;
+
+  if (receiver == NULL || out_value == NULL || !value_is_map_like(receiver)) {
+    snprintf(out, out_size, "has_path() is only valid on map or dict values");
+    return 1;
+  }
+  if (argc != 1) {
+    snprintf(out, out_size, "has_path() expects exactly one path argument");
+    return 1;
+  }
+  if (render_argument_key(&args[0], path, sizeof(path), out, out_size) != 0) {
+    return 1;
+  }
+  arksh_value_init(&resolved);
+  if (arksh_value_get_path(receiver, path, &resolved, &found, out, out_size) != 0) {
+    arksh_value_free(&resolved);
+    return 1;
+  }
+  arksh_value_free(&resolved);
+  arksh_value_set_boolean(out_value, found);
+  return 0;
+}
+
+static int map_like_method_set_path(
+  ArkshShell *shell,
+  const ArkshValue *receiver,
+  int argc,
+  const ArkshValue *args,
+  ArkshValue *out_value,
+  char *out,
+  size_t out_size
+) {
+  char path[ARKSH_MAX_OUTPUT];
+
+  (void) shell;
+
+  if (receiver == NULL || out_value == NULL || !value_is_map_like(receiver)) {
+    snprintf(out, out_size, "set_path() is only valid on map or dict values");
+    return 1;
+  }
+  if (argc != 2) {
+    snprintf(out, out_size, "set_path() expects exactly two arguments: path and value");
+    return 1;
+  }
+  if (render_argument_key(&args[0], path, sizeof(path), out, out_size) != 0) {
+    return 1;
+  }
+  return arksh_value_set_path(receiver, path, &args[1], out_value, out, out_size);
+}
+
+static int map_like_method_pick(
+  ArkshShell *shell,
+  const ArkshValue *receiver,
+  int argc,
+  const ArkshValue *args,
+  ArkshValue *out_value,
+  char *out,
+  size_t out_size
+) {
+  char keys[ARKSH_MAX_ARGS][ARKSH_MAX_NAME];
+  int i;
+
+  (void) shell;
+
+  if (receiver == NULL || out_value == NULL || !value_is_map_like(receiver)) {
+    snprintf(out, out_size, "pick() is only valid on map or dict values");
+    return 1;
+  }
+  if (argc <= 0) {
+    snprintf(out, out_size, "pick() expects at least one key");
+    return 1;
+  }
+  for (i = 0; i < argc; ++i) {
+    if (render_argument_key(&args[i], keys[i], sizeof(keys[i]), out, out_size) != 0) {
+      return 1;
+    }
+  }
+  return arksh_value_pick(receiver, argc, keys, out_value, out, out_size);
+}
+
+static int map_like_method_merge(
+  ArkshShell *shell,
+  const ArkshValue *receiver,
+  int argc,
+  const ArkshValue *args,
+  ArkshValue *out_value,
+  char *out,
+  size_t out_size
+) {
+  (void) shell;
+
+  if (receiver == NULL || out_value == NULL || !value_is_map_like(receiver)) {
+    snprintf(out, out_size, "merge() is only valid on map or dict values");
+    return 1;
+  }
+  if (argc != 1 || !value_is_map_like(&args[0])) {
+    snprintf(out, out_size, "merge() expects exactly one map or dict argument");
+    return 1;
+  }
+  return arksh_value_merge(receiver, &args[0], out_value, out, out_size);
+}
+
 /* path() resolver: creates a filesystem path value from a string argument */
 static int resolver_path(ArkshShell *shell, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
   char path_text[ARKSH_MAX_PATH];
@@ -4564,6 +4717,7 @@ static int register_builtin_pipeline_stages(ArkshShell *shell) {
     { "reduce",    "fold list into a single value with an accumulator block" },
     /* projection / transformation */
     { "each",      "project each item to a property name or block result" },
+    { "pluck",     "extract a nested path or property from each list item" },
     { "map",       "transform each item with a block, return new list" },
     { "flat_map",  "transform each item with a block and flatten one level" },
     { "group_by",  "group items by property or block into a map" },
@@ -9480,6 +9634,21 @@ static int register_builtin_extensions(ArkshShell *shell) {
   if (arksh_shell_register_native_method_extension(shell, "map", "has", map_method_has, 0) != 0) {
     return 1;
   }
+  if (arksh_shell_register_native_method_extension(shell, "map", "get_path", map_like_method_get_path, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "map", "has_path", map_like_method_has_path, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "map", "set_path", map_like_method_set_path, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "map", "pick", map_like_method_pick, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "map", "merge", map_like_method_merge, 0) != 0) {
+    return 1;
+  }
   if (arksh_shell_register_native_method_extension(shell, "file", "read_json", method_read_json, 0) != 0) {
     return 1;
   }
@@ -9506,6 +9675,21 @@ static int register_builtin_extensions(ArkshShell *shell) {
     return 1;
   }
   if (arksh_shell_register_native_method_extension(shell, "dict", "from_json", dict_method_from_json, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "dict", "get_path", map_like_method_get_path, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "dict", "has_path", map_like_method_has_path, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "dict", "set_path", map_like_method_set_path, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "dict", "pick", map_like_method_pick, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_register_native_method_extension(shell, "dict", "merge", map_like_method_merge, 0) != 0) {
     return 1;
   }
   if (arksh_shell_register_native_property_extension(shell, "dict", "keys", dict_prop_keys, 0) != 0) {
@@ -9869,6 +10053,8 @@ void arksh_shell_print_help(const ArkshShell *shell, char *out, size_t out_size)
     "  list(1, 2, 3) |> reduce(number(0), [:acc :n | acc + n])\n"
     "  list(1, 2, 3) |> to_json()\n"
     "  map(\"a\", list(1, 2, map(\"b\", true))) |> to_json()\n"
+    "  tests/fixtures/json/nested.json -> read_json() -> get_path(\"a[2].b\")\n"
+    "  list(map(\"name\", \"alpha\"), map(\"name\", \"beta\")) |> pluck(\"name\") |> join(\",\")\n"
     "  list(1, 20, 3) |> sort(value desc)\n"
     "  plugin load build/arksh_sample_plugin.dylib ; sample() -> name\n"
     "  plugin load build/arksh_sample_plugin.dylib ; text(\"ciao\") |> sample_wrap()\n"

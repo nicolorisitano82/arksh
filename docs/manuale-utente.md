@@ -509,7 +509,20 @@ Helper file-oriented su receiver path-like:
 ```text
 data.json -> read_json()
 data.json -> write_json(payload)
+data.json -> read_json() -> get_path("a[2].b")
+let data = data.json -> read_json()
+data -> set_path("meta.version", number(2))
+list(map("profile", map("name", "alpha")), map("profile", map("name", "beta"))) |> pluck("profile.name")
 ```
+
+Query e trasformazioni utili:
+
+- `get_path("a[2].b")` legge path annidati con segmenti `.` e indici `[n]`
+- `has_path(...)` verifica l'esistenza di un path senza fallire
+- `set_path(path, value)` restituisce una copia aggiornata del valore
+- `pick("k1", "k2")` estrae solo alcune chiavi da `map` o `dict`
+- `merge(other)` combina due `map` o `dict`, con override dei valori del secondo
+- `pluck("profile.name")` proietta un campo annidato da ogni elemento di una lista
 
 ## 14. Diagnostica e problemi comuni
 

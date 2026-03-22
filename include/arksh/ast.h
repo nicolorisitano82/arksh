@@ -174,8 +174,8 @@ typedef struct {
 } ArkshClassCommandNode;
 
 typedef struct {
-  char selector[ARKSH_MAX_PATH];
-  char raw_selector[ARKSH_MAX_TOKEN];
+  char selector[ARKSH_MAX_LINE];
+  char raw_selector[ARKSH_MAX_LINE];
   char member[ARKSH_MAX_NAME];
   char argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
   char raw_argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];

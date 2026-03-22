@@ -250,6 +250,8 @@ if(BUILD_TESTING)
   add_test(NAME arksh_proc_namespace COMMAND arksh -c "proc() -> pid")
   add_test(NAME arksh_shell_namespace COMMAND arksh -c "shell() -> plugins |> count()")
   add_test(NAME arksh_nested_json_roundtrip COMMAND arksh -c "tests/fixtures/json/nested.json -> read_json() |> to_json()")
+  add_test(NAME arksh_json_get_path COMMAND arksh -c "tests/fixtures/json/nested.json -> read_json() -> get_path(\"a[2].b\")")
+  add_test(NAME arksh_pipeline_pluck COMMAND arksh -c "list(map(\"name\", \"alpha\"), map(\"name\", \"beta\")) |> pluck(\"name\") |> join(\",\")")
   add_test(NAME arksh_plugin_value_resolver COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_sample_plugin> ; sample() -> name")
   add_test(NAME arksh_plugin_pipeline_stage COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_sample_plugin> ; text(\"ciao\") |> sample_wrap()")
   add_test(NAME arksh_positional_in_function COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/positional-in-function.arksh")
@@ -353,6 +355,8 @@ if(BUILD_TESTING)
     arksh_proc_namespace
     arksh_shell_namespace
     arksh_nested_json_roundtrip
+    arksh_json_get_path
+    arksh_pipeline_pluck
     arksh_plugin_value_resolver
     arksh_plugin_pipeline_stage
     PROPERTIES
@@ -368,6 +372,16 @@ if(BUILD_TESTING)
     arksh_glob_command_args
     PROPERTIES
       PASS_REGULAR_EXPRESSION "2"
+  )
+  set_tests_properties(
+    arksh_json_get_path
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "true"
+  )
+  set_tests_properties(
+    arksh_pipeline_pluck
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "alpha,beta"
   )
   set_tests_properties(
     arksh_if_command
@@ -1064,6 +1078,10 @@ if(BUILD_TESTING)
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/json-edge-cases.arksh"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_golden_json_query_transform
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/json-query-transform.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   set_tests_properties(
     arksh_golden_pipeline_chain
     arksh_golden_reduce_block
@@ -1075,6 +1093,7 @@ if(BUILD_TESTING)
     arksh_golden_base64_stages
     arksh_golden_matrix_types
     arksh_golden_json_edge_cases
+    arksh_golden_json_query_transform
     PROPERTIES TIMEOUT 15
   )
   # Each test checks a distinctive output string that only appears when the script ran fully.
@@ -1090,6 +1109,8 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_golden_matrix_types     PROPERTIES PASS_REGULAR_EXPRESSION "\"score\": 95")
   # E7-S1: JSON edge cases — unicode café round-trip and matrix JSON output
   set_tests_properties(arksh_golden_json_edge_cases  PROPERTIES PASS_REGULAR_EXPRESSION "caf")
+  # E7-S3: nested get_path/set_path, pluck and file round-trip
+  set_tests_properties(arksh_golden_json_query_transform PROPERTIES PASS_REGULAR_EXPRESSION "e7s3_roundtrip_ok")
 
   # plugin autoload tests
   file(MAKE_DIRECTORY
@@ -1098,13 +1119,13 @@ if(BUILD_TESTING)
     "${CMAKE_CURRENT_BINARY_DIR}/tests/autoload_home_dup"
   )
   add_test(NAME arksh_plugin_autoload_set
-    COMMAND arksh -c "plugin autoload set /tmp/arksh_test_pal.dylib"
+    COMMAND arksh -c "plugin autoload unset /tmp/arksh_test_pal.dylib ; plugin autoload set /tmp/arksh_test_pal.dylib"
   )
   add_test(NAME arksh_plugin_autoload_unset
-    COMMAND arksh -c "plugin autoload set /tmp/arksh_test_pau.dylib ; plugin autoload unset /tmp/arksh_test_pau.dylib"
+    COMMAND arksh -c "plugin autoload unset /tmp/arksh_test_pau.dylib ; plugin autoload set /tmp/arksh_test_pau.dylib ; plugin autoload unset /tmp/arksh_test_pau.dylib"
   )
   add_test(NAME arksh_plugin_autoload_duplicate
-    COMMAND arksh -c "plugin autoload set /tmp/arksh_test_dup.dylib ; plugin autoload set /tmp/arksh_test_dup.dylib"
+    COMMAND arksh -c "plugin autoload unset /tmp/arksh_test_dup.dylib ; plugin autoload set /tmp/arksh_test_dup.dylib ; plugin autoload set /tmp/arksh_test_dup.dylib"
   )
   set_tests_properties(
     arksh_plugin_autoload_set arksh_plugin_autoload_unset arksh_plugin_autoload_duplicate

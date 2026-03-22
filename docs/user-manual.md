@@ -509,7 +509,20 @@ File-oriented helpers on path-like receivers:
 ```text
 data.json -> read_json()
 data.json -> write_json(payload)
+data.json -> read_json() -> get_path("a[2].b")
+let data = data.json -> read_json()
+data -> set_path("meta.version", number(2))
+list(map("profile", map("name", "alpha")), map("profile", map("name", "beta"))) |> pluck("profile.name")
 ```
+
+Useful query and transform helpers:
+
+- `get_path("a[2].b")` reads nested paths using `.` segments and `[n]` indexes
+- `has_path(...)` checks whether a nested path exists without failing
+- `set_path(path, value)` returns an updated copy of the current value
+- `pick("k1", "k2")` keeps only selected keys from a `map` or `dict`
+- `merge(other)` combines two `map` or `dict` values, with the right side overriding
+- `pluck("profile.name")` projects a nested field from each element in a list
 
 ## 14. Troubleshooting
 

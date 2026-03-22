@@ -246,6 +246,20 @@ static void test_object_expression_method(void) {
          "obj expr method: member_kind METHOD");
 }
 
+static void test_object_expression_chained_receiver(void) {
+  ArkshAst ast = parse_ok("data.json -> read_json() -> get_path(\"a[2].b\")");
+  EXPECT(ast.kind == ARKSH_AST_OBJECT_EXPRESSION, "obj expr chained: kind");
+  EXPECT(strcmp(ast.as.object_expression.raw_selector, "data.json -> read_json()") == 0,
+         "obj expr chained: raw_selector == chained receiver");
+  EXPECT(strcmp(ast.as.object_expression.member, "get_path") == 0,
+         "obj expr chained: member == 'get_path'");
+  EXPECT(ast.as.object_expression.member_kind == ARKSH_MEMBER_METHOD,
+         "obj expr chained: member_kind METHOD");
+  EXPECT(ast.as.object_expression.argc == 1, "obj expr chained: argc == 1");
+  EXPECT(strcmp(ast.as.object_expression.raw_argv[0], "\"a[2].b\"") == 0,
+         "obj expr chained: raw arg preserved");
+}
+
 /* ------------------------------------------------------------------ OBJECT_PIPELINE */
 
 static void test_object_pipeline_one_stage(void) {
@@ -359,6 +373,7 @@ int main(void) {
   /* OBJECT_EXPRESSION */
   test_object_expression_arrow();
   test_object_expression_method();
+  test_object_expression_chained_receiver();
 
   /* OBJECT_PIPELINE */
   test_object_pipeline_one_stage();

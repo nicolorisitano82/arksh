@@ -118,6 +118,8 @@ Matrix("name", "score")
 
 # Pipelines
 . -> children() |> where(type == "file") |> sort(size desc)
+tests/fixtures/json/nested.json -> read_json() -> get_path("a[2].b")
+list(map("profile", map("name", "alpha")), map("profile", map("name", "beta"))) |> pluck("profile.name") |> join(",")
 capture("pwd") |> lines() |> first()
 list(1, 2, 3) |> map([:it | it + number(1)])
 

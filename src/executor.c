@@ -3386,6 +3386,144 @@ static int apply_join_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
   return 0;
 }
 
+static int path_has_nested_segments(const char *path) {
+  if (path == NULL) {
+    return 0;
+  }
+  return strchr(path, '.') != NULL || strchr(path, '[') != NULL || strchr(path, ']') != NULL;
+}
+
+static int apply_pluck_stage(ArkshShell *shell, ArkshValue *value, const ArkshPipelineStageNode *stage, char *out, size_t out_size) {
+  char path[ARKSH_MAX_OUTPUT];
+  ArkshValue *result;
+  size_t i;
+
+  if (shell == NULL || value == NULL || stage == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (value->kind != ARKSH_VALUE_LIST) {
+    snprintf(out, out_size, "pluck() expects a list");
+    return 1;
+  }
+  if (stage->raw_args[0] == '\0') {
+    snprintf(out, out_size, "pluck() expects a path argument");
+    return 1;
+  }
+  if (evaluate_stage_argument_to_text(shell, stage->raw_args, path, sizeof(path), out, out_size) != 0) {
+    return 1;
+  }
+
+  result = (ArkshValue *) allocate_temp_buffer(1, sizeof(*result), "pluck() result", out, out_size);
+  if (result == NULL) {
+    return 1;
+  }
+
+  arksh_value_init(result);
+  result->kind = ARKSH_VALUE_LIST;
+
+  for (i = 0; i < value->list.count; ++i) {
+    ArkshValue *item_value;
+    ArkshValue *picked_value;
+    ArkshValueItem *picked_item;
+    int found = 0;
+
+    item_value = (ArkshValue *) allocate_temp_buffer(1, sizeof(*item_value), "pluck() item value", out, out_size);
+    picked_value = (ArkshValue *) allocate_temp_buffer(1, sizeof(*picked_value), "pluck() picked value", out, out_size);
+    picked_item = (ArkshValueItem *) allocate_temp_buffer(1, sizeof(*picked_item), "pluck() picked item", out, out_size);
+    if (item_value == NULL || picked_value == NULL || picked_item == NULL) {
+      free(item_value);
+      free(picked_value);
+      free(picked_item);
+      arksh_value_free(result);
+      free(result);
+      return 1;
+    }
+
+    arksh_value_init(item_value);
+    arksh_value_init(picked_value);
+    arksh_value_item_init(picked_item);
+
+    if (arksh_value_set_from_item(item_value, &value->list.items[i]) != 0) {
+      arksh_value_free(item_value);
+      arksh_value_free(picked_value);
+      arksh_value_item_free(picked_item);
+      free(item_value);
+      free(picked_value);
+      free(picked_item);
+      arksh_value_free(result);
+      free(result);
+      snprintf(out, out_size, "unable to prepare pluck() item");
+      return 1;
+    }
+
+    if ((item_value->kind == ARKSH_VALUE_MAP || item_value->kind == ARKSH_VALUE_DICT || item_value->kind == ARKSH_VALUE_LIST) &&
+        arksh_value_get_path(item_value, path, picked_value, &found, out, out_size) != 0) {
+      arksh_value_free(item_value);
+      arksh_value_free(picked_value);
+      arksh_value_item_free(picked_item);
+      free(item_value);
+      free(picked_value);
+      free(picked_item);
+      arksh_value_free(result);
+      free(result);
+      return 1;
+    }
+
+    if (!found && !path_has_nested_segments(path)) {
+      int status = arksh_value_get_property_value(item_value, path, picked_value, out, out_size);
+      if (status == 0) {
+        found = 1;
+      } else if (error_has_prefix(out, "unknown property:")) {
+        out[0] = '\0';
+        arksh_value_free(picked_value);
+        arksh_value_init(picked_value);
+      } else {
+        arksh_value_free(item_value);
+        arksh_value_free(picked_value);
+        arksh_value_item_free(picked_item);
+        free(item_value);
+        free(picked_value);
+        free(picked_item);
+        arksh_value_free(result);
+        free(result);
+        return 1;
+      }
+    }
+
+    if (set_item_from_value(picked_value, picked_item, out, out_size) != 0 || arksh_value_list_append_item(result, picked_item) != 0) {
+      arksh_value_free(item_value);
+      arksh_value_free(picked_value);
+      arksh_value_item_free(picked_item);
+      free(item_value);
+      free(picked_value);
+      free(picked_item);
+      arksh_value_free(result);
+      free(result);
+      snprintf(out, out_size, "pluck() output list is too large");
+      return 1;
+    }
+
+    arksh_value_free(item_value);
+    arksh_value_free(picked_value);
+    arksh_value_item_free(picked_item);
+    free(item_value);
+    free(picked_value);
+    free(picked_item);
+  }
+
+  arksh_value_free(value);
+  if (arksh_value_copy(value, result) != 0) {
+    arksh_value_free(result);
+    free(result);
+    snprintf(out, out_size, "unable to finalize pluck() result");
+    return 1;
+  }
+  arksh_value_free(result);
+  free(result);
+  return 0;
+}
+
 static int apply_to_json_stage(ArkshValue *value, char *out, size_t out_size) {
   char json[ARKSH_MAX_OUTPUT];
 
@@ -4460,6 +4598,10 @@ static int apply_pipeline_stage(ArkshShell *shell, ArkshValue *value, const Arks
 
   if (strcmp(stage->name, "join") == 0) {
     return apply_join_stage(shell, value, stage, out, out_size);
+  }
+
+  if (strcmp(stage->name, "pluck") == 0) {
+    return apply_pluck_stage(shell, value, stage, out, out_size);
   }
 
   if (strcmp(stage->name, "reduce") == 0) {

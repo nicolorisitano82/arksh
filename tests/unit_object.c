@@ -392,6 +392,162 @@ static void test_map_get_missing(void) {
   arksh_value_free(&map);
 }
 
+static void test_map_get_path_nested(void) {
+  ArkshValue root;
+  ArkshValue list;
+  ArkshValue one;
+  ArkshValue two;
+  ArkshValue nested;
+  ArkshValue truthy;
+  ArkshValue resolved;
+  char error[ARKSH_MAX_OUTPUT];
+  int found = 0;
+
+  arksh_value_init(&root);
+  arksh_value_init(&list);
+  arksh_value_init(&one);
+  arksh_value_init(&two);
+  arksh_value_init(&nested);
+  arksh_value_init(&truthy);
+  arksh_value_init(&resolved);
+
+  arksh_value_set_map(&root);
+  list.kind = ARKSH_VALUE_LIST;
+  arksh_value_set_number(&one, 1.0);
+  arksh_value_set_number(&two, 2.0);
+  arksh_value_set_map(&nested);
+  arksh_value_set_boolean(&truthy, 1);
+
+  EXPECT(arksh_value_list_append_value(&list, &one) == 0, "get_path nested: append first item");
+  EXPECT(arksh_value_list_append_value(&list, &two) == 0, "get_path nested: append second item");
+  EXPECT(arksh_value_map_set(&nested, "b", &truthy) == 0, "get_path nested: set nested key");
+  EXPECT(arksh_value_list_append_value(&list, &nested) == 0, "get_path nested: append nested map");
+  EXPECT(arksh_value_map_set(&root, "a", &list) == 0, "get_path nested: set list key");
+
+  error[0] = '\0';
+  EXPECT(arksh_value_get_path(&root, "a[2].b", &resolved, &found, error, sizeof(error)) == 0, "get_path nested: rc == 0");
+  EXPECT(found == 1, "get_path nested: found == 1");
+  EXPECT(resolved.kind == ARKSH_VALUE_BOOLEAN, "get_path nested: kind == BOOLEAN");
+  EXPECT(resolved.boolean == 1, "get_path nested: boolean == true");
+
+  arksh_value_free(&resolved);
+  arksh_value_free(&truthy);
+  arksh_value_free(&nested);
+  arksh_value_free(&two);
+  arksh_value_free(&one);
+  arksh_value_free(&list);
+  arksh_value_free(&root);
+}
+
+static void test_map_set_path_auto_create(void) {
+  ArkshValue root;
+  ArkshValue replacement;
+  ArkshValue updated;
+  ArkshValue resolved;
+  char error[ARKSH_MAX_OUTPUT];
+  int found = 0;
+
+  arksh_value_init(&root);
+  arksh_value_init(&replacement);
+  arksh_value_init(&updated);
+  arksh_value_init(&resolved);
+
+  arksh_value_set_map(&root);
+  arksh_value_set_number(&replacement, 2.0);
+
+  error[0] = '\0';
+  EXPECT(arksh_value_set_path(&root, "meta.version", &replacement, &updated, error, sizeof(error)) == 0, "set_path auto create: rc == 0");
+  EXPECT(arksh_value_get_path(&updated, "meta.version", &resolved, &found, error, sizeof(error)) == 0, "set_path auto create: get_path rc == 0");
+  EXPECT(found == 1, "set_path auto create: found == 1");
+  EXPECT(resolved.kind == ARKSH_VALUE_NUMBER, "set_path auto create: kind == NUMBER");
+  EXPECT(resolved.number == 2.0, "set_path auto create: value == 2");
+
+  arksh_value_free(&resolved);
+  arksh_value_free(&updated);
+  arksh_value_free(&replacement);
+  arksh_value_free(&root);
+}
+
+static void test_map_pick_selected_keys(void) {
+  ArkshValue typed_map;
+  ArkshValue name_value;
+  ArkshValue count_value;
+  ArkshValue picked;
+  const ArkshValueItem *name_entry;
+  const ArkshValueItem *count_entry;
+  const ArkshValueItem *type_entry;
+  char keys[1][ARKSH_MAX_NAME] = { "name" };
+  char error[ARKSH_MAX_OUTPUT];
+
+  arksh_value_init(&typed_map);
+  arksh_value_init(&name_value);
+  arksh_value_init(&count_value);
+  arksh_value_init(&picked);
+
+  arksh_value_set_typed_map(&typed_map, "demo");
+  arksh_value_set_string(&name_value, "arksh");
+  arksh_value_set_number(&count_value, 3.0);
+  EXPECT(arksh_value_map_set(&typed_map, "name", &name_value) == 0, "pick: set name");
+  EXPECT(arksh_value_map_set(&typed_map, "count", &count_value) == 0, "pick: set count");
+
+  error[0] = '\0';
+  EXPECT(arksh_value_pick(&typed_map, 1, keys, &picked, error, sizeof(error)) == 0, "pick: rc == 0");
+  name_entry = arksh_value_map_get_item(&picked, "name");
+  count_entry = arksh_value_map_get_item(&picked, "count");
+  type_entry = arksh_value_map_get_item(&picked, "__type__");
+  EXPECT(name_entry != NULL && strcmp(name_entry->text, "arksh") == 0, "pick: name preserved");
+  EXPECT(count_entry == NULL, "pick: count omitted");
+  EXPECT(type_entry != NULL && strcmp(type_entry->text, "demo") == 0, "pick: __type__ preserved");
+
+  arksh_value_free(&picked);
+  arksh_value_free(&count_value);
+  arksh_value_free(&name_value);
+  arksh_value_free(&typed_map);
+}
+
+static void test_map_merge_override(void) {
+  ArkshValue left;
+  ArkshValue right;
+  ArkshValue name_left;
+  ArkshValue name_right;
+  ArkshValue status_right;
+  ArkshValue merged;
+  const ArkshValueItem *name_entry;
+  const ArkshValueItem *status_entry;
+  char error[ARKSH_MAX_OUTPUT];
+
+  arksh_value_init(&left);
+  arksh_value_init(&right);
+  arksh_value_init(&name_left);
+  arksh_value_init(&name_right);
+  arksh_value_init(&status_right);
+  arksh_value_init(&merged);
+
+  arksh_value_set_map(&left);
+  arksh_value_set_map(&right);
+  arksh_value_set_string(&name_left, "old");
+  arksh_value_set_string(&name_right, "new");
+  arksh_value_set_string(&status_right, "ok");
+
+  EXPECT(arksh_value_map_set(&left, "name", &name_left) == 0, "merge: set left name");
+  EXPECT(arksh_value_map_set(&right, "name", &name_right) == 0, "merge: set right name");
+  EXPECT(arksh_value_map_set(&right, "status", &status_right) == 0, "merge: set right status");
+
+  error[0] = '\0';
+  EXPECT(arksh_value_merge(&left, &right, &merged, error, sizeof(error)) == 0, "merge: rc == 0");
+  name_entry = arksh_value_map_get_item(&merged, "name");
+  status_entry = arksh_value_map_get_item(&merged, "status");
+  EXPECT(name_entry != NULL && strcmp(name_entry->text, "new") == 0, "merge: right value overrides");
+  EXPECT(status_entry != NULL && strcmp(status_entry->text, "ok") == 0, "merge: new key added");
+
+  arksh_value_free(&merged);
+  arksh_value_free(&status_right);
+  arksh_value_free(&name_right);
+  arksh_value_free(&name_left);
+  arksh_value_free(&right);
+  arksh_value_free(&left);
+}
+
 /* ------------------------------------------------------------------ render */
 
 static void test_render_string(void) {
@@ -806,6 +962,10 @@ int main(void) {
   test_map_set_get();
   test_map_overwrite();
   test_map_get_missing();
+  test_map_get_path_nested();
+  test_map_set_path_auto_create();
+  test_map_pick_selected_keys();
+  test_map_merge_override();
 
   /* render */
   test_render_string();

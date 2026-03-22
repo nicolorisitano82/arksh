@@ -1,0 +1,18 @@
+# golden: nested path lookup from JSON file
+tests/fixtures/json/nested.json -> read_json() -> get_path("a[2].b")
+
+# golden: create nested path and read it back
+let data = tests/fixtures/json/nested.json -> read_json()
+let updated = data -> set_path("meta.version", number(2))
+updated -> get_path("meta.version")
+
+# golden: pick selected keys and serialize them
+updated -> pick("name", "meta") |> to_json()
+
+# golden: pluck nested values from a list of maps
+list(map("profile", map("name", "alpha")), map("profile", map("name", "beta"))) |> pluck("profile.name") |> join(",")
+
+# golden: merge, write to file, read back and verify
+let merged = updated -> merge(map("status", "e7s3_roundtrip_ok"))
+e7s3-roundtrip.json -> write_json(merged)
+e7s3-roundtrip.json -> read_json() -> get_path("status")

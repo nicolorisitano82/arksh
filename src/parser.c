@@ -937,10 +937,10 @@ static int parse_object_expression_text(const char *line, ArkshObjectExpressionN
   }
 
   for (i = 0; i < stream.count; ++i) {
-    if (stream.tokens[i].kind == ARKSH_TOKEN_ARROW) {
+    if (stream.tokens[i].kind == ARKSH_TOKEN_ARROW &&
+        !position_is_inside_nested_structure(line, stream.tokens[i].position)) {
       arrow_index = i;
       found_arrow = 1;
-      break;
     }
   }
 
