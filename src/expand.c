@@ -149,7 +149,7 @@ static int clone_subshell(const ArkshShell *shell, ArkshShell **out_shell, char 
   }
 
   *out_shell = NULL;
-  clone = (ArkshShell *) calloc(1, sizeof(*clone));
+  clone = (ArkshShell *) arksh_scratch_alloc_active_zero(1, sizeof(*clone));
   if (clone == NULL) {
     snprintf(error, error_size, "unable to allocate command substitution shell");
     return 1;
@@ -164,7 +164,6 @@ static int clone_subshell(const ArkshShell *shell, ArkshShell **out_shell, char 
       for (rollback = 0; rollback < i; ++rollback) {
         arksh_value_free(&clone->bindings[rollback].value);
       }
-      free(clone);
       snprintf(error, error_size, "unable to clone value binding for command substitution");
       return 1;
     }
@@ -1860,16 +1859,20 @@ int arksh_expand_word(
   char pattern[ARKSH_MAX_TOKEN * 2];
   int has_glob = 0;
   int saw_quote_open = 0;
+  ArkshScratchFrame scratch_frame;
+  int status;
 
   if (out_values == NULL || max_values <= 0 || out_count == NULL || error == NULL || error_size == 0) {
     return 1;
   }
 
+  arksh_scratch_frame_begin(shell, &scratch_frame);
   *out_count = 0;
   memset(split_flags, 0, sizeof(split_flags));
 
   if (expand_raw_token(shell, raw, mode, expanded, sizeof(expanded), split_flags, &saw_quote_open, pattern, sizeof(pattern), &has_glob, error, error_size) != 0) {
-    return 1;
+    status = 1;
+    goto cleanup;
   }
 
   if (mode == ARKSH_EXPAND_MODE_COMMAND && has_glob) {
@@ -1879,15 +1882,18 @@ int arksh_expand_word(
     glob_status = arksh_platform_glob(pattern, out_values, max_values, &match_count);
     if (glob_status == 0 && match_count > 0) {
       *out_count = match_count;
-      return 0;
+      status = 0;
+      goto cleanup;
     }
     if (glob_status == 2) {
       snprintf(error, error_size, "glob expansion produced too many matches");
-      return 1;
+      status = 1;
+      goto cleanup;
     }
     if (glob_status != 0) {
       snprintf(error, error_size, "glob expansion failed");
-      return 1;
+      status = 1;
+      goto cleanup;
     }
   }
 
@@ -1899,11 +1905,16 @@ int arksh_expand_word(
     if (ifs == NULL) {
       ifs = " \t\n";
     }
-    return apply_ifs_splitting(expanded, exp_len, split_flags, saw_quote_open, ifs,
-                               out_values, max_values, out_count, error, error_size);
+    status = apply_ifs_splitting(expanded, exp_len, split_flags, saw_quote_open, ifs,
+                                 out_values, max_values, out_count, error, error_size);
+    goto cleanup;
   }
 
   copy_string(out_values[0], sizeof(out_values[0]), expanded);
   *out_count = 1;
-  return 0;
+  status = 0;
+
+cleanup:
+  arksh_scratch_frame_end(&scratch_frame);
+  return status;
 }

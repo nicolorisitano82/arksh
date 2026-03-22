@@ -1010,13 +1010,13 @@ Stato story: `[x]`
 
 ### E12-S2. Scratch arena per executor ed espansioni
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E12-S2-T1` introdurre un modulo `arena` o `scratch allocator` riutilizzabile nel core
-- `[ ]` `E12-S2-T2` sostituire `allocate_temp_buffer()` nell'executor con allocazioni da arena per i buffer temporanei del path caldo
-- `[ ]` `E12-S2-T3` integrare la stessa arena in `expand.c` per command substitution, field splitting e buffer temporanei
-- `[ ]` `E12-S2-T4` garantire reset a fine comando senza leak e senza cambiare la semantica dei valori che devono sopravvivere oltre il frame
-- `[ ]` `E12-S2-T5` aggiungere benchmark e regressioni per verificare il calo di allocazioni rispetto alla baseline
+- `[x]` `E12-S2-T1` introdurre un modulo `arena` o `scratch allocator` riutilizzabile nel core
+- `[x]` `E12-S2-T2` sostituire `allocate_temp_buffer()` nell'executor con allocazioni da arena per i buffer temporanei del path caldo
+- `[x]` `E12-S2-T3` integrare la stessa arena in `expand.c` per command substitution, field splitting e buffer temporanei
+- `[x]` `E12-S2-T4` garantire reset a fine comando senza leak e senza cambiare la semantica dei valori che devono sopravvivere oltre il frame
+- `[x]` `E12-S2-T5` aggiungere benchmark e regressioni per verificare il calo di allocazioni rispetto alla baseline
 
 ### E12-S3. Layout piu leggero per `ArkshValue`
 

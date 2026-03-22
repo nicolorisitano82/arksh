@@ -73,3 +73,15 @@ Environment:
 - `function-scope` shows a very high `temp_buffer_calls` count, making it a good validation target for `E12-S2`.
 - This baseline is intentionally simple: it is meant to be stable enough for before/after comparisons while `E12-S2` through `E12-S8` land.
 - On Windows, `arksh_perf` currently prints an explicit placeholder message instead of running the POSIX benchmark path.
+
+## E12-S2 Delta
+
+After landing the scratch arena in `E12-S2`, the same benchmark bundle showed clear allocation drops in the hottest paths:
+
+- `object-pipeline`: `calloc_calls` from `250` to `216`
+- `json-structured`: `calloc_calls` from `714` to `576`
+- `function-scope`: `calloc_calls` from `420` to `132`
+- `subshell`: `calloc_calls` from `146` to `104`
+- `command-substitution`: `calloc_calls` from `50` to `8`
+
+This baseline file remains the reference "before" snapshot. The detailed implementation delta is tracked in the `E12-S2` work and validated by dedicated perf regression tests.

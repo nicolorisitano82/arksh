@@ -2,6 +2,7 @@
 #include <string.h>
 
 #define ARKSH_PERF_NO_ALLOC_MACROS
+#include "arksh/arena.h"
 #include "arksh/perf.h"
 
 static ArkshPerfCounters g_perf_counters;
@@ -85,8 +86,17 @@ void *arksh_perf_realloc_impl(void *ptr, size_t size) {
 }
 
 void arksh_perf_free_impl(void *ptr) {
+  if (ptr == NULL) {
+    return;
+  }
+
+  if (arksh_scratch_active_contains(ptr)) {
+    return;
+  }
+
   if (g_perf_counters.enabled) {
     g_perf_counters.free_calls++;
   }
+
   free(ptr);
 }

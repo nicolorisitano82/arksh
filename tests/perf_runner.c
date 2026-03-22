@@ -22,6 +22,112 @@ typedef struct {
   long long max_rss_kb;
 } PerfRunSummary;
 
+static int lookup_metric_value(const PerfRunSummary *summary, const char *name, unsigned long long *out_value) {
+  if (summary == NULL || name == NULL || out_value == NULL) {
+    return 1;
+  }
+
+  if (strcmp(name, "exit_code") == 0) {
+    *out_value = (unsigned long long) summary->exit_code;
+    return 0;
+  }
+  if (strcmp(name, "max_rss_kb") == 0) {
+    *out_value = (unsigned long long) summary->max_rss_kb;
+    return 0;
+  }
+  if (strcmp(name, "malloc_calls") == 0) {
+    *out_value = summary->counters.malloc_calls;
+    return 0;
+  }
+  if (strcmp(name, "calloc_calls") == 0) {
+    *out_value = summary->counters.calloc_calls;
+    return 0;
+  }
+  if (strcmp(name, "realloc_calls") == 0) {
+    *out_value = summary->counters.realloc_calls;
+    return 0;
+  }
+  if (strcmp(name, "free_calls") == 0) {
+    *out_value = summary->counters.free_calls;
+    return 0;
+  }
+  if (strcmp(name, "malloc_bytes") == 0) {
+    *out_value = summary->counters.malloc_bytes;
+    return 0;
+  }
+  if (strcmp(name, "calloc_bytes") == 0) {
+    *out_value = summary->counters.calloc_bytes;
+    return 0;
+  }
+  if (strcmp(name, "realloc_bytes") == 0) {
+    *out_value = summary->counters.realloc_bytes;
+    return 0;
+  }
+  if (strcmp(name, "temp_buffer_calls") == 0) {
+    *out_value = summary->counters.temp_buffer_calls;
+    return 0;
+  }
+  if (strcmp(name, "temp_buffer_bytes") == 0) {
+    *out_value = summary->counters.temp_buffer_bytes;
+    return 0;
+  }
+  if (strcmp(name, "value_copy_calls") == 0) {
+    *out_value = summary->counters.value_copy_calls;
+    return 0;
+  }
+  if (strcmp(name, "value_render_calls") == 0) {
+    *out_value = summary->counters.value_render_calls;
+    return 0;
+  }
+
+  return 1;
+}
+
+static int check_expectation(const PerfRunSummary *summary, const char *spec) {
+  const char *sep;
+  char name[128];
+  unsigned long long actual;
+  unsigned long long expected;
+  char *endptr = NULL;
+  size_t name_len;
+
+  if (summary == NULL || spec == NULL) {
+    return 1;
+  }
+
+  sep = strstr(spec, "<=");
+  if (sep == NULL) {
+    fprintf(stderr, "unsupported expectation syntax: %s\n", spec);
+    return 1;
+  }
+
+  name_len = (size_t) (sep - spec);
+  if (name_len == 0 || name_len >= sizeof(name)) {
+    fprintf(stderr, "invalid expectation metric: %s\n", spec);
+    return 1;
+  }
+  memcpy(name, spec, name_len);
+  name[name_len] = '\0';
+
+  expected = strtoull(sep + 2, &endptr, 10);
+  if (endptr == NULL || *endptr != '\0') {
+    fprintf(stderr, "invalid expectation value: %s\n", spec);
+    return 1;
+  }
+
+  if (lookup_metric_value(summary, name, &actual) != 0) {
+    fprintf(stderr, "unknown expectation metric: %s\n", name);
+    return 1;
+  }
+
+  if (actual > expected) {
+    fprintf(stderr, "expectation failed: %s (%llu > %llu)\n", name, actual, expected);
+    return 1;
+  }
+
+  return 0;
+}
+
 static double now_ms(void) {
 #ifdef _WIN32
   LARGE_INTEGER freq;
@@ -242,9 +348,10 @@ static int run_benchmark_case(const char *arksh_path, const char *mode, const ch
 int main(int argc, char **argv) {
   PerfRunSummary summary;
   char captured[32768];
+  int i;
 
-  if (argc != 5) {
-    fprintf(stderr, "usage: %s <arksh-path> <label> <command|script> <payload>\n", argv[0]);
+  if (argc < 5) {
+    fprintf(stderr, "usage: %s <arksh-path> <label> <command|script> <payload> [metric<=value ...]\n", argv[0]);
     return 1;
   }
 
@@ -270,6 +377,12 @@ int main(int argc, char **argv) {
     printf("temp_buffer_bytes=%llu\n", summary.counters.temp_buffer_bytes);
     printf("value_copy_calls=%llu\n", summary.counters.value_copy_calls);
     printf("value_render_calls=%llu\n", summary.counters.value_render_calls);
+  }
+
+  for (i = 5; i < argc; ++i) {
+    if (check_expectation(&summary, argv[i]) != 0) {
+      return 1;
+    }
   }
 
   return summary.exit_code == 0 ? 0 : 1;

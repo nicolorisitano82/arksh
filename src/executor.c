@@ -124,7 +124,7 @@ static void *allocate_temp_buffer(size_t count, size_t item_size, const char *la
   }
 
   arksh_perf_note_temp_buffer(count, item_size);
-  buffer = calloc(count, item_size);
+  buffer = arksh_scratch_alloc_active_zero(count, item_size);
   if (buffer == NULL && out != NULL && out_size > 0) {
     snprintf(out, out_size, "unable to allocate %s", label == NULL ? "temporary buffer" : label);
   }
@@ -1009,7 +1009,7 @@ static int evaluate_value_text_core(ArkshShell *shell, const char *text, ArkshVa
     return 1;
   }
 
-  ast = (ArkshAst *) malloc(sizeof(ArkshAst));
+  ast = (ArkshAst *) arksh_scratch_alloc_active_zero(1, sizeof(*ast));
   if (ast == NULL) {
     snprintf(out, out_size, "out of memory");
     return 1;
@@ -1017,7 +1017,6 @@ static int evaluate_value_text_core(ArkshShell *shell, const char *text, ArkshVa
 
   parse_error[0] = '\0';
   if (arksh_parse_value_line(text, ast, parse_error, sizeof(parse_error)) != 0) {
-    free(ast);
     if (parse_error[0] != '\0') {
       copy_string(out, out_size, parse_error);
     }
@@ -1025,7 +1024,6 @@ static int evaluate_value_text_core(ArkshShell *shell, const char *text, ArkshVa
   }
 
   result = evaluate_ast_value(shell, ast, out_value, out, out_size);
-  free(ast);
   return result;
 }
 
@@ -2557,7 +2555,7 @@ static int split_text_lines_into_value(const char *text, ArkshValue *out_value) 
 
   while (*cursor != '\0') {
     const char *line_end = strchr(cursor, '\n');
-    ArkshValueItem *item = (ArkshValueItem *) calloc(1, sizeof(*item));
+    ArkshValueItem *item = (ArkshValueItem *) arksh_scratch_alloc_active_zero(1, sizeof(*item));
     size_t len;
     char line[ARKSH_MAX_VALUE_TEXT];
 
@@ -2580,11 +2578,8 @@ static int split_text_lines_into_value(const char *text, ArkshValue *out_value) 
     item->kind = ARKSH_VALUE_STRING;
     copy_string(item->text, sizeof(item->text), line);
     if (arksh_value_list_append_item(out_value, item) != 0) {
-      free(item);
       return 1;
     }
-    free(item);
-
     if (*line_end == '\0') {
       break;
     }
@@ -2605,7 +2600,7 @@ static int append_string_item_to_value(ArkshValue *out_value, const char *text) 
     return 1;
   }
 
-  item = (ArkshValueItem *) calloc(1, sizeof(*item));
+  item = (ArkshValueItem *) arksh_scratch_alloc_active_zero(1, sizeof(*item));
   if (item == NULL) {
     return 1;
   }
@@ -2613,10 +2608,8 @@ static int append_string_item_to_value(ArkshValue *out_value, const char *text) 
   item->kind = ARKSH_VALUE_STRING;
   copy_string(item->text, sizeof(item->text), text);
   if (arksh_value_list_append_item(out_value, item) != 0) {
-    free(item);
     return 1;
   }
-  free(item);
   return 0;
 }
 
@@ -4775,16 +4768,14 @@ static int apply_pipeline_stage(ArkshShell *shell, ArkshValue *value, const Arks
   /* T5: fallback — try an extension method with this name */
   {
     char ext_err[ARKSH_MAX_OUTPUT];
-    ArkshValue *ext_result = (ArkshValue *) calloc(1, sizeof(ArkshValue));
+    ArkshValue *ext_result = (ArkshValue *) arksh_scratch_alloc_active_zero(1, sizeof(ArkshValue));
     if (ext_result != NULL) {
       if (invoke_extension_method_value(shell, value, stage->name, 0, NULL, ext_result, ext_err, sizeof(ext_err)) == 0) {
         arksh_value_free(value);
         *value = *ext_result;
-        free(ext_result);
         return 0;
       }
       arksh_value_free(ext_result);
-      free(ext_result);
     }
   }
 
@@ -5849,7 +5840,7 @@ static int evaluate_line_value_heap(ArkshShell *shell, const char *line, ArkshVa
     return 0;
   }
 
-  ast = (ArkshAst *) malloc(sizeof(ArkshAst));
+  ast = (ArkshAst *) arksh_scratch_alloc_active_zero(1, sizeof(*ast));
   if (ast == NULL) {
     snprintf(out, out_size, "out of memory");
     return 1;
@@ -5857,13 +5848,11 @@ static int evaluate_line_value_heap(ArkshShell *shell, const char *line, ArkshVa
 
   parse_error[0] = '\0';
   if (arksh_parse_value_line(trimmed, ast, parse_error, sizeof(parse_error)) != 0) {
-    free(ast);
     snprintf(out, out_size, "%s", parse_error[0] == '\0' ? "parse error" : parse_error);
     return 1;
   }
 
   result = evaluate_ast_value(shell, ast, value, out, out_size);
-  free(ast);
   return result;
 }
 
@@ -6089,7 +6078,7 @@ static int evaluate_binary_expr_iterative(ArkshShell *shell, const char *text, A
     copy_trimmed_range(text, prev, end, seg, sizeof(seg));
     prev = (i < n_ops) ? op_pos[i] + 1 : end;
 
-    terms[i] = (ArkshValue *) calloc(1, sizeof(ArkshValue));
+    terms[i] = (ArkshValue *) arksh_scratch_alloc_active_zero(1, sizeof(ArkshValue));
     if (terms[i] == NULL) {
       snprintf(out, out_size, "out of memory"); status = 1; goto cleanup;
     }
@@ -7052,49 +7041,74 @@ static int execute_case_command(ArkshShell *shell, const ArkshCaseCommandNode *c
 }
 
 int arksh_execute_ast(ArkshShell *shell, const ArkshAst *ast, char *out, size_t out_size) {
+  ArkshScratchFrame scratch_frame;
+  int status;
+
   if (shell == NULL || ast == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
+  arksh_scratch_frame_begin(shell, &scratch_frame);
   out[0] = '\0';
 
   switch (ast->kind) {
     case ARKSH_AST_EMPTY:
-      return 0;
+      status = 0;
+      break;
     case ARKSH_AST_SIMPLE_COMMAND:
-      return execute_simple_command(shell, &ast->as.command, out, out_size);
+      status = execute_simple_command(shell, &ast->as.command, out, out_size);
+      break;
     case ARKSH_AST_VALUE_EXPRESSION:
-      return execute_value_expression(shell, &ast->as.value_expression, out, out_size);
+      status = execute_value_expression(shell, &ast->as.value_expression, out, out_size);
+      break;
     case ARKSH_AST_OBJECT_EXPRESSION:
-      return evaluate_object_expression_text(shell, &ast->as.object_expression, out, out_size);
+      status = evaluate_object_expression_text(shell, &ast->as.object_expression, out, out_size);
+      break;
     case ARKSH_AST_OBJECT_PIPELINE:
-      return execute_object_pipeline(shell, &ast->as.pipeline, out, out_size);
+      status = execute_object_pipeline(shell, &ast->as.pipeline, out, out_size);
+      break;
     case ARKSH_AST_COMMAND_PIPELINE:
-      return execute_shell_pipeline(shell, &ast->as.command_pipeline, out, out_size);
+      status = execute_shell_pipeline(shell, &ast->as.command_pipeline, out, out_size);
+      break;
     case ARKSH_AST_COMMAND_LIST:
-      return execute_command_list(shell, &ast->as.command_list, out, out_size);
+      status = execute_command_list(shell, &ast->as.command_list, out, out_size);
+      break;
     case ARKSH_AST_GROUP_COMMAND:
-      return execute_group_command(shell, &ast->as.group_command, out, out_size);
+      status = execute_group_command(shell, &ast->as.group_command, out, out_size);
+      break;
     case ARKSH_AST_SUBSHELL_COMMAND:
-      return execute_subshell_command(shell, &ast->as.subshell_command, out, out_size);
+      status = execute_subshell_command(shell, &ast->as.subshell_command, out, out_size);
+      break;
     case ARKSH_AST_IF_COMMAND:
-      return execute_if_command(shell, &ast->as.if_command, out, out_size);
+      status = execute_if_command(shell, &ast->as.if_command, out, out_size);
+      break;
     case ARKSH_AST_WHILE_COMMAND:
-      return execute_while_command(shell, &ast->as.while_command, out, out_size);
+      status = execute_while_command(shell, &ast->as.while_command, out, out_size);
+      break;
     case ARKSH_AST_UNTIL_COMMAND:
-      return execute_until_command(shell, &ast->as.until_command, out, out_size);
+      status = execute_until_command(shell, &ast->as.until_command, out, out_size);
+      break;
     case ARKSH_AST_FOR_COMMAND:
-      return execute_for_command(shell, &ast->as.for_command, out, out_size);
+      status = execute_for_command(shell, &ast->as.for_command, out, out_size);
+      break;
     case ARKSH_AST_CASE_COMMAND:
-      return execute_case_command(shell, &ast->as.case_command, out, out_size);
+      status = execute_case_command(shell, &ast->as.case_command, out, out_size);
+      break;
     case ARKSH_AST_SWITCH_COMMAND:
-      return execute_switch_command(shell, &ast->as.switch_command, out, out_size);
+      status = execute_switch_command(shell, &ast->as.switch_command, out, out_size);
+      break;
     case ARKSH_AST_FUNCTION_COMMAND:
-      return execute_function_definition(shell, &ast->as.function_command, out, out_size);
+      status = execute_function_definition(shell, &ast->as.function_command, out, out_size);
+      break;
     case ARKSH_AST_CLASS_COMMAND:
-      return execute_class_definition(shell, &ast->as.class_command, out, out_size);
+      status = execute_class_definition(shell, &ast->as.class_command, out, out_size);
+      break;
     default:
       snprintf(out, out_size, "unsupported AST node kind");
-      return 1;
+      status = 1;
+      break;
   }
+
+  arksh_scratch_frame_end(&scratch_frame);
+  return status;
 }

@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 
+#include "arksh/arena.h"
 #include "arksh/ast.h"
 #include "arksh/object.h"
 #include "arksh/platform.h"
@@ -284,6 +285,7 @@ typedef struct ArkshShell {
   long long last_bg_pid;
   long long shell_pid;
   int force_capture; /* 1 inside capture()/capture_lines()/bridge — always capture stdout */
+  ArkshScratchArena scratch;
   ArkshTypeDescriptor type_descriptors[ARKSH_MAX_TYPE_DESCRIPTORS];
   size_t type_descriptor_count;
 } ArkshShell;

@@ -10143,6 +10143,7 @@ int arksh_shell_init(ArkshShell *shell) {
   shell->next_job_id = 1;
   shell->loading_plugin_index = -1;
   shell->last_bg_pid = -1;
+  arksh_scratch_arena_init(&shell->scratch);
   perf_env = getenv("ARKSH_PERF");
   arksh_perf_enable(perf_env != NULL && perf_env[0] != '\0' && strcmp(perf_env, "0") != 0);
   {
@@ -10221,6 +10222,8 @@ void arksh_shell_destroy(ArkshShell *shell) {
     arksh_platform_library_close(shell->plugins[i].handle);
     shell->plugins[i].handle = NULL;
   }
+
+  arksh_scratch_arena_destroy(&shell->scratch);
 }
 
 int arksh_shell_register_command(ArkshShell *shell, const char *name, const char *description, ArkshCommandFn fn, int is_plugin_command) {

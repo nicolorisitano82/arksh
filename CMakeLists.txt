@@ -66,6 +66,7 @@ if(ARKSH_FUZZ)
 endif()
 
 add_library(arksh_core STATIC
+  src/arena.c
   src/expand.c
   src/executor.c
   src/line_editor.c
@@ -204,6 +205,8 @@ if(BUILD_TESTING)
   # E8-S1-T4: object model unit tests (link with math library for fabs())
   add_executable(arksh_unit_object tests/unit_object.c)
   target_link_libraries(arksh_unit_object PRIVATE arksh_core m)
+  add_executable(arksh_unit_arena tests/unit_arena.c)
+  target_link_libraries(arksh_unit_arena PRIVATE arksh_core)
 
   # E8-S3-T3: libFuzzer target — built only when ARKSH_FUZZ=ON
   if(ARKSH_FUZZ)
@@ -368,6 +371,19 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_perf_runner_smoke PROPERTIES
     PASS_REGULAR_EXPRESSION "case=startup"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+  add_test(NAME arksh_perf_object_pipeline_alloc_drop
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> object-pipeline script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/object-pipeline.arksh" "calloc_calls<=230")
+  add_test(NAME arksh_perf_function_scope_alloc_drop
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> function-scope script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/function-scope.arksh" "calloc_calls<=200")
+  add_test(NAME arksh_perf_command_subst_alloc_drop
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> command-substitution script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/command-substitution.arksh" "calloc_calls<=20")
+  set_tests_properties(
+    arksh_perf_object_pipeline_alloc_drop
+    arksh_perf_function_scope_alloc_drop
+    arksh_perf_command_subst_alloc_drop
+    PROPERTIES
+      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   )
   add_test(NAME arksh_positional_in_function COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/positional-in-function.arksh")
   add_test(NAME arksh_positional_count COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/param-count.arksh")
@@ -1145,6 +1161,7 @@ if(BUILD_TESTING)
 
   # E8-S1-T4: object model unit tests
   add_test(NAME arksh_unit_object COMMAND arksh_unit_object)
+  add_test(NAME arksh_unit_arena COMMAND arksh_unit_arena)
   set_tests_properties(arksh_unit_object PROPERTIES
     PASS_REGULAR_EXPRESSION "all tests passed"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
