@@ -510,6 +510,8 @@ static int value_is_truthy(const ArkshValue *value) {
     case ARKSH_VALUE_MAP:
     case ARKSH_VALUE_DICT:
       return value->map.count > 0;
+    case ARKSH_VALUE_MATRIX:
+      return value->matrix != NULL && value->matrix->row_count > 0;
     case ARKSH_VALUE_EMPTY:
     default:
       return 0;
@@ -4362,6 +4364,104 @@ static int apply_pipeline_stage(ArkshShell *shell, ArkshValue *value, const Arks
 
   if (strcmp(stage->name, "base64_decode") == 0) {
     return apply_base64_decode_stage(value, out, out_size);
+  }
+
+  /* E6-S8: matrix pipeline stages */
+  if (strcmp(stage->name, "transpose") == 0) {
+    ArkshMatrix *src, *dst;
+    ArkshValue result;
+    size_t r, c;
+    const char *row_names[ARKSH_MAX_MATRIX_ROWS];
+    char name_buf[ARKSH_MAX_MATRIX_ROWS][16];
+
+    if (value->kind != ARKSH_VALUE_MATRIX || value->matrix == NULL) {
+      snprintf(out, out_size, "transpose: value must be a matrix");
+      return 1;
+    }
+    src = value->matrix;
+    /* New column names are "row_0", "row_1", ... */
+    for (r = 0; r < src->row_count && r < ARKSH_MAX_MATRIX_ROWS; ++r) {
+      snprintf(name_buf[r], sizeof(name_buf[r]), "row_%zu", r);
+      row_names[r] = name_buf[r];
+    }
+    arksh_value_set_matrix(&result, row_names, src->row_count);
+    dst = result.matrix;
+    dst->row_count = src->col_count;
+    for (r = 0; r < src->col_count; ++r) {
+      /* Each new row r corresponds to old column r */
+      for (c = 0; c < src->row_count && c < (size_t)ARKSH_MAX_MATRIX_COLS; ++c) {
+        dst->rows[r][c] = src->rows[c][r];
+      }
+    }
+    arksh_value_free(value);
+    *value = result;
+    return 0;
+  }
+
+  if (strcmp(stage->name, "fill_na") == 0) {
+    ArkshMatrix *m;
+    const char *raw_args_str = stage->raw_args;
+    char col_name[ARKSH_MAX_NAME];
+    char fill_val[ARKSH_MAX_MATRIX_CELL_TEXT];
+    int col_idx;
+    size_t row;
+
+    if (value->kind != ARKSH_VALUE_MATRIX || value->matrix == NULL) {
+      snprintf(out, out_size, "fill_na: value must be a matrix");
+      return 1;
+    }
+    if (raw_args_str == NULL || raw_args_str[0] == '\0') {
+      snprintf(out, out_size, "fill_na: usage fill_na(col_name, value)");
+      return 1;
+    }
+    /* Parse two comma-separated args from raw_args */
+    {
+      const char *comma = strchr(raw_args_str, ',');
+      size_t name_len;
+      if (comma == NULL) {
+        snprintf(out, out_size, "fill_na: usage fill_na(col_name, value)");
+        return 1;
+      }
+      name_len = (size_t)(comma - raw_args_str);
+      if (name_len >= ARKSH_MAX_NAME) name_len = ARKSH_MAX_NAME - 1;
+      strncpy(col_name, raw_args_str, name_len);
+      col_name[name_len] = '\0';
+      /* Trim surrounding quotes/spaces */
+      {
+        char *p = col_name;
+        while (*p == ' ' || *p == '"' || *p == '\'') p++;
+        char *e = p + strlen(p) - 1;
+        while (e > p && (*e == ' ' || *e == '"' || *e == '\'')) *e-- = '\0';
+        memmove(col_name, p, strlen(p) + 1);
+      }
+      comma++;
+      while (*comma == ' ') comma++;
+      copy_string(fill_val, sizeof(fill_val), comma);
+      {
+        char *e = fill_val + strlen(fill_val) - 1;
+        while (e >= fill_val && (*e == ' ' || *e == '"' || *e == '\'')) *e-- = '\0';
+        char *p = fill_val;
+        while (*p == '"' || *p == '\'') p++;
+        memmove(fill_val, p, strlen(p) + 1);
+      }
+    }
+    m = value->matrix;
+    col_idx = -1;
+    for (row = 0; row < m->col_count; ++row) {
+      if (strcmp(m->col_names[row], col_name) == 0) { col_idx = (int)row; break; }
+    }
+    if (col_idx < 0) {
+      snprintf(out, out_size, "fill_na: column \"%s\" not found", col_name);
+      return 1;
+    }
+    for (row = 0; row < m->row_count; ++row) {
+      ArkshMatrixCell *cell = &m->rows[row][(size_t)col_idx];
+      if (cell->kind == ARKSH_VALUE_EMPTY || cell->text[0] == '\0') {
+        cell->kind = ARKSH_VALUE_STRING;
+        copy_string(cell->text, ARKSH_MAX_MATRIX_CELL_TEXT, fill_val);
+      }
+    }
+    return 0;
   }
 
   handler = arksh_shell_find_pipeline_stage(shell, stage->name);

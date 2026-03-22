@@ -1,0 +1,58 @@
+# golden: Matrix() 0x0 — rows = 0
+let m0 = Matrix()
+let r0 = m0 -> rows
+r0 -> print()
+
+# golden: Matrix with headers — cols = 3
+let m = Matrix("name", "age", "score")
+let c = m -> cols
+c -> print()
+
+# golden: add_row — rows = 2
+let m2 = m -> add_row("alice", 30, 95.5)
+let m3 = m2 -> add_row("bob", 25, 87.0)
+let r = m3 -> rows
+r -> print()
+
+# golden: col() — lista con 30 e 25
+let ages = m3 -> col("age")
+ages -> print()
+
+# golden: where — filtra 1 riga (alice, age > 26)
+let flt = m3 -> where("age", ">", 26)
+let fr = flt -> rows
+fr -> print()
+
+# golden: select — matrice 2x1
+let sub = m3 -> select("name")
+let sr = sub -> rows
+let sc = sub -> cols
+sr -> print()
+sc -> print()
+
+# golden: to_json — array JSON
+let j = m3 -> to_json()
+j -> print()
+
+# golden: type = "matrix"
+let t = m3 -> type
+t -> print()
+
+# golden: col_names lista corretta
+let cn = m3 -> col_names
+cn -> print()
+
+# golden: round-trip CSV
+let csv = m3 -> to_csv()
+let m5 = Matrix() -> from_csv(csv)
+let m5r = m5 -> rows
+let m5c = m5 -> cols
+m5r -> print()
+m5c -> print()
+
+# golden: transpose — rows e cols scambiati (3x2 → 2x3)
+let mt = m3 |> transpose
+let tr = mt -> rows
+let tc = mt -> cols
+tr -> print()
+tc -> print()

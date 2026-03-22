@@ -206,6 +206,8 @@ void arksh_value_free(ArkshValue *value) {
     for (i = 0; i < value->map.count; ++i) {
       arksh_value_item_free(&value->map.entries[i].value);
     }
+  } else if (value->kind == ARKSH_VALUE_MATRIX) {
+    free(value->matrix);
   }
 
   memset(value, 0, sizeof(*value));
@@ -274,6 +276,15 @@ int arksh_value_copy(ArkshValue *dest, const ArkshValue *src) {
         return 1;
       }
       dest->map.count++;
+    }
+  } else if (src->kind == ARKSH_VALUE_MATRIX) {
+    if (src->matrix != NULL) {
+      dest->matrix = (ArkshMatrix *) calloc(1, sizeof(ArkshMatrix));
+      if (dest->matrix == NULL) {
+        arksh_value_init(dest);
+        return 1;
+      }
+      *dest->matrix = *src->matrix;
     }
   }
 
@@ -837,6 +848,8 @@ const char *arksh_value_kind_name(ArkshValueKind kind) {
       return "imaginary";
     case ARKSH_VALUE_DICT:
       return "dict";
+    case ARKSH_VALUE_MATRIX:
+      return "matrix";
     case ARKSH_VALUE_EMPTY:
     default:
       return "empty";
@@ -982,6 +995,34 @@ void arksh_value_set_dict(ArkshValue *value) {
 
   arksh_value_init(value);
   value->kind = ARKSH_VALUE_DICT;
+}
+
+/* E6-S8 */
+void arksh_value_set_matrix(ArkshValue *value, const char **col_names, size_t col_count) {
+  size_t i;
+
+  if (value == NULL) {
+    return;
+  }
+
+  arksh_value_free(value);
+  value->kind = ARKSH_VALUE_MATRIX;
+  value->matrix = (ArkshMatrix *) calloc(1, sizeof(ArkshMatrix));
+  if (value->matrix == NULL) {
+    value->kind = ARKSH_VALUE_EMPTY;
+    return;
+  }
+
+  if (col_count > ARKSH_MAX_MATRIX_COLS) {
+    col_count = ARKSH_MAX_MATRIX_COLS;
+  }
+  value->matrix->col_count = col_count;
+  for (i = 0; i < col_count; ++i) {
+    if (col_names != NULL && col_names[i] != NULL) {
+      strncpy(value->matrix->col_names[i], col_names[i], ARKSH_MAX_NAME - 1);
+      value->matrix->col_names[i][ARKSH_MAX_NAME - 1] = '\0';
+    }
+  }
 }
 
 void arksh_value_set_typed_map(ArkshValue *value, const char *type_name) {
@@ -1273,6 +1314,87 @@ int arksh_value_render(const ArkshValue *value, char *out, size_t out_size) {
     case ARKSH_VALUE_IMAGINARY:
       format_number_by_kind(value->kind, value->number, out, out_size);
       return 0;
+    /* E6-S8: Matrix renders as a text table */
+    case ARKSH_VALUE_MATRIX: {
+      size_t row, col;
+      size_t col_widths[ARKSH_MAX_MATRIX_COLS];
+      ArkshMatrix *m = value->matrix;
+
+      if (m == NULL || m->col_count == 0) {
+        copy_string(out, out_size, "empty matrix");
+        return 0;
+      }
+
+      /* Compute display width for each column */
+      for (col = 0; col < m->col_count; ++col) {
+        col_widths[col] = strlen(m->col_names[col]);
+        for (row = 0; row < m->row_count; ++row) {
+          const ArkshMatrixCell *c = &m->rows[row][col];
+          size_t cw;
+          if (c->kind == ARKSH_VALUE_NUMBER ||
+              c->kind == ARKSH_VALUE_INTEGER ||
+              c->kind == ARKSH_VALUE_FLOAT ||
+              c->kind == ARKSH_VALUE_DOUBLE) {
+            char num[32];
+            snprintf(num, sizeof(num), "%.6g", c->number);
+            cw = strlen(num);
+          } else {
+            cw = strlen(c->text);
+          }
+          if (cw > col_widths[col]) {
+            col_widths[col] = cw;
+          }
+        }
+        if (col_widths[col] > 20) col_widths[col] = 20;
+        if (col_widths[col] < 1) col_widths[col] = 1;
+      }
+
+      out[0] = '\0';
+      /* Header row */
+      for (col = 0; col < m->col_count; ++col) {
+        char cell[24];
+        if (col > 0) strncat(out, "  ", out_size - strlen(out) - 1);
+        snprintf(cell, sizeof(cell), "%-*.*s", (int)col_widths[col], (int)col_widths[col], m->col_names[col]);
+        strncat(out, cell, out_size - strlen(out) - 1);
+      }
+      strncat(out, "\n", out_size - strlen(out) - 1);
+      /* Separator */
+      for (col = 0; col < m->col_count; ++col) {
+        char sep[24];
+        size_t k;
+        if (col > 0) strncat(out, "  ", out_size - strlen(out) - 1);
+        for (k = 0; k < col_widths[col] && k < sizeof(sep) - 1; ++k) sep[k] = '-';
+        sep[col_widths[col] < sizeof(sep) - 1 ? col_widths[col] : sizeof(sep) - 1] = '\0';
+        strncat(out, sep, out_size - strlen(out) - 1);
+      }
+      /* Data rows */
+      for (row = 0; row < m->row_count; ++row) {
+        strncat(out, "\n", out_size - strlen(out) - 1);
+        for (col = 0; col < m->col_count; ++col) {
+          const ArkshMatrixCell *c = &m->rows[row][col];
+          char cell[24];
+          if (col > 0) strncat(out, "  ", out_size - strlen(out) - 1);
+          if (c->kind == ARKSH_VALUE_NUMBER ||
+              c->kind == ARKSH_VALUE_INTEGER ||
+              c->kind == ARKSH_VALUE_FLOAT ||
+              c->kind == ARKSH_VALUE_DOUBLE) {
+            char num[32];
+            snprintf(num, sizeof(num), "%.6g", c->number);
+            snprintf(cell, sizeof(cell), "%-*.*s", (int)col_widths[col], (int)col_widths[col], num);
+          } else {
+            snprintf(cell, sizeof(cell), "%-*.*s", (int)col_widths[col], (int)col_widths[col], c->text);
+          }
+          strncat(out, cell, out_size - strlen(out) - 1);
+        }
+        if (strlen(out) + 128 >= out_size && row + 1 < m->row_count) {
+          char trunc[64];
+          snprintf(trunc, sizeof(trunc), "\n... (%zu more rows)", m->row_count - row - 1);
+          strncat(out, trunc, out_size - strlen(out) - 1);
+          break;
+        }
+      }
+      return 0;
+    }
     case ARKSH_VALUE_EMPTY:
     default:
       copy_string(out, out_size, "");

@@ -66,8 +66,30 @@ typedef enum {
   ARKSH_VALUE_DOUBLE,
   ARKSH_VALUE_IMAGINARY,
   /* E6-S6: immutable key-value dictionary */
-  ARKSH_VALUE_DICT
+  ARKSH_VALUE_DICT,
+  /* E6-S8: bidimensional tabular value with named columns */
+  ARKSH_VALUE_MATRIX
 } ArkshValueKind;
+
+/* E6-S8: Matrix cell — lighter than ArkshValueItem (no object/block/nested). */
+#define ARKSH_MAX_MATRIX_COLS       32
+#define ARKSH_MAX_MATRIX_ROWS      256
+#define ARKSH_MAX_MATRIX_CELL_TEXT ARKSH_MAX_NAME
+
+typedef struct {
+  ArkshValueKind kind; /* STRING, NUMBER, BOOLEAN, or EMPTY */
+  char text[ARKSH_MAX_MATRIX_CELL_TEXT];
+  double number;
+  int boolean;
+} ArkshMatrixCell;
+
+/* Heap-allocated via arksh_value_set_matrix(); owned by ArkshValue.matrix. */
+typedef struct {
+  char col_names[ARKSH_MAX_MATRIX_COLS][ARKSH_MAX_NAME];
+  size_t col_count;
+  ArkshMatrixCell rows[ARKSH_MAX_MATRIX_ROWS][ARKSH_MAX_MATRIX_COLS];
+  size_t row_count;
+} ArkshMatrix;
 
 typedef struct ArkshValue ArkshValue;
 
@@ -105,6 +127,8 @@ struct ArkshValue {
   ArkshBlock block;
   ArkshValueList list;
   ArkshValueMap map;
+  /* E6-S8: heap-allocated matrix; NULL unless kind == ARKSH_VALUE_MATRIX */
+  ArkshMatrix *matrix;
 };
 
 const char *arksh_object_kind_name(ArkshObjectKind kind);
@@ -130,6 +154,8 @@ void arksh_value_set_instance(ArkshValue *value, const char *class_name, int ins
 void arksh_value_set_map(ArkshValue *value);
 /* E6-S6: create an empty Dict value (immutable key-value dictionary). */
 void arksh_value_set_dict(ArkshValue *value);
+/* E6-S8: create an empty Matrix value with the given column names. */
+void arksh_value_set_matrix(ArkshValue *value, const char **col_names, size_t col_count);
 /* E6-S2-T1: create a MAP value tagged with a custom type name.
  * The type name is stored as the "__type__" entry in the map and is returned
  * by "-> type".  Extensions registered with this type name as target will

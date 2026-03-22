@@ -1351,6 +1351,12 @@ static int parse_extension_target(
     *out_value_kind = ARKSH_VALUE_DICT;
     return 0;
   }
+  /* E6-S8: Matrix */
+  if (strcmp(target, "matrix") == 0) {
+    *out_kind = ARKSH_EXTENSION_TARGET_VALUE_KIND;
+    *out_value_kind = ARKSH_VALUE_MATRIX;
+    return 0;
+  }
   if (strcmp(target, "class") == 0) {
     *out_kind = ARKSH_EXTENSION_TARGET_VALUE_KIND;
     *out_value_kind = ARKSH_VALUE_CLASS;
@@ -4433,6 +4439,9 @@ static int dict_method_from_json(ArkshShell *shell, const ArkshValue *receiver, 
   return 0;
 }
 
+/* E6-S8: forward declaration — defined later near register_builtin_extensions */
+static int resolver_matrix(ArkshShell *shell, int argc, const ArkshValue *args, ArkshValue *out_value, char *error, size_t error_size);
+
 static int register_builtin_value_resolvers(ArkshShell *shell) {
   if (shell == NULL) {
     return 1;
@@ -4484,6 +4493,10 @@ static int register_builtin_value_resolvers(ArkshShell *shell) {
   if (arksh_shell_register_value_resolver(shell, "Dict", "immutable key-value dictionary", resolver_dict, 0) != 0) {
     return 1;
   }
+  /* E6-S8: Matrix */
+  if (arksh_shell_register_value_resolver(shell, "Matrix", "create a Matrix with named columns", resolver_matrix, 0) != 0) {
+    return 1;
+  }
 
   return 0;
 }
@@ -4524,6 +4537,9 @@ static int register_builtin_pipeline_stages(ArkshShell *shell) {
     /* encoding (E6-S7) */
     { "base64_encode",  "encode a string to Base64 (RFC 4648)" },
     { "base64_decode",  "decode a Base64-encoded string (RFC 4648)" },
+    /* matrix (E6-S8) */
+    { "transpose",  "transpose a Matrix (swap rows and columns)" },
+    { "fill_na",    "replace empty cells in a matrix column with a value" },
     /* misc */
     { "render",    "render any value to its text representation" },
     { NULL, NULL }
@@ -8648,6 +8664,718 @@ static int register_builtin_commands(ArkshShell *shell) {
   return 0;
 }
 
+/* ===== E6-S8: Matrix type — helpers, properties, methods, resolver ===== */
+
+/* Helper: convert ArkshValue to matrix cell. */
+static void matrix_cell_set(ArkshMatrixCell *cell, const ArkshValue *v) {
+  if (v == NULL || v->kind == ARKSH_VALUE_EMPTY) {
+    memset(cell, 0, sizeof(*cell));
+    cell->kind = ARKSH_VALUE_EMPTY;
+    return;
+  }
+  cell->kind = v->kind;
+  cell->number = v->number;
+  cell->boolean = v->boolean;
+  copy_string(cell->text, sizeof(cell->text), v->text);
+}
+
+/* Helper: convert matrix cell to ArkshValue. */
+static void matrix_cell_get(const ArkshMatrixCell *cell, ArkshValue *out) {
+  arksh_value_init(out);
+  if (cell == NULL) return;
+  switch (cell->kind) {
+    case ARKSH_VALUE_NUMBER:
+    case ARKSH_VALUE_INTEGER:
+    case ARKSH_VALUE_FLOAT:
+    case ARKSH_VALUE_DOUBLE:
+    case ARKSH_VALUE_IMAGINARY:
+      out->kind = cell->kind;
+      out->number = cell->number;
+      break;
+    case ARKSH_VALUE_BOOLEAN:
+      arksh_value_set_boolean(out, cell->boolean);
+      break;
+    case ARKSH_VALUE_STRING:
+      arksh_value_set_string(out, cell->text);
+      break;
+    default:
+      arksh_value_set_string(out, cell->text);
+      break;
+  }
+}
+
+/* Helper: format cell to text. */
+static void matrix_cell_format(const ArkshMatrixCell *cell, char *out, size_t out_size) {
+  if (cell == NULL || cell->kind == ARKSH_VALUE_EMPTY) {
+    copy_string(out, out_size, "");
+    return;
+  }
+  if (cell->kind == ARKSH_VALUE_NUMBER ||
+      cell->kind == ARKSH_VALUE_INTEGER ||
+      cell->kind == ARKSH_VALUE_FLOAT ||
+      cell->kind == ARKSH_VALUE_DOUBLE) {
+    snprintf(out, out_size, "%.6g", cell->number);
+  } else if (cell->kind == ARKSH_VALUE_BOOLEAN) {
+    copy_string(out, out_size, cell->boolean ? "true" : "false");
+  } else {
+    copy_string(out, out_size, cell->text);
+  }
+}
+
+/* Helper: find column index by name, -1 if not found. */
+static int matrix_find_col(const ArkshMatrix *m, const char *name) {
+  size_t i;
+  if (m == NULL || name == NULL) return -1;
+  for (i = 0; i < m->col_count; ++i) {
+    if (strcmp(m->col_names[i], name) == 0) return (int)i;
+  }
+  return -1;
+}
+
+/* Helper: compare cell against ArkshValue using operator string. */
+static int matrix_cell_compare(const ArkshMatrixCell *cell, const char *op, const ArkshValue *val) {
+  int cmp;
+  /* Numeric comparison if cell and val are numeric */
+  if ((cell->kind == ARKSH_VALUE_NUMBER || cell->kind == ARKSH_VALUE_INTEGER ||
+       cell->kind == ARKSH_VALUE_FLOAT || cell->kind == ARKSH_VALUE_DOUBLE) &&
+      (val->kind == ARKSH_VALUE_NUMBER || val->kind == ARKSH_VALUE_INTEGER ||
+       val->kind == ARKSH_VALUE_FLOAT || val->kind == ARKSH_VALUE_DOUBLE)) {
+    double a = cell->number;
+    double b = val->number;
+    if (strcmp(op, "==") == 0) return a == b;
+    if (strcmp(op, "!=") == 0) return a != b;
+    if (strcmp(op, "<")  == 0) return a <  b;
+    if (strcmp(op, "<=") == 0) return a <= b;
+    if (strcmp(op, ">")  == 0) return a >  b;
+    if (strcmp(op, ">=") == 0) return a >= b;
+    return 0;
+  }
+  /* String comparison otherwise */
+  {
+    char cell_text[ARKSH_MAX_MATRIX_CELL_TEXT];
+    matrix_cell_format(cell, cell_text, sizeof(cell_text));
+    cmp = strcmp(cell_text, val->text);
+    if (strcmp(op, "==") == 0) return cmp == 0;
+    if (strcmp(op, "!=") == 0) return cmp != 0;
+    if (strcmp(op, "<")  == 0) return cmp <  0;
+    if (strcmp(op, "<=") == 0) return cmp <= 0;
+    if (strcmp(op, ">")  == 0) return cmp >  0;
+    if (strcmp(op, ">=") == 0) return cmp >= 0;
+  }
+  return 0;
+}
+
+/* --- Properties --- */
+
+static int matrix_prop_rows(ArkshShell *shell, const ArkshValue *receiver, ArkshValue *out_value, char *out, size_t out_size) {
+  (void) shell;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX) {
+    snprintf(out, out_size, "rows is only valid on matrix values");
+    return 1;
+  }
+  arksh_value_set_integer(out_value, (double)(receiver->matrix ? receiver->matrix->row_count : 0));
+  return 0;
+}
+
+static int matrix_prop_cols(ArkshShell *shell, const ArkshValue *receiver, ArkshValue *out_value, char *out, size_t out_size) {
+  (void) shell;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX) {
+    snprintf(out, out_size, "cols is only valid on matrix values");
+    return 1;
+  }
+  arksh_value_set_integer(out_value, (double)(receiver->matrix ? receiver->matrix->col_count : 0));
+  return 0;
+}
+
+static int matrix_prop_col_names(ArkshShell *shell, const ArkshValue *receiver, ArkshValue *out_value, char *out, size_t out_size) {
+  size_t i;
+  ArkshMatrix *m;
+  (void) shell;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX) {
+    snprintf(out, out_size, "col_names is only valid on matrix values");
+    return 1;
+  }
+  m = receiver->matrix;
+  arksh_value_init(out_value);
+  out_value->kind = ARKSH_VALUE_LIST;
+  if (m == NULL) return 0;
+  for (i = 0; i < m->col_count; ++i) {
+    ArkshValue col_val;
+    arksh_value_set_string(&col_val, m->col_names[i]);
+    if (arksh_value_list_append_value(out_value, &col_val) != 0) {
+      arksh_value_free(&col_val);
+      snprintf(out, out_size, "col_names: result too large");
+      return 1;
+    }
+    arksh_value_free(&col_val);
+  }
+  return 0;
+}
+
+static int matrix_prop_type(ArkshShell *shell, const ArkshValue *receiver, ArkshValue *out_value, char *out, size_t out_size) {
+  (void) shell; (void) out; (void) out_size;
+  (void) receiver;
+  arksh_value_set_string(out_value, "matrix");
+  return 0;
+}
+
+/* --- Mutation methods --- */
+
+static int matrix_method_add_row(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  ArkshMatrix *src, *dst;
+  size_t col;
+  (void) shell;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX || receiver->matrix == NULL) {
+    snprintf(out, out_size, "add_row() is only valid on matrix values");
+    return 1;
+  }
+  src = receiver->matrix;
+  if ((size_t)argc != src->col_count) {
+    snprintf(out, out_size, "add_row() expects %zu arguments, got %d", src->col_count, argc);
+    return 1;
+  }
+  if (src->row_count >= ARKSH_MAX_MATRIX_ROWS) {
+    snprintf(out, out_size, "add_row() matrix is full (max %d rows)", ARKSH_MAX_MATRIX_ROWS);
+    return 1;
+  }
+  if (arksh_value_copy(out_value, receiver) != 0) {
+    snprintf(out, out_size, "add_row() copy failed");
+    return 1;
+  }
+  dst = out_value->matrix;
+  for (col = 0; col < dst->col_count; ++col) {
+    matrix_cell_set(&dst->rows[dst->row_count][col], &args[col]);
+  }
+  dst->row_count++;
+  return 0;
+}
+
+static int matrix_method_drop_row(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  ArkshMatrix *src, *dst;
+  size_t n, row, col;
+  (void) shell;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX || receiver->matrix == NULL) {
+    snprintf(out, out_size, "drop_row() is only valid on matrix values");
+    return 1;
+  }
+  if (argc != 1 || (args[0].kind != ARKSH_VALUE_NUMBER && args[0].kind != ARKSH_VALUE_INTEGER)) {
+    snprintf(out, out_size, "drop_row() expects exactly one integer index");
+    return 1;
+  }
+  src = receiver->matrix;
+  n = (size_t)(long)args[0].number;
+  if (n >= src->row_count) {
+    snprintf(out, out_size, "drop_row() index %zu out of range (0..%zu)", n, src->row_count > 0 ? src->row_count - 1 : 0);
+    return 1;
+  }
+  arksh_value_init(out_value);
+  {
+    const char *names[ARKSH_MAX_MATRIX_COLS];
+    for (col = 0; col < src->col_count; ++col) names[col] = src->col_names[col];
+    arksh_value_set_matrix(out_value, names, src->col_count);
+  }
+  dst = out_value->matrix;
+  for (row = 0; row < src->row_count; ++row) {
+    if (row == n) continue;
+    for (col = 0; col < src->col_count; ++col) {
+      dst->rows[dst->row_count][col] = src->rows[row][col];
+    }
+    dst->row_count++;
+  }
+  return 0;
+}
+
+static int matrix_method_rename_col(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  ArkshMatrix *src, *dst;
+  int idx;
+  (void) shell;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX || receiver->matrix == NULL) {
+    snprintf(out, out_size, "rename_col() is only valid on matrix values");
+    return 1;
+  }
+  if (argc != 2 || args[0].kind != ARKSH_VALUE_STRING || args[1].kind != ARKSH_VALUE_STRING) {
+    snprintf(out, out_size, "rename_col() expects two string arguments (old_name, new_name)");
+    return 1;
+  }
+  src = receiver->matrix;
+  idx = matrix_find_col(src, args[0].text);
+  if (idx < 0) {
+    snprintf(out, out_size, "rename_col() column \"%s\" not found", args[0].text);
+    return 1;
+  }
+  if (arksh_value_copy(out_value, receiver) != 0) {
+    snprintf(out, out_size, "rename_col() copy failed");
+    return 1;
+  }
+  dst = out_value->matrix;
+  copy_string(dst->col_names[idx], ARKSH_MAX_NAME, args[1].text);
+  return 0;
+}
+
+/* --- Access and selection --- */
+
+static int matrix_method_row(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  ArkshMatrix *m;
+  size_t n, col;
+  (void) shell;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX || receiver->matrix == NULL) {
+    snprintf(out, out_size, "row() is only valid on matrix values");
+    return 1;
+  }
+  if (argc != 1 || (args[0].kind != ARKSH_VALUE_NUMBER && args[0].kind != ARKSH_VALUE_INTEGER)) {
+    snprintf(out, out_size, "row() expects exactly one integer index");
+    return 1;
+  }
+  m = receiver->matrix;
+  n = (size_t)(long)args[0].number;
+  if (n >= m->row_count) {
+    snprintf(out, out_size, "row() index %zu out of range (0..%zu)", n, m->row_count > 0 ? m->row_count - 1 : 0);
+    return 1;
+  }
+  arksh_value_set_map(out_value);
+  for (col = 0; col < m->col_count; ++col) {
+    ArkshValue cell_val;
+    matrix_cell_get(&m->rows[n][col], &cell_val);
+    if (arksh_value_map_set(out_value, m->col_names[col], &cell_val) != 0) {
+      arksh_value_free(&cell_val);
+      snprintf(out, out_size, "row() result too large");
+      return 1;
+    }
+    arksh_value_free(&cell_val);
+  }
+  return 0;
+}
+
+static int matrix_method_col(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  ArkshMatrix *m;
+  int idx;
+  size_t row;
+  (void) shell;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX || receiver->matrix == NULL) {
+    snprintf(out, out_size, "col() is only valid on matrix values");
+    return 1;
+  }
+  if (argc != 1 || args[0].kind != ARKSH_VALUE_STRING) {
+    snprintf(out, out_size, "col() expects exactly one string column name");
+    return 1;
+  }
+  m = receiver->matrix;
+  idx = matrix_find_col(m, args[0].text);
+  if (idx < 0) {
+    snprintf(out, out_size, "col() column \"%s\" not found", args[0].text);
+    return 1;
+  }
+  arksh_value_init(out_value);
+  out_value->kind = ARKSH_VALUE_LIST;
+  for (row = 0; row < m->row_count; ++row) {
+    ArkshValue cell_val;
+    matrix_cell_get(&m->rows[row][(size_t)idx], &cell_val);
+    if (arksh_value_list_append_value(out_value, &cell_val) != 0) {
+      arksh_value_free(&cell_val);
+      snprintf(out, out_size, "col() result too large");
+      return 1;
+    }
+    arksh_value_free(&cell_val);
+  }
+  return 0;
+}
+
+static int matrix_method_select(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  ArkshMatrix *src, *dst;
+  int col_idx[ARKSH_MAX_MATRIX_COLS];
+  const char *new_names[ARKSH_MAX_MATRIX_COLS];
+  int i, num_cols;
+  size_t row, col;
+  (void) shell;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX || receiver->matrix == NULL) {
+    snprintf(out, out_size, "select() is only valid on matrix values");
+    return 1;
+  }
+  if (argc == 0) {
+    snprintf(out, out_size, "select() expects at least one column name");
+    return 1;
+  }
+  src = receiver->matrix;
+  num_cols = argc < ARKSH_MAX_MATRIX_COLS ? argc : ARKSH_MAX_MATRIX_COLS;
+  for (i = 0; i < num_cols; ++i) {
+    if (args[i].kind != ARKSH_VALUE_STRING) {
+      snprintf(out, out_size, "select() expects string column names");
+      return 1;
+    }
+    col_idx[i] = matrix_find_col(src, args[i].text);
+    if (col_idx[i] < 0) {
+      snprintf(out, out_size, "select() column \"%s\" not found", args[i].text);
+      return 1;
+    }
+    new_names[i] = src->col_names[col_idx[i]];
+  }
+  arksh_value_set_matrix(out_value, new_names, (size_t)num_cols);
+  dst = out_value->matrix;
+  for (row = 0; row < src->row_count; ++row) {
+    for (col = 0; col < (size_t)num_cols; ++col) {
+      dst->rows[dst->row_count][col] = src->rows[row][(size_t)col_idx[col]];
+    }
+    dst->row_count++;
+  }
+  return 0;
+}
+
+static int matrix_method_where(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  ArkshMatrix *src, *dst;
+  int idx;
+  size_t row, col;
+  (void) shell;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX || receiver->matrix == NULL) {
+    snprintf(out, out_size, "where() is only valid on matrix values");
+    return 1;
+  }
+  if (argc != 3 || args[0].kind != ARKSH_VALUE_STRING || args[1].kind != ARKSH_VALUE_STRING) {
+    snprintf(out, out_size, "where() expects (col_name, operator, value)");
+    return 1;
+  }
+  src = receiver->matrix;
+  idx = matrix_find_col(src, args[0].text);
+  if (idx < 0) {
+    snprintf(out, out_size, "where() column \"%s\" not found", args[0].text);
+    return 1;
+  }
+  {
+    const char *names[ARKSH_MAX_MATRIX_COLS];
+    for (col = 0; col < src->col_count; ++col) names[col] = src->col_names[col];
+    arksh_value_set_matrix(out_value, names, src->col_count);
+  }
+  dst = out_value->matrix;
+  for (row = 0; row < src->row_count; ++row) {
+    if (matrix_cell_compare(&src->rows[row][(size_t)idx], args[1].text, &args[2])) {
+      for (col = 0; col < src->col_count; ++col) {
+        dst->rows[dst->row_count][col] = src->rows[row][col];
+      }
+      dst->row_count++;
+    }
+  }
+  return 0;
+}
+
+/* --- Interoperability --- */
+
+static int matrix_method_to_maps(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  ArkshMatrix *m;
+  size_t row, col;
+  (void) shell; (void) argc; (void) args;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX || receiver->matrix == NULL) {
+    snprintf(out, out_size, "to_maps is only valid on matrix values");
+    return 1;
+  }
+  m = receiver->matrix;
+  arksh_value_init(out_value);
+  out_value->kind = ARKSH_VALUE_LIST;
+  for (row = 0; row < m->row_count; ++row) {
+    ArkshValue row_map;
+    arksh_value_set_map(&row_map);
+    for (col = 0; col < m->col_count; ++col) {
+      ArkshValue cell_val;
+      matrix_cell_get(&m->rows[row][col], &cell_val);
+      if (arksh_value_map_set(&row_map, m->col_names[col], &cell_val) != 0) {
+        arksh_value_free(&cell_val);
+        arksh_value_free(&row_map);
+        snprintf(out, out_size, "to_maps: map too large");
+        return 1;
+      }
+      arksh_value_free(&cell_val);
+    }
+    if (arksh_value_list_append_value(out_value, &row_map) != 0) {
+      arksh_value_free(&row_map);
+      snprintf(out, out_size, "to_maps: list too large");
+      return 1;
+    }
+    arksh_value_free(&row_map);
+  }
+  return 0;
+}
+
+static int matrix_method_from_maps(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  const ArkshValue *list_val;
+  ArkshMatrix *dst;
+  size_t row;
+  (void) shell; (void) receiver;
+  if (argc != 1) {
+    snprintf(out, out_size, "from_maps() expects exactly one list argument");
+    return 1;
+  }
+  /* Accept list directly or as nested */
+  list_val = &args[0];
+  if (list_val->kind != ARKSH_VALUE_LIST) {
+    snprintf(out, out_size, "from_maps() argument must be a list");
+    return 1;
+  }
+  if (list_val->list.count == 0) {
+    arksh_value_set_matrix(out_value, NULL, 0);
+    return 0;
+  }
+  /* Infer columns from first item (must be a map) */
+  {
+    const ArkshValueItem *first = &list_val->list.items[0];
+    const ArkshValue *first_map = (first->nested != NULL) ? first->nested : NULL;
+    const char *col_names[ARKSH_MAX_MATRIX_COLS];
+    size_t col_count;
+
+    if (first->kind != ARKSH_VALUE_MAP && first->kind != ARKSH_VALUE_DICT) {
+      snprintf(out, out_size, "from_maps() list items must be maps");
+      return 1;
+    }
+    if (first_map == NULL) {
+      snprintf(out, out_size, "from_maps() could not access first map");
+      return 1;
+    }
+    col_count = first_map->map.count;
+    if (col_count > ARKSH_MAX_MATRIX_COLS) col_count = ARKSH_MAX_MATRIX_COLS;
+    {
+      size_t c;
+      for (c = 0; c < col_count; ++c) col_names[c] = first_map->map.entries[c].key;
+      arksh_value_set_matrix(out_value, col_names, col_count);
+    }
+  }
+  dst = out_value->matrix;
+  for (row = 0; row < list_val->list.count && dst->row_count < ARKSH_MAX_MATRIX_ROWS; ++row) {
+    const ArkshValueItem *item = &list_val->list.items[row];
+    const ArkshValue *map_val = (item->nested != NULL) ? item->nested : NULL;
+    size_t col;
+    if (item->kind != ARKSH_VALUE_MAP && item->kind != ARKSH_VALUE_DICT) continue;
+    if (map_val == NULL) continue;
+    for (col = 0; col < dst->col_count; ++col) {
+      const ArkshValueItem *entry = arksh_value_map_get_item(map_val, dst->col_names[col]);
+      if (entry != NULL) {
+        ArkshValue cell_val;
+        if (arksh_value_set_from_item(&cell_val, entry) == 0) {
+          matrix_cell_set(&dst->rows[dst->row_count][col], &cell_val);
+          arksh_value_free(&cell_val);
+        }
+      }
+    }
+    dst->row_count++;
+  }
+  return 0;
+}
+
+/* Simple CSV field writer: quotes field if it contains comma, quote, or newline. */
+static void csv_write_field(const char *text, char *out, size_t out_size) {
+  int needs_quote = 0;
+  const char *p;
+  size_t pos;
+
+  for (p = text; *p; ++p) {
+    if (*p == ',' || *p == '"' || *p == '\n' || *p == '\r') {
+      needs_quote = 1;
+      break;
+    }
+  }
+  pos = 0;
+  if (needs_quote) {
+    if (pos < out_size - 1) out[pos++] = '"';
+    for (p = text; *p && pos < out_size - 3; ++p) {
+      if (*p == '"') { out[pos++] = '"'; out[pos++] = '"'; }
+      else out[pos++] = *p;
+    }
+    if (pos < out_size - 1) out[pos++] = '"';
+  } else {
+    for (p = text; *p && pos < out_size - 1; ++p) out[pos++] = *p;
+  }
+  out[pos] = '\0';
+}
+
+static int matrix_method_to_csv(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  ArkshMatrix *m;
+  size_t row, col, flen;
+  char buf[ARKSH_MAX_OUTPUT];
+  size_t pos = 0;
+  (void) shell; (void) argc; (void) args;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX || receiver->matrix == NULL) {
+    snprintf(out, out_size, "to_csv is only valid on matrix values");
+    return 1;
+  }
+  m = receiver->matrix;
+  /* Header row */
+  for (col = 0; col < m->col_count; ++col) {
+    char field[ARKSH_MAX_NAME * 3];
+    if (col > 0 && pos < sizeof(buf) - 1) buf[pos++] = ',';
+    csv_write_field(m->col_names[col], field, sizeof(field));
+    flen = strlen(field);
+    if (pos + flen < sizeof(buf) - 1) { memcpy(buf + pos, field, flen); pos += flen; }
+  }
+  if (pos < sizeof(buf) - 1) buf[pos++] = '\n';
+  /* Data rows */
+  for (row = 0; row < m->row_count; ++row) {
+    for (col = 0; col < m->col_count; ++col) {
+      char field[ARKSH_MAX_MATRIX_CELL_TEXT * 3];
+      char raw[ARKSH_MAX_MATRIX_CELL_TEXT];
+      matrix_cell_format(&m->rows[row][col], raw, sizeof(raw));
+      if (col > 0 && pos < sizeof(buf) - 1) buf[pos++] = ',';
+      csv_write_field(raw, field, sizeof(field));
+      flen = strlen(field);
+      if (pos + flen < sizeof(buf) - 1) { memcpy(buf + pos, field, flen); pos += flen; }
+    }
+    if (pos < sizeof(buf) - 1) buf[pos++] = '\n';
+  }
+  buf[pos] = '\0';
+  arksh_value_set_string(out_value, buf);
+  return 0;
+}
+
+/* Parse one CSV field from src starting at *pos, advance *pos past the delimiter. */
+static void csv_read_field(const char *src, size_t *pos, char *out, size_t out_size) {
+  size_t p = *pos;
+  size_t j = 0;
+
+  if (src[p] == '"') {
+    p++;
+    while (src[p] != '\0') {
+      if (src[p] == '"') {
+        if (src[p + 1] == '"') { if (j < out_size - 1) out[j++] = '"'; p += 2; }
+        else { p++; break; }
+      } else {
+        if (j < out_size - 1) out[j++] = src[p];
+        p++;
+      }
+    }
+  } else {
+    while (src[p] != '\0' && src[p] != ',' && src[p] != '\n' && src[p] != '\r') {
+      if (j < out_size - 1) out[j++] = src[p];
+      p++;
+    }
+  }
+  out[j] = '\0';
+  if (src[p] == ',') p++;
+  *pos = p;
+}
+
+static int matrix_method_from_csv(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  const char *csv;
+  size_t pos, col;
+  const char *col_names[ARKSH_MAX_MATRIX_COLS];
+  char name_buf[ARKSH_MAX_MATRIX_COLS][ARKSH_MAX_NAME];
+  size_t col_count;
+  ArkshMatrix *dst;
+  (void) shell; (void) receiver;
+  if (argc != 1 || args[0].kind != ARKSH_VALUE_STRING) {
+    snprintf(out, out_size, "from_csv() expects exactly one string argument");
+    return 1;
+  }
+  csv = args[0].text;
+  pos = 0;
+  col_count = 0;
+  /* Parse header row */
+  while (csv[pos] != '\0' && csv[pos] != '\n' && csv[pos] != '\r') {
+    if (col_count >= ARKSH_MAX_MATRIX_COLS) break;
+    csv_read_field(csv, &pos, name_buf[col_count], ARKSH_MAX_NAME);
+    col_names[col_count] = name_buf[col_count];
+    col_count++;
+    if (csv[pos] == '\n' || csv[pos] == '\r') break;
+  }
+  /* Skip newline */
+  while (csv[pos] == '\n' || csv[pos] == '\r') pos++;
+  if (col_count == 0) {
+    arksh_value_set_matrix(out_value, NULL, 0);
+    return 0;
+  }
+  arksh_value_set_matrix(out_value, col_names, col_count);
+  dst = out_value->matrix;
+  /* Parse data rows */
+  while (csv[pos] != '\0' && dst->row_count < ARKSH_MAX_MATRIX_ROWS) {
+    /* Skip blank lines */
+    if (csv[pos] == '\n' || csv[pos] == '\r') {
+      while (csv[pos] == '\n' || csv[pos] == '\r') pos++;
+      continue;
+    }
+    for (col = 0; col < dst->col_count; ++col) {
+      char field[ARKSH_MAX_MATRIX_CELL_TEXT];
+      csv_read_field(csv, &pos, field, sizeof(field));
+      copy_string(dst->rows[dst->row_count][col].text, ARKSH_MAX_MATRIX_CELL_TEXT, field);
+      dst->rows[dst->row_count][col].kind = ARKSH_VALUE_STRING;
+    }
+    /* Skip to end of line */
+    while (csv[pos] != '\0' && csv[pos] != '\n' && csv[pos] != '\r') pos++;
+    while (csv[pos] == '\n' || csv[pos] == '\r') pos++;
+    dst->row_count++;
+  }
+  return 0;
+}
+
+static int matrix_method_to_json(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
+  ArkshMatrix *m;
+  char buf[ARKSH_MAX_OUTPUT];
+  size_t pos, row, col;
+  (void) shell; (void) argc; (void) args;
+  if (receiver == NULL || receiver->kind != ARKSH_VALUE_MATRIX || receiver->matrix == NULL) {
+    snprintf(out, out_size, "to_json is only valid on matrix values");
+    return 1;
+  }
+  m = receiver->matrix;
+  pos = 0;
+  if (pos < sizeof(buf) - 1) buf[pos++] = '[';
+  for (row = 0; row < m->row_count; ++row) {
+    if (row > 0 && pos < sizeof(buf) - 1) { buf[pos++] = ','; if (pos < sizeof(buf) - 1) buf[pos++] = ' '; }
+    if (pos < sizeof(buf) - 1) buf[pos++] = '{';
+    for (col = 0; col < m->col_count; ++col) {
+      char cell_text[ARKSH_MAX_MATRIX_CELL_TEXT];
+      if (col > 0 && pos < sizeof(buf) - 1) { buf[pos++] = ','; if (pos < sizeof(buf) - 1) buf[pos++] = ' '; }
+      /* key */
+      if (pos < sizeof(buf) - 1) buf[pos++] = '"';
+      { const char *k = m->col_names[col]; while (*k && pos < sizeof(buf) - 1) buf[pos++] = *k++; }
+      if (pos < sizeof(buf) - 1) buf[pos++] = '"';
+      if (pos < sizeof(buf) - 1) buf[pos++] = ':';
+      if (pos < sizeof(buf) - 1) buf[pos++] = ' ';
+      /* value */
+      matrix_cell_format(&m->rows[row][col], cell_text, sizeof(cell_text));
+      if (m->rows[row][col].kind == ARKSH_VALUE_NUMBER ||
+          m->rows[row][col].kind == ARKSH_VALUE_INTEGER ||
+          m->rows[row][col].kind == ARKSH_VALUE_FLOAT ||
+          m->rows[row][col].kind == ARKSH_VALUE_DOUBLE) {
+        const char *n = cell_text;
+        while (*n && pos < sizeof(buf) - 1) buf[pos++] = *n++;
+      } else if (m->rows[row][col].kind == ARKSH_VALUE_BOOLEAN) {
+        const char *bv = m->rows[row][col].boolean ? "true" : "false";
+        while (*bv && pos < sizeof(buf) - 1) buf[pos++] = *bv++;
+      } else {
+        const char *s = cell_text;
+        if (pos < sizeof(buf) - 1) buf[pos++] = '"';
+        while (*s && pos < sizeof(buf) - 3) {
+          if (*s == '"' || *s == '\\') { buf[pos++] = '\\'; }
+          buf[pos++] = *s++;
+        }
+        if (pos < sizeof(buf) - 1) buf[pos++] = '"';
+      }
+    }
+    if (pos < sizeof(buf) - 1) buf[pos++] = '}';
+  }
+  if (pos < sizeof(buf) - 1) buf[pos++] = ']';
+  buf[pos] = '\0';
+  arksh_value_set_string(out_value, buf);
+  return 0;
+}
+
+/* --- Resolver --- */
+
+static int resolver_matrix(ArkshShell *shell, int argc, const ArkshValue *args, ArkshValue *out_value, char *error, size_t error_size) {
+  const char *col_names[ARKSH_MAX_MATRIX_COLS];
+  int i;
+  (void) shell;
+  if (argc > ARKSH_MAX_MATRIX_COLS) {
+    snprintf(error, error_size, "Matrix() too many columns (max %d)", ARKSH_MAX_MATRIX_COLS);
+    return 1;
+  }
+  for (i = 0; i < argc; ++i) {
+    if (args[i].kind != ARKSH_VALUE_STRING) {
+      snprintf(error, error_size, "Matrix() expects string column names");
+      return 1;
+    }
+    col_names[i] = args[i].text;
+  }
+  arksh_value_set_matrix(out_value, col_names, (size_t)argc);
+  return 0;
+}
+
+/* ===== end E6-S8 ===== */
+
 static int register_builtin_extensions(ArkshShell *shell) {
   if (shell == NULL) {
     return 1;
@@ -8708,6 +9436,25 @@ static int register_builtin_extensions(ArkshShell *shell) {
   if (arksh_shell_register_type_descriptor(shell, "dict", "immutable key-value dictionary with string keys") != 0) {
     return 1;
   }
+
+  /* E6-S8: Matrix */
+  if (arksh_shell_register_native_property_extension(shell, "matrix", "rows",      matrix_prop_rows,     0) != 0) return 1;
+  if (arksh_shell_register_native_property_extension(shell, "matrix", "cols",      matrix_prop_cols,     0) != 0) return 1;
+  if (arksh_shell_register_native_property_extension(shell, "matrix", "col_names", matrix_prop_col_names,0) != 0) return 1;
+  if (arksh_shell_register_native_property_extension(shell, "matrix", "type",      matrix_prop_type,     0) != 0) return 1;
+  if (arksh_shell_register_native_method_extension(shell, "matrix", "add_row",    matrix_method_add_row,    0) != 0) return 1;
+  if (arksh_shell_register_native_method_extension(shell, "matrix", "drop_row",   matrix_method_drop_row,   0) != 0) return 1;
+  if (arksh_shell_register_native_method_extension(shell, "matrix", "rename_col", matrix_method_rename_col, 0) != 0) return 1;
+  if (arksh_shell_register_native_method_extension(shell, "matrix", "row",        matrix_method_row,        0) != 0) return 1;
+  if (arksh_shell_register_native_method_extension(shell, "matrix", "col",        matrix_method_col,        0) != 0) return 1;
+  if (arksh_shell_register_native_method_extension(shell, "matrix", "select",     matrix_method_select,     0) != 0) return 1;
+  if (arksh_shell_register_native_method_extension(shell, "matrix", "where",      matrix_method_where,      0) != 0) return 1;
+  if (arksh_shell_register_native_method_extension(shell, "matrix", "to_maps",    matrix_method_to_maps,    0) != 0) return 1;
+  if (arksh_shell_register_native_method_extension(shell, "matrix", "from_maps",  matrix_method_from_maps,  0) != 0) return 1;
+  if (arksh_shell_register_native_method_extension(shell, "matrix", "to_csv",     matrix_method_to_csv,     0) != 0) return 1;
+  if (arksh_shell_register_native_method_extension(shell, "matrix", "from_csv",   matrix_method_from_csv,   0) != 0) return 1;
+  if (arksh_shell_register_native_method_extension(shell, "matrix", "to_json",    matrix_method_to_json,    0) != 0) return 1;
+  if (arksh_shell_register_type_descriptor(shell, "matrix", "bidimensional tabular value with named columns") != 0) return 1;
 
   return 0;
 }

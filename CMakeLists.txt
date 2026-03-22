@@ -1044,6 +1044,10 @@ if(BUILD_TESTING)
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/base64-stages.arksh"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_golden_matrix_types
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/matrix-types.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   set_tests_properties(
     arksh_golden_pipeline_chain
     arksh_golden_reduce_block
@@ -1053,6 +1057,7 @@ if(BUILD_TESTING)
     arksh_golden_numeric_types
     arksh_golden_dict_types
     arksh_golden_base64_stages
+    arksh_golden_matrix_types
     PROPERTIES TIMEOUT 15
   )
   # Each test checks a distinctive output string that only appears when the script ran fully.
@@ -1064,6 +1069,8 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_golden_numeric_types    PROPERTIES PASS_REGULAR_EXPRESSION "3i")
   set_tests_properties(arksh_golden_dict_types       PROPERTIES PASS_REGULAR_EXPRESSION "\\{\"nome\":\"alice\"\\}")
   set_tests_properties(arksh_golden_base64_stages    PROPERTIES PASS_REGULAR_EXPRESSION "aGVsbG8=")
+  # E6-S8: Matrix — checks to_json output and transpose row/col count
+  set_tests_properties(arksh_golden_matrix_types     PROPERTIES PASS_REGULAR_EXPRESSION "\"score\": 95")
 
   # plugin autoload tests
   add_test(NAME arksh_plugin_autoload_set
