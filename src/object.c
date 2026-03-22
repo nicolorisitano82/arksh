@@ -25,6 +25,24 @@ static void append_line(char *out, size_t out_size, const char *line) {
   snprintf(out + strlen(out), out_size - strlen(out), "%s", line);
 }
 
+static ArkshValue *allocate_value(char *error, size_t error_size) {
+  ArkshValue *value = (ArkshValue *) calloc(1, sizeof(*value));
+
+  if (value == NULL && error != NULL && error_size > 0) {
+    snprintf(error, error_size, "out of memory");
+  }
+  return value;
+}
+
+static ArkshValueItem *allocate_value_item(char *error, size_t error_size) {
+  ArkshValueItem *item = (ArkshValueItem *) calloc(1, sizeof(*item));
+
+  if (item == NULL && error != NULL && error_size > 0) {
+    snprintf(error, error_size, "out of memory");
+  }
+  return item;
+}
+
 static int parse_limit(const char *text, size_t *out_limit) {
   char *endptr = NULL;
   unsigned long value;
@@ -796,19 +814,25 @@ static int json_parse_array(const char **cursor, ArkshValue *out_value, char *er
   }
 
   while (**cursor != '\0') {
-    ArkshValue parsed_value;
+    ArkshValue *parsed_value = allocate_value(error, error_size);
 
-    if (json_parse_value_internal(cursor, &parsed_value, error, error_size, depth) != 0) {
+    if (parsed_value == NULL) {
       return 1;
     }
-    if (arksh_value_list_append_value(out_value, &parsed_value) != 0) {
-      arksh_value_free(&parsed_value);
+    if (json_parse_value_internal(cursor, parsed_value, error, error_size, depth) != 0) {
+      free(parsed_value);
+      return 1;
+    }
+    if (arksh_value_list_append_value(out_value, parsed_value) != 0) {
+      arksh_value_free(parsed_value);
+      free(parsed_value);
       if (error[0] == '\0') {
         snprintf(error, error_size, "JSON array is too large");
       }
       return 1;
     }
-    arksh_value_free(&parsed_value);
+    arksh_value_free(parsed_value);
+    free(parsed_value);
 
     json_skip_ws(cursor);
     if (**cursor == ']') {
@@ -848,33 +872,43 @@ static int json_parse_object(const char **cursor, ArkshValue *out_value, char *e
 
   while (**cursor != '\0') {
     char key[ARKSH_MAX_NAME];
-    ArkshValue parsed_value;
+    ArkshValue *parsed_value = allocate_value(error, error_size);
+
+    if (parsed_value == NULL) {
+      return 1;
+    }
 
     if (**cursor != '"') {
+      free(parsed_value);
       snprintf(error, error_size, "expected JSON object key");
       return 1;
     }
     if (json_parse_string(cursor, key, sizeof(key), error, error_size) != 0) {
+      free(parsed_value);
       return 1;
     }
 
     json_skip_ws(cursor);
     if (**cursor != ':') {
+      free(parsed_value);
       snprintf(error, error_size, "expected ':' after JSON object key");
       return 1;
     }
     (*cursor)++;
     json_skip_ws(cursor);
 
-    if (json_parse_value_internal(cursor, &parsed_value, error, error_size, depth) != 0) {
+    if (json_parse_value_internal(cursor, parsed_value, error, error_size, depth) != 0) {
+      free(parsed_value);
       return 1;
     }
-    if (arksh_value_map_set(out_value, key, &parsed_value) != 0) {
-      arksh_value_free(&parsed_value);
+    if (arksh_value_map_set(out_value, key, parsed_value) != 0) {
+      arksh_value_free(parsed_value);
+      free(parsed_value);
       snprintf(error, error_size, "JSON object is too large");
       return 1;
     }
-    arksh_value_free(&parsed_value);
+    arksh_value_free(parsed_value);
+    free(parsed_value);
 
     json_skip_ws(cursor);
     if (**cursor == '}') {
@@ -1231,7 +1265,7 @@ void arksh_value_set_matrix(ArkshValue *value, const char **col_names, size_t co
 }
 
 void arksh_value_set_typed_map(ArkshValue *value, const char *type_name) {
-  ArkshValue tag;
+  ArkshValue *tag;
 
   if (value == NULL || type_name == NULL) {
     return;
@@ -1242,9 +1276,14 @@ void arksh_value_set_typed_map(ArkshValue *value, const char *type_name) {
 
   /* Store the type tag as a string entry; ignore allocation failures here
    * since the caller checks properties independently. */
-  arksh_value_set_string(&tag, type_name);
-  arksh_value_map_set(value, "__type__", &tag);
-  arksh_value_free(&tag);
+  tag = allocate_value(NULL, 0);
+  if (tag == NULL) {
+    return;
+  }
+  arksh_value_set_string(tag, type_name);
+  arksh_value_map_set(value, "__type__", tag);
+  arksh_value_free(tag);
+  free(tag);
 }
 
 int arksh_value_set_from_item(ArkshValue *value, const ArkshValueItem *item) {
@@ -1292,27 +1331,34 @@ int arksh_value_list_append_item(ArkshValue *value, const ArkshValueItem *item) 
 }
 
 int arksh_value_list_append_value(ArkshValue *value, const ArkshValue *item_value) {
-  ArkshValueItem item;
+  ArkshValueItem *item;
 
   if (value == NULL || item_value == NULL) {
     return 1;
   }
 
-  arksh_value_item_init(&item);
-  if (arksh_value_item_set_from_value(&item, item_value) != 0) {
+  item = allocate_value_item(NULL, 0);
+  if (item == NULL) {
     return 1;
   }
-  if (arksh_value_list_append_item(value, &item) != 0) {
-    arksh_value_item_free(&item);
+  arksh_value_item_init(item);
+  if (arksh_value_item_set_from_value(item, item_value) != 0) {
+    free(item);
     return 1;
   }
-  arksh_value_item_free(&item);
+  if (arksh_value_list_append_item(value, item) != 0) {
+    arksh_value_item_free(item);
+    free(item);
+    return 1;
+  }
+  arksh_value_item_free(item);
+  free(item);
   return 0;
 }
 
 int arksh_value_map_set(ArkshValue *value, const char *key, const ArkshValue *entry_value) {
   size_t i;
-  ArkshValueItem item;
+  ArkshValueItem *item;
 
   if (value == NULL || key == NULL || key[0] == '\0' || entry_value == NULL) {
     return 1;
@@ -1325,27 +1371,35 @@ int arksh_value_map_set(ArkshValue *value, const char *key, const ArkshValue *en
     return 1;
   }
 
-  arksh_value_item_init(&item);
-  if (arksh_value_item_set_from_value(&item, entry_value) != 0) {
+  item = allocate_value_item(NULL, 0);
+  if (item == NULL) {
+    return 1;
+  }
+  arksh_value_item_init(item);
+  if (arksh_value_item_set_from_value(item, entry_value) != 0) {
+    free(item);
     return 1;
   }
 
   for (i = 0; i < value->map.count; ++i) {
     if (strcmp(value->map.entries[i].key, key) == 0) {
       arksh_value_item_free(&value->map.entries[i].value);
-      value->map.entries[i].value = item;
+      value->map.entries[i].value = *item;
+      free(item);
       return 0;
     }
   }
 
   if (value->map.count >= ARKSH_MAX_COLLECTION_ITEMS) {
-    arksh_value_item_free(&item);
+    arksh_value_item_free(item);
+    free(item);
     return 1;
   }
 
   copy_string(value->map.entries[value->map.count].key, sizeof(value->map.entries[value->map.count].key), key);
-  value->map.entries[value->map.count].value = item;
+  value->map.entries[value->map.count].value = *item;
   value->map.count++;
+  free(item);
   return 0;
 }
 
@@ -1836,21 +1890,35 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
       }
       if (strcmp(property, "params") == 0) {
         size_t i;
-        ArkshValue params;
+        ArkshValue *params = allocate_value(error, error_size);
 
-        arksh_value_init(&params);
-        params.kind = ARKSH_VALUE_LIST;
+        if (params == NULL) {
+          return 1;
+        }
+        arksh_value_init(params);
+        params->kind = ARKSH_VALUE_LIST;
         for (i = 0; i < (size_t) value->block.param_count; ++i) {
-          ArkshValue param;
+          ArkshValue *param = allocate_value(error, error_size);
 
-          arksh_value_set_string(&param, value->block.params[i]);
-          if (arksh_value_list_append_value(&params, &param) != 0) {
-            arksh_value_free(&params);
+          if (param == NULL) {
+            arksh_value_free(params);
+            free(params);
+            return 1;
+          }
+          arksh_value_set_string(param, value->block.params[i]);
+          if (arksh_value_list_append_value(params, param) != 0) {
+            arksh_value_free(param);
+            free(param);
+            arksh_value_free(params);
+            free(params);
             snprintf(error, error_size, "unknown property: %s", property);
             return 1;
           }
+          arksh_value_free(param);
+          free(param);
         }
-        *out_value = params;
+        *out_value = *params;
+        free(params);
         return 0;
       }
       break;
@@ -1907,7 +1975,7 @@ int arksh_value_get_property_value(const ArkshValue *value, const char *property
 }
 
 int arksh_value_get_property(const ArkshValue *value, const char *property, char *out, size_t out_size) {
-  ArkshValue property_value;
+  ArkshValue *property_value;
   char error[ARKSH_MAX_OUTPUT];
   int status;
 
@@ -1915,14 +1983,22 @@ int arksh_value_get_property(const ArkshValue *value, const char *property, char
     return 1;
   }
 
-  status = arksh_value_get_property_value(value, property, &property_value, error, sizeof(error));
+  property_value = (ArkshValue *) calloc(1, sizeof(*property_value));
+  if (property_value == NULL) {
+    snprintf(out, out_size, "out of memory");
+    return 1;
+  }
+
+  status = arksh_value_get_property_value(value, property, property_value, error, sizeof(error));
   if (status != 0) {
+    free(property_value);
     copy_string(out, out_size, error);
     return 1;
   }
 
-  status = arksh_value_render(&property_value, out, out_size);
-  arksh_value_free(&property_value);
+  status = arksh_value_render(property_value, out, out_size);
+  arksh_value_free(property_value);
+  free(property_value);
   return status;
 }
 
@@ -2018,28 +2094,39 @@ int arksh_object_get_property(const ArkshObject *object, const char *property, c
 }
 
 int arksh_value_item_get_property_value(const ArkshValueItem *item, const char *property, ArkshValue *out_value, char *error, size_t error_size) {
-  ArkshValue temp_value;
+  ArkshValue *temp_value;
+  int status;
 
   if (item == NULL || property == NULL || out_value == NULL || error == NULL || error_size == 0) {
     return 1;
   }
 
-  if ((item->kind == ARKSH_VALUE_LIST || item->kind == ARKSH_VALUE_MAP) && item->nested != NULL) {
+  if ((item->kind == ARKSH_VALUE_LIST || item->kind == ARKSH_VALUE_MAP || item->kind == ARKSH_VALUE_DICT) &&
+      item->nested != NULL) {
     return arksh_value_get_property_value(item->nested, property, out_value, error, error_size);
   }
 
-  arksh_value_init(&temp_value);
-  temp_value.kind = item->kind;
-  copy_string(temp_value.text, sizeof(temp_value.text), item->text);
-  temp_value.number = item->number;
-  temp_value.boolean = item->boolean;
-  temp_value.object = item->object;
-  temp_value.block = item->block;
-  return arksh_value_get_property_value(&temp_value, property, out_value, error, error_size);
+  temp_value = (ArkshValue *) calloc(1, sizeof(*temp_value));
+  if (temp_value == NULL) {
+    snprintf(error, error_size, "out of memory");
+    return 1;
+  }
+
+  arksh_value_init(temp_value);
+  temp_value->kind = item->kind;
+  copy_string(temp_value->text, sizeof(temp_value->text), item->text);
+  temp_value->number = item->number;
+  temp_value->boolean = item->boolean;
+  temp_value->object = item->object;
+  temp_value->block = item->block;
+  status = arksh_value_get_property_value(temp_value, property, out_value, error, error_size);
+  arksh_value_free(temp_value);
+  free(temp_value);
+  return status;
 }
 
 int arksh_value_item_get_property(const ArkshValueItem *item, const char *property, char *out, size_t out_size) {
-  ArkshValue property_value;
+  ArkshValue *property_value;
   char error[ARKSH_MAX_OUTPUT];
   int status;
 
@@ -2047,14 +2134,22 @@ int arksh_value_item_get_property(const ArkshValueItem *item, const char *proper
     return 1;
   }
 
-  status = arksh_value_item_get_property_value(item, property, &property_value, error, sizeof(error));
+  property_value = (ArkshValue *) calloc(1, sizeof(*property_value));
+  if (property_value == NULL) {
+    snprintf(out, out_size, "out of memory");
+    return 1;
+  }
+
+  status = arksh_value_item_get_property_value(item, property, property_value, error, sizeof(error));
   if (status != 0) {
+    free(property_value);
     copy_string(out, out_size, error);
     return 1;
   }
 
-  status = arksh_value_render(&property_value, out, out_size);
-  arksh_value_free(&property_value);
+  status = arksh_value_render(property_value, out, out_size);
+  arksh_value_free(property_value);
+  free(property_value);
   return status;
 }
 
@@ -2141,17 +2236,24 @@ int arksh_object_call_method_value(const ArkshObject *object, const char *method
 
     for (i = 0; i < child_count && i < ARKSH_MAX_COLLECTION_ITEMS; ++i) {
       char child_path[ARKSH_MAX_PATH];
-      ArkshValueItem item;
+      ArkshValueItem *item = allocate_value_item(error, error_size);
+
+      if (item == NULL) {
+        return 1;
+      }
 
       if (arksh_platform_resolve_path(object->path, child_names[i], child_path, sizeof(child_path)) != 0) {
+        free(item);
         continue;
       }
 
-      arksh_value_item_init(&item);
-      item.kind = ARKSH_VALUE_OBJECT;
-      if (arksh_object_resolve(object->path, child_path, &item.object) == 0 && arksh_value_list_append_item(out_value, &item) == 0) {
+      arksh_value_item_init(item);
+      item->kind = ARKSH_VALUE_OBJECT;
+      if (arksh_object_resolve(object->path, child_path, &item->object) == 0 && arksh_value_list_append_item(out_value, item) == 0) {
+        free(item);
         continue;
       }
+      free(item);
     }
 
     return 0;

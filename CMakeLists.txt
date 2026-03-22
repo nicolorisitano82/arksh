@@ -161,6 +161,8 @@ if(BUILD_TESTING)
   add_test(NAME arksh_object_type COMMAND arksh -c "obj(\".\").type")
   add_test(NAME arksh_human_object_type COMMAND arksh -c ". -> type")
   add_test(NAME arksh_pipeline_count COMMAND arksh -c ". -> children() |> count()")
+  add_test(NAME arksh_pipeline_sort_numbers COMMAND arksh -c "list(1, 20, 3) |> sort(value desc)")
+  add_test(NAME arksh_pipeline_sort_property COMMAND arksh -c ". -> children() |> where(type == \"file\") |> sort(size desc)")
   add_test(NAME arksh_external_command COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" hello")
   add_test(NAME arksh_shell_pipeline COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" alpha beta | \"${ARKSH_TEST_COUNT}\"")
   add_test(NAME arksh_glob_command_args COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" tests/fixtures/glob/*.fixture | \"${ARKSH_TEST_COUNT}\"")
@@ -875,6 +877,11 @@ if(BUILD_TESTING)
     arksh_sum_numbers arksh_min_numbers arksh_max_numbers arksh_sum_property
     PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  set_tests_properties(
+    arksh_pipeline_sort_numbers arksh_pipeline_sort_property
+    PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  set_tests_properties(arksh_pipeline_sort_numbers PROPERTIES PASS_REGULAR_EXPRESSION "20")
   set_tests_properties(arksh_map_block       PROPERTIES PASS_REGULAR_EXPRESSION "3")
   set_tests_properties(arksh_filter_alias    PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+")
   set_tests_properties(arksh_flat_map_block  PROPERTIES PASS_REGULAR_EXPRESSION "4")
@@ -1080,6 +1087,11 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_golden_json_edge_cases  PROPERTIES PASS_REGULAR_EXPRESSION "caf")
 
   # plugin autoload tests
+  file(MAKE_DIRECTORY
+    "${CMAKE_CURRENT_BINARY_DIR}/tests/autoload_home_set"
+    "${CMAKE_CURRENT_BINARY_DIR}/tests/autoload_home_unset"
+    "${CMAKE_CURRENT_BINARY_DIR}/tests/autoload_home_dup"
+  )
   add_test(NAME arksh_plugin_autoload_set
     COMMAND arksh -c "plugin autoload set /tmp/arksh_test_pal.dylib"
   )
@@ -1092,6 +1104,15 @@ if(BUILD_TESTING)
   set_tests_properties(
     arksh_plugin_autoload_set arksh_plugin_autoload_unset arksh_plugin_autoload_duplicate
     PROPERTIES TIMEOUT 10
+  )
+  set_tests_properties(arksh_plugin_autoload_set PROPERTIES
+    ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/tests/autoload_home_set"
+  )
+  set_tests_properties(arksh_plugin_autoload_unset PROPERTIES
+    ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/tests/autoload_home_unset"
+  )
+  set_tests_properties(arksh_plugin_autoload_duplicate PROPERTIES
+    ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/tests/autoload_home_dup"
   )
   set_tests_properties(arksh_plugin_autoload_set       PROPERTIES PASS_REGULAR_EXPRESSION "added to autoload")
   set_tests_properties(arksh_plugin_autoload_unset     PROPERTIES PASS_REGULAR_EXPRESSION "removed from autoload")

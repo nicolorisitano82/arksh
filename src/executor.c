@@ -2249,19 +2249,26 @@ static int get_property_text_with_shell(
   char *out,
   size_t out_size
 ) {
-  ArkshValue value;
+  ArkshValue *value;
   int status;
 
   if (shell == NULL || receiver == NULL || property == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
-  if (get_property_value_with_shell(shell, receiver, property, &value, out, out_size) != 0) {
+  value = (ArkshValue *) allocate_temp_buffer(1, sizeof(*value), "property text value", out, out_size);
+  if (value == NULL) {
     return 1;
   }
 
-  status = arksh_value_render(&value, out, out_size);
-  arksh_value_free(&value);
+  if (get_property_value_with_shell(shell, receiver, property, value, out, out_size) != 0) {
+    free(value);
+    return 1;
+  }
+
+  status = arksh_value_render(value, out, out_size);
+  arksh_value_free(value);
+  free(value);
   return status;
 }
 
@@ -2442,68 +2449,95 @@ static int call_bound_value(
 }
 
 static int evaluate_object_expression_text(ArkshShell *shell, const ArkshObjectExpressionNode *expression, char *out, size_t out_size) {
-  ArkshValue receiver;
-  ArkshValue result;
+  ArkshValue *receiver;
+  ArkshValue *result;
   int status;
 
   if (shell == NULL || expression == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
-  if (resolve_receiver_value(shell, expression->raw_selector, &receiver, out, out_size) != 0) {
+  receiver = (ArkshValue *) allocate_temp_buffer(1, sizeof(*receiver), "object expression receiver", out, out_size);
+  if (receiver == NULL) {
+    return 1;
+  }
+  result = (ArkshValue *) allocate_temp_buffer(1, sizeof(*result), "object expression result", out, out_size);
+  if (result == NULL) {
+    free(receiver);
+    return 1;
+  }
+
+  if (resolve_receiver_value(shell, expression->raw_selector, receiver, out, out_size) != 0) {
+    free(result);
+    free(receiver);
     return 1;
   }
 
   if (expression->member_kind == ARKSH_MEMBER_PROPERTY) {
-    status = get_property_value_with_shell(shell, &receiver, expression->member, &result, out, out_size);
+    status = get_property_value_with_shell(shell, receiver, expression->member, result, out, out_size);
     if (status != 0 && error_has_prefix(out, "unknown property:")) {
-      status = invoke_extension_property_value(shell, &receiver, expression->member, &result, out, out_size);
+      status = invoke_extension_property_value(shell, receiver, expression->member, result, out, out_size);
     }
     if (status != 0) {
-      arksh_value_free(&receiver);
+      arksh_value_free(receiver);
+      free(result);
+      free(receiver);
       return 1;
     }
-    status = arksh_value_render(&result, out, out_size);
-    arksh_value_free(&result);
-    arksh_value_free(&receiver);
+    status = arksh_value_render(result, out, out_size);
+    arksh_value_free(result);
+    arksh_value_free(receiver);
+    free(result);
+    free(receiver);
     return status;
   }
 
-  status = call_bound_value(shell, &receiver, expression, &result, out, out_size);
-  arksh_value_free(&receiver);
+  status = call_bound_value(shell, receiver, expression, result, out, out_size);
+  arksh_value_free(receiver);
+  free(receiver);
   if (status != 0) {
+    free(result);
     return 1;
   }
 
-  status = arksh_value_render(&result, out, out_size);
-  arksh_value_free(&result);
+  status = arksh_value_render(result, out, out_size);
+  arksh_value_free(result);
+  free(result);
   return status;
 }
 
 static int evaluate_object_expression_value(ArkshShell *shell, const ArkshObjectExpressionNode *expression, ArkshValue *value, char *out, size_t out_size) {
-  ArkshValue receiver;
+  ArkshValue *receiver;
   int status;
 
   if (shell == NULL || expression == NULL || value == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
-  if (resolve_receiver_value(shell, expression->raw_selector, &receiver, out, out_size) != 0) {
+  receiver = (ArkshValue *) allocate_temp_buffer(1, sizeof(*receiver), "object expression receiver value", out, out_size);
+  if (receiver == NULL) {
+    return 1;
+  }
+
+  if (resolve_receiver_value(shell, expression->raw_selector, receiver, out, out_size) != 0) {
+    free(receiver);
     return 1;
   }
 
   arksh_value_init(value);
   if (expression->member_kind == ARKSH_MEMBER_PROPERTY) {
-    status = get_property_value_with_shell(shell, &receiver, expression->member, value, out, out_size);
+    status = get_property_value_with_shell(shell, receiver, expression->member, value, out, out_size);
     if (status != 0 && error_has_prefix(out, "unknown property:")) {
-      status = invoke_extension_property_value(shell, &receiver, expression->member, value, out, out_size);
+      status = invoke_extension_property_value(shell, receiver, expression->member, value, out, out_size);
     }
-    arksh_value_free(&receiver);
+    arksh_value_free(receiver);
+    free(receiver);
     return status;
   }
 
-  status = call_bound_value(shell, &receiver, expression, value, out, out_size);
-  arksh_value_free(&receiver);
+  status = call_bound_value(shell, receiver, expression, value, out, out_size);
+  arksh_value_free(receiver);
+  free(receiver);
   return status;
 }
 
@@ -2520,9 +2554,13 @@ static int split_text_lines_into_value(const char *text, ArkshValue *out_value) 
 
   while (*cursor != '\0') {
     const char *line_end = strchr(cursor, '\n');
-    ArkshValueItem item;
+    ArkshValueItem *item = (ArkshValueItem *) calloc(1, sizeof(*item));
     size_t len;
     char line[ARKSH_MAX_VALUE_TEXT];
+
+    if (item == NULL) {
+      return 1;
+    }
 
     if (line_end == NULL) {
       line_end = cursor + strlen(cursor);
@@ -2535,12 +2573,14 @@ static int split_text_lines_into_value(const char *text, ArkshValue *out_value) 
 
     memcpy(line, cursor, len);
     line[len] = '\0';
-    arksh_value_item_init(&item);
-    item.kind = ARKSH_VALUE_STRING;
-    copy_string(item.text, sizeof(item.text), line);
-    if (arksh_value_list_append_item(out_value, &item) != 0) {
+    arksh_value_item_init(item);
+    item->kind = ARKSH_VALUE_STRING;
+    copy_string(item->text, sizeof(item->text), line);
+    if (arksh_value_list_append_item(out_value, item) != 0) {
+      free(item);
       return 1;
     }
+    free(item);
 
     if (*line_end == '\0') {
       break;
@@ -2556,16 +2596,25 @@ static int split_text_lines_into_value(const char *text, ArkshValue *out_value) 
 }
 
 static int append_string_item_to_value(ArkshValue *out_value, const char *text) {
-  ArkshValueItem item;
+  ArkshValueItem *item;
 
   if (out_value == NULL || text == NULL) {
     return 1;
   }
 
-  arksh_value_item_init(&item);
-  item.kind = ARKSH_VALUE_STRING;
-  copy_string(item.text, sizeof(item.text), text);
-  return arksh_value_list_append_item(out_value, &item);
+  item = (ArkshValueItem *) calloc(1, sizeof(*item));
+  if (item == NULL) {
+    return 1;
+  }
+  arksh_value_item_init(item);
+  item->kind = ARKSH_VALUE_STRING;
+  copy_string(item->text, sizeof(item->text), text);
+  if (arksh_value_list_append_item(out_value, item) != 0) {
+    free(item);
+    return 1;
+  }
+  free(item);
+  return 0;
 }
 
 static int split_text_whitespace_into_value(const char *text, ArkshValue *out_value) {
@@ -2839,17 +2888,23 @@ static int evaluate_value_source(ArkshShell *shell, const ArkshValueSourceNode *
       arksh_value_init(value);
       value->kind = ARKSH_VALUE_LIST;
       for (i = 0; i < source->argc; ++i) {
-        ArkshValue item_value;
+        ArkshValue *item_value = (ArkshValue *) allocate_temp_buffer(1, sizeof(*item_value), "list literal item", out, out_size);
 
-        if (evaluate_token_argument_value(shell, source->raw_argv[i], &item_value, out, out_size) != 0) {
+        if (item_value == NULL) {
           return 1;
         }
-        if (arksh_value_list_append_value(value, &item_value) != 0) {
-          arksh_value_free(&item_value);
+        if (evaluate_token_argument_value(shell, source->raw_argv[i], item_value, out, out_size) != 0) {
+          free(item_value);
+          return 1;
+        }
+        if (arksh_value_list_append_value(value, item_value) != 0) {
+          arksh_value_free(item_value);
+          free(item_value);
           snprintf(out, out_size, "unable to append list item");
           return 1;
         }
-        arksh_value_free(&item_value);
+        arksh_value_free(item_value);
+        free(item_value);
       }
       return 0;
     case ARKSH_VALUE_SOURCE_BLOCK_LITERAL:
@@ -3303,7 +3358,7 @@ static int apply_to_json_stage(ArkshValue *value, char *out, size_t out_size) {
 }
 
 static int apply_from_json_stage(ArkshValue *value, char *out, size_t out_size) {
-  ArkshValue parsed;
+  ArkshValue *parsed;
 
   if (value == NULL || out == NULL || out_size == 0) {
     return 1;
@@ -3314,11 +3369,18 @@ static int apply_from_json_stage(ArkshValue *value, char *out, size_t out_size) 
     return 1;
   }
 
-  if (arksh_value_parse_json(value->text, &parsed, out, out_size) != 0) {
+  parsed = (ArkshValue *) allocate_temp_buffer(1, sizeof(*parsed), "from_json parsed value", out, out_size);
+  if (parsed == NULL) {
+    return 1;
+  }
+  if (arksh_value_parse_json(value->text, parsed, out, out_size) != 0) {
+    free(parsed);
     return 1;
   }
 
-  *value = parsed;
+  arksh_value_free(value);
+  *value = *parsed;
+  free(parsed);
   return 0;
 }
 
@@ -3584,9 +3646,17 @@ static int apply_each_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
       result->kind = ARKSH_VALUE_LIST;
 
       for (i = 0; i < value->list.count; ++i) {
-        ArkshValueItem item;
+        ArkshValueItem *item = (ArkshValueItem *) allocate_temp_buffer(1, sizeof(*item), "each() block item", out, out_size);
+
+        if (item == NULL) {
+          free(temp_values);
+          arksh_value_free(result);
+          free(result);
+          return 1;
+        }
 
         if (arksh_value_set_from_item(&temp_values[0], &value->list.items[i]) != 0) {
+          free(item);
           free(temp_values);
           arksh_value_free(result);
           free(result);
@@ -3600,8 +3670,9 @@ static int apply_each_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
           free(result);
           return 1;
         }
-        if (set_item_from_value(&temp_values[1], &item, out, out_size) != 0 || arksh_value_list_append_item(result, &item) != 0) {
-          arksh_value_item_free(&item);
+        if (set_item_from_value(&temp_values[1], item, out, out_size) != 0 || arksh_value_list_append_item(result, item) != 0) {
+          arksh_value_item_free(item);
+          free(item);
           arksh_value_free(&temp_values[0]);
           arksh_value_free(&temp_values[1]);
           free(temp_values);
@@ -3610,7 +3681,8 @@ static int apply_each_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
           snprintf(out, out_size, "each() output list is too large");
           return 1;
         }
-        arksh_value_item_free(&item);
+        arksh_value_item_free(item);
+        free(item);
         arksh_value_free(&temp_values[0]);
         arksh_value_free(&temp_values[1]);
       }
@@ -3646,10 +3718,16 @@ static int apply_each_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
 
   for (i = 0; i < value->list.count; ++i) {
     ArkshValue *mapped;
-    ArkshValueItem item;
+    ArkshValueItem *item;
 
     mapped = (ArkshValue *) allocate_temp_buffer(1, sizeof(*mapped), "each() mapped value", out, out_size);
     if (mapped == NULL) {
+      free(result);
+      return 1;
+    }
+    item = (ArkshValueItem *) allocate_temp_buffer(1, sizeof(*item), "each() selector item", out, out_size);
+    if (item == NULL) {
+      free(mapped);
       free(result);
       return 1;
     }
@@ -3657,12 +3735,14 @@ static int apply_each_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
     if (apply_each_selector_to_item(shell, &selector, &value->list.items[i], mapped, out, out_size) != 0) {
       arksh_value_free(mapped);
       free(mapped);
+      free(item);
       arksh_value_free(result);
       free(result);
       return 1;
     }
-    if (set_item_from_value(mapped, &item, out, out_size) != 0 || arksh_value_list_append_item(result, &item) != 0) {
-      arksh_value_item_free(&item);
+    if (set_item_from_value(mapped, item, out, out_size) != 0 || arksh_value_list_append_item(result, item) != 0) {
+      arksh_value_item_free(item);
+      free(item);
       arksh_value_free(mapped);
       free(mapped);
       arksh_value_free(result);
@@ -3670,7 +3750,8 @@ static int apply_each_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
       snprintf(out, out_size, "each() output list is too large");
       return 1;
     }
-    arksh_value_item_free(&item);
+    arksh_value_item_free(item);
+    free(item);
     arksh_value_free(mapped);
     free(mapped);
   }
@@ -3724,9 +3805,17 @@ static int apply_map_stage(ArkshShell *shell, ArkshValue *value, const ArkshPipe
   result->kind = ARKSH_VALUE_LIST;
 
   for (i = 0; i < value->list.count; ++i) {
-    ArkshValueItem item;
+    ArkshValueItem *item = (ArkshValueItem *) allocate_temp_buffer(1, sizeof(*item), "map() item", out, out_size);
+
+    if (item == NULL) {
+      free(temp_values);
+      arksh_value_free(result);
+      free(result);
+      return 1;
+    }
 
     if (arksh_value_set_from_item(&temp_values[0], &value->list.items[i]) != 0) {
+      free(item);
       free(temp_values);
       arksh_value_free(result);
       free(result);
@@ -3740,9 +3829,10 @@ static int apply_map_stage(ArkshShell *shell, ArkshValue *value, const ArkshPipe
       free(result);
       return 1;
     }
-    if (set_item_from_value(&temp_values[1], &item, out, out_size) != 0 ||
-        arksh_value_list_append_item(result, &item) != 0) {
-      arksh_value_item_free(&item);
+    if (set_item_from_value(&temp_values[1], item, out, out_size) != 0 ||
+        arksh_value_list_append_item(result, item) != 0) {
+      arksh_value_item_free(item);
+      free(item);
       arksh_value_free(&temp_values[0]);
       arksh_value_free(&temp_values[1]);
       free(temp_values);
@@ -3751,7 +3841,8 @@ static int apply_map_stage(ArkshShell *shell, ArkshValue *value, const ArkshPipe
       snprintf(out, out_size, "map() output list is too large");
       return 1;
     }
-    arksh_value_item_free(&item);
+    arksh_value_item_free(item);
+    free(item);
     arksh_value_free(&temp_values[0]);
     arksh_value_free(&temp_values[1]);
   }
@@ -3836,11 +3927,20 @@ static int apply_flat_map_stage(ArkshShell *shell, ArkshValue *value, const Arks
         }
       }
     } else {
-      ArkshValueItem item;
+      ArkshValueItem *item = (ArkshValueItem *) allocate_temp_buffer(1, sizeof(*item), "flat_map() item", out, out_size);
 
-      if (set_item_from_value(&temp_values[1], &item, out, out_size) != 0 ||
-          arksh_value_list_append_item(result, &item) != 0) {
-        arksh_value_item_free(&item);
+      if (item == NULL) {
+        arksh_value_free(&temp_values[0]);
+        arksh_value_free(&temp_values[1]);
+        free(temp_values);
+        arksh_value_free(result);
+        free(result);
+        return 1;
+      }
+      if (set_item_from_value(&temp_values[1], item, out, out_size) != 0 ||
+          arksh_value_list_append_item(result, item) != 0) {
+        arksh_value_item_free(item);
+        free(item);
         arksh_value_free(&temp_values[0]);
         arksh_value_free(&temp_values[1]);
         free(temp_values);
@@ -3849,7 +3949,8 @@ static int apply_flat_map_stage(ArkshShell *shell, ArkshValue *value, const Arks
         snprintf(out, out_size, "flat_map() output list is too large");
         return 1;
       }
-      arksh_value_item_free(&item);
+      arksh_value_item_free(item);
+      free(item);
     }
 
     arksh_value_free(&temp_values[0]);
@@ -4369,7 +4470,7 @@ static int apply_pipeline_stage(ArkshShell *shell, ArkshValue *value, const Arks
   /* E6-S8: matrix pipeline stages */
   if (strcmp(stage->name, "transpose") == 0) {
     ArkshMatrix *src, *dst;
-    ArkshValue result;
+    ArkshValue *result;
     size_t r, c;
     const char *row_names[ARKSH_MAX_MATRIX_ROWS];
     char name_buf[ARKSH_MAX_MATRIX_ROWS][16];
@@ -4384,8 +4485,12 @@ static int apply_pipeline_stage(ArkshShell *shell, ArkshValue *value, const Arks
       snprintf(name_buf[r], sizeof(name_buf[r]), "row_%zu", r);
       row_names[r] = name_buf[r];
     }
-    arksh_value_set_matrix(&result, row_names, src->row_count);
-    dst = result.matrix;
+    result = (ArkshValue *) allocate_temp_buffer(1, sizeof(*result), "transpose result", out, out_size);
+    if (result == NULL) {
+      return 1;
+    }
+    arksh_value_set_matrix(result, row_names, src->row_count);
+    dst = result->matrix;
     dst->row_count = src->col_count;
     for (r = 0; r < src->col_count; ++r) {
       /* Each new row r corresponds to old column r */
@@ -4394,7 +4499,8 @@ static int apply_pipeline_stage(ArkshShell *shell, ArkshValue *value, const Arks
       }
     }
     arksh_value_free(value);
-    *value = result;
+    *value = *result;
+    free(result);
     return 0;
   }
 
@@ -5725,7 +5831,7 @@ static int apply_binary_op(ArkshShell *shell, ArkshValue *lv, char op, ArkshValu
   /* Extension method fallback. */
   {
     const char *method_name;
-    ArkshValue result_val;
+    ArkshValue *result_val;
     int status;
     switch (op) {
       case '+': method_name = "__add__"; break;
@@ -5735,11 +5841,16 @@ static int apply_binary_op(ArkshShell *shell, ArkshValue *lv, char op, ArkshValu
       default:
         snprintf(out, out_size, "unknown binary operator: %c", op); return 1;
     }
-    arksh_value_init(&result_val);
-    status = invoke_extension_method_value(shell, lv, method_name, 1, rv, &result_val, out, out_size);
-    if (status != 0) { arksh_value_free(&result_val); return 1; }
+    result_val = (ArkshValue *) allocate_temp_buffer(1, sizeof(*result_val), "binary op extension result", out, out_size);
+    if (result_val == NULL) {
+      return 1;
+    }
+    arksh_value_init(result_val);
+    status = invoke_extension_method_value(shell, lv, method_name, 1, rv, result_val, out, out_size);
+    if (status != 0) { arksh_value_free(result_val); free(result_val); return 1; }
     arksh_value_free(lv);
-    *lv = result_val;
+    *lv = *result_val;
+    free(result_val);
     return 0;
   }
 }
@@ -6415,12 +6526,19 @@ static int append_for_source_word(
   }
 
   for (i = 0; i < expanded_count; ++i) {
-    ArkshValueItem item;
+    ArkshValueItem *item = (ArkshValueItem *) allocate_temp_buffer(1, sizeof(*item), "for-loop source item", out, out_size);
 
-    if (set_item_from_text(expanded_words[i], &item) != 0 || arksh_value_list_append_item(iterable, &item) != 0) {
+    if (item == NULL) {
+      return 1;
+    }
+    if (set_item_from_text(expanded_words[i], item) != 0 || arksh_value_list_append_item(iterable, item) != 0) {
+      arksh_value_item_free(item);
+      free(item);
       snprintf(out, out_size, "unable to append for-loop item");
       return 1;
     }
+    arksh_value_item_free(item);
+    free(item);
   }
 
   return 0;
@@ -6527,15 +6645,24 @@ static int execute_for_command(ArkshShell *shell, const ArkshForCommandNode *com
   shell->loop_depth++;
   if (iterable->kind == ARKSH_VALUE_LIST) {
     for (i = 0; i < iterable->list.count && shell->running; ++i) {
-      ArkshValue current_value;
+      ArkshValue *current_value;
       char segment_output[ARKSH_MAX_OUTPUT];
 
-      if (arksh_value_set_from_item(&current_value, &iterable->list.items[i]) != 0) {
+      current_value = (ArkshValue *) allocate_temp_buffer(1, sizeof(*current_value), "for-loop current value", out, out_size);
+      if (current_value == NULL) {
+        shell->loop_depth--;
+        free(iterable);
+        return 1;
+      }
+      if (arksh_value_set_from_item(current_value, &iterable->list.items[i]) != 0) {
+        free(current_value);
         free(iterable);
         snprintf(out, out_size, "unable to prepare for-loop item");
         return 1;
       }
-      if (assign_for_loop_variable(shell, command->variable, &current_value, out, out_size) != 0) {
+      if (assign_for_loop_variable(shell, command->variable, current_value, out, out_size) != 0) {
+        arksh_value_free(current_value);
+        free(current_value);
         shell->loop_depth--;
         free(iterable);
         return 1;
@@ -6544,6 +6671,8 @@ static int execute_for_command(ArkshShell *shell, const ArkshForCommandNode *com
       segment_output[0] = '\0';
       last_body_status = arksh_shell_execute_line(shell, command->body, segment_output, sizeof(segment_output));
       if (append_output_segment(out, out_size, segment_output) != 0) {
+        arksh_value_free(current_value);
+        free(current_value);
         shell->loop_depth--;
         free(iterable);
         snprintf(out, out_size, "combined command output too large");
@@ -6553,14 +6682,20 @@ static int execute_for_command(ArkshShell *shell, const ArkshForCommandNode *com
       switch (resolve_loop_control(shell)) {
         case ARKSH_LOOP_CONTROL_BREAK:
           final_status = 0;
+          arksh_value_free(current_value);
+          free(current_value);
           free(iterable);
           shell->loop_depth--;
           return final_status;
         case ARKSH_LOOP_CONTROL_CONTINUE:
+          arksh_value_free(current_value);
+          free(current_value);
           last_body_status = 0;
           continue;
         case ARKSH_LOOP_CONTROL_PROPAGATE:
           final_status = last_body_status;
+          arksh_value_free(current_value);
+          free(current_value);
           free(iterable);
           shell->loop_depth--;
           return final_status;
@@ -6568,6 +6703,8 @@ static int execute_for_command(ArkshShell *shell, const ArkshForCommandNode *com
         default:
           break;
       }
+      arksh_value_free(current_value);
+      free(current_value);
     }
   } else if (iterable->kind != ARKSH_VALUE_EMPTY) {
     char segment_output[ARKSH_MAX_OUTPUT];

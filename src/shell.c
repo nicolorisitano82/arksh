@@ -51,6 +51,15 @@ s_trap_map[] = {
   { NULL,    ARKSH_TRAP_COUNT, 0        }
 };
 
+static ArkshValue *allocate_shell_value(char *out, size_t out_size) {
+  ArkshValue *value = (ArkshValue *) calloc(1, sizeof(*value));
+
+  if (value == NULL && out != NULL && out_size > 0) {
+    snprintf(out, out_size, "out of memory");
+  }
+  return value;
+}
+
 static ArkshValue *allocate_runtime_value(char *error, size_t error_size, const char *label);
 static int build_class_property_list(const ArkshShell *shell, const char *class_name, ArkshValue *out_value, char *out, size_t out_size);
 static int build_class_method_list(const ArkshShell *shell, const char *class_name, ArkshValue *out_value, char *out, size_t out_size);
@@ -1179,7 +1188,7 @@ static void collect_class_runtime_member_completions(
   size_t max_matches,
   size_t *count
 ) {
-  ArkshValue names;
+  ArkshValue *names;
   char error[ARKSH_MAX_OUTPUT];
   size_t i;
 
@@ -1190,13 +1199,18 @@ static void collect_class_runtime_member_completions(
     return;
   }
 
+  names = allocate_shell_value(NULL, 0);
+  if (names == NULL) {
+    return;
+  }
+
   error[0] = '\0';
   if (receiver->kind == ARKSH_VALUE_CLASS) {
-    if (build_class_property_list(shell, receiver->text, &names, error, sizeof(error)) == 0) {
-      for (i = 0; i < names.list.count; ++i) {
-        append_member_completion(names.list.items[i].text, 0, prefix, matches, max_matches, count);
+    if (build_class_property_list(shell, receiver->text, names, error, sizeof(error)) == 0) {
+      for (i = 0; i < names->list.count; ++i) {
+        append_member_completion(names->list.items[i].text, 0, prefix, matches, max_matches, count);
       }
-      arksh_value_free(&names);
+      arksh_value_free(names);
     }
   } else {
     const ArkshClassInstance *instance = find_instance_entry_const(shell, (int) receiver->number);
@@ -1209,12 +1223,13 @@ static void collect_class_runtime_member_completions(
   }
 
   error[0] = '\0';
-  if (build_class_method_list(shell, receiver->text, &names, error, sizeof(error)) == 0) {
-    for (i = 0; i < names.list.count; ++i) {
-      append_member_completion(names.list.items[i].text, 1, prefix, matches, max_matches, count);
+  if (build_class_method_list(shell, receiver->text, names, error, sizeof(error)) == 0) {
+    for (i = 0; i < names->list.count; ++i) {
+      append_member_completion(names->list.items[i].text, 1, prefix, matches, max_matches, count);
     }
-    arksh_value_free(&names);
+    arksh_value_free(names);
   }
+  free(names);
 }
 
 static void collect_extension_member_completions(
@@ -4275,22 +4290,30 @@ static int dict_method_delete(ArkshShell *shell, const ArkshValue *receiver, int
 
   arksh_value_set_dict(out_value);
   for (i = 0; i < receiver->map.count; ++i) {
-    ArkshValue entry_val;
+    ArkshValue *entry_val = allocate_shell_value(out, out_size);
+
+    if (entry_val == NULL) {
+      return 1;
+    }
 
     if (strcmp(receiver->map.entries[i].key, key) == 0) {
+      free(entry_val);
       continue;
     }
-    arksh_value_init(&entry_val);
-    if (arksh_value_set_from_item(&entry_val, &receiver->map.entries[i].value) != 0) {
+    arksh_value_init(entry_val);
+    if (arksh_value_set_from_item(entry_val, &receiver->map.entries[i].value) != 0) {
+      free(entry_val);
       snprintf(out, out_size, "delete() failed to copy entry");
       return 1;
     }
-    if (arksh_value_map_set(out_value, receiver->map.entries[i].key, &entry_val) != 0) {
-      arksh_value_free(&entry_val);
+    if (arksh_value_map_set(out_value, receiver->map.entries[i].key, entry_val) != 0) {
+      arksh_value_free(entry_val);
+      free(entry_val);
       snprintf(out, out_size, "delete() dict is full");
       return 1;
     }
-    arksh_value_free(&entry_val);
+    arksh_value_free(entry_val);
+    free(entry_val);
   }
   return 0;
 }
@@ -4349,15 +4372,20 @@ static int dict_prop_keys(ArkshShell *shell, const ArkshValue *receiver, ArkshVa
   arksh_value_init(out_value);
   out_value->kind = ARKSH_VALUE_LIST;
   for (i = 0; i < receiver->map.count; ++i) {
-    ArkshValue key_val;
+    ArkshValue *key_val = allocate_shell_value(out, out_size);
 
-    arksh_value_set_string(&key_val, receiver->map.entries[i].key);
-    if (arksh_value_list_append_value(out_value, &key_val) != 0) {
-      arksh_value_free(&key_val);
+    if (key_val == NULL) {
+      return 1;
+    }
+    arksh_value_set_string(key_val, receiver->map.entries[i].key);
+    if (arksh_value_list_append_value(out_value, key_val) != 0) {
+      arksh_value_free(key_val);
+      free(key_val);
       snprintf(out, out_size, "keys: result is too large");
       return 1;
     }
-    arksh_value_free(&key_val);
+    arksh_value_free(key_val);
+    free(key_val);
   }
   return 0;
 }
@@ -4374,19 +4402,25 @@ static int dict_prop_values(ArkshShell *shell, const ArkshValue *receiver, Arksh
   arksh_value_init(out_value);
   out_value->kind = ARKSH_VALUE_LIST;
   for (i = 0; i < receiver->map.count; ++i) {
-    ArkshValue item_val;
+    ArkshValue *item_val = allocate_shell_value(out, out_size);
 
-    arksh_value_init(&item_val);
-    if (arksh_value_set_from_item(&item_val, &receiver->map.entries[i].value) != 0) {
+    if (item_val == NULL) {
+      return 1;
+    }
+    arksh_value_init(item_val);
+    if (arksh_value_set_from_item(item_val, &receiver->map.entries[i].value) != 0) {
+      free(item_val);
       snprintf(out, out_size, "values: failed to expand item");
       return 1;
     }
-    if (arksh_value_list_append_value(out_value, &item_val) != 0) {
-      arksh_value_free(&item_val);
+    if (arksh_value_list_append_value(out_value, item_val) != 0) {
+      arksh_value_free(item_val);
+      free(item_val);
       snprintf(out, out_size, "values: result is too large");
       return 1;
     }
-    arksh_value_free(&item_val);
+    arksh_value_free(item_val);
+    free(item_val);
   }
   return 0;
 }
@@ -4414,7 +4448,7 @@ static int dict_method_to_json(ArkshShell *shell, const ArkshValue *receiver, in
 }
 
 static int dict_method_from_json(ArkshShell *shell, const ArkshValue *receiver, int argc, const ArkshValue *args, ArkshValue *out_value, char *out, size_t out_size) {
-  ArkshValue parsed;
+  ArkshValue *parsed;
   char error[ARKSH_MAX_OUTPUT];
 
   (void) shell;
@@ -4424,18 +4458,25 @@ static int dict_method_from_json(ArkshShell *shell, const ArkshValue *receiver, 
     snprintf(out, out_size, "from_json() expects exactly one string argument");
     return 1;
   }
-  arksh_value_init(&parsed);
-  if (arksh_value_parse_json(args[0].text, &parsed, error, sizeof(error)) != 0) {
+  parsed = allocate_shell_value(out, out_size);
+  if (parsed == NULL) {
+    return 1;
+  }
+  arksh_value_init(parsed);
+  if (arksh_value_parse_json(args[0].text, parsed, error, sizeof(error)) != 0) {
+    free(parsed);
     snprintf(out, out_size, "from_json: %s", error);
     return 1;
   }
-  if (parsed.kind != ARKSH_VALUE_MAP) {
-    arksh_value_free(&parsed);
+  if (parsed->kind != ARKSH_VALUE_MAP) {
+    arksh_value_free(parsed);
+    free(parsed);
     snprintf(out, out_size, "from_json: expected JSON object");
     return 1;
   }
-  parsed.kind = ARKSH_VALUE_DICT;
-  *out_value = parsed;
+  parsed->kind = ARKSH_VALUE_DICT;
+  *out_value = *parsed;
+  free(parsed);
   return 0;
 }
 
@@ -8800,14 +8841,20 @@ static int matrix_prop_col_names(ArkshShell *shell, const ArkshValue *receiver, 
   out_value->kind = ARKSH_VALUE_LIST;
   if (m == NULL) return 0;
   for (i = 0; i < m->col_count; ++i) {
-    ArkshValue col_val;
-    arksh_value_set_string(&col_val, m->col_names[i]);
-    if (arksh_value_list_append_value(out_value, &col_val) != 0) {
-      arksh_value_free(&col_val);
+    ArkshValue *col_val = allocate_shell_value(out, out_size);
+
+    if (col_val == NULL) {
+      return 1;
+    }
+    arksh_value_set_string(col_val, m->col_names[i]);
+    if (arksh_value_list_append_value(out_value, col_val) != 0) {
+      arksh_value_free(col_val);
+      free(col_val);
       snprintf(out, out_size, "col_names: result too large");
       return 1;
     }
-    arksh_value_free(&col_val);
+    arksh_value_free(col_val);
+    free(col_val);
   }
   return 0;
 }
@@ -8934,14 +8981,20 @@ static int matrix_method_row(ArkshShell *shell, const ArkshValue *receiver, int 
   }
   arksh_value_set_map(out_value);
   for (col = 0; col < m->col_count; ++col) {
-    ArkshValue cell_val;
-    matrix_cell_get(&m->rows[n][col], &cell_val);
-    if (arksh_value_map_set(out_value, m->col_names[col], &cell_val) != 0) {
-      arksh_value_free(&cell_val);
+    ArkshValue *cell_val = allocate_shell_value(out, out_size);
+
+    if (cell_val == NULL) {
+      return 1;
+    }
+    matrix_cell_get(&m->rows[n][col], cell_val);
+    if (arksh_value_map_set(out_value, m->col_names[col], cell_val) != 0) {
+      arksh_value_free(cell_val);
+      free(cell_val);
       snprintf(out, out_size, "row() result too large");
       return 1;
     }
-    arksh_value_free(&cell_val);
+    arksh_value_free(cell_val);
+    free(cell_val);
   }
   return 0;
 }
@@ -8968,14 +9021,20 @@ static int matrix_method_col(ArkshShell *shell, const ArkshValue *receiver, int 
   arksh_value_init(out_value);
   out_value->kind = ARKSH_VALUE_LIST;
   for (row = 0; row < m->row_count; ++row) {
-    ArkshValue cell_val;
-    matrix_cell_get(&m->rows[row][(size_t)idx], &cell_val);
-    if (arksh_value_list_append_value(out_value, &cell_val) != 0) {
-      arksh_value_free(&cell_val);
+    ArkshValue *cell_val = allocate_shell_value(out, out_size);
+
+    if (cell_val == NULL) {
+      return 1;
+    }
+    matrix_cell_get(&m->rows[row][(size_t)idx], cell_val);
+    if (arksh_value_list_append_value(out_value, cell_val) != 0) {
+      arksh_value_free(cell_val);
+      free(cell_val);
       snprintf(out, out_size, "col() result too large");
       return 1;
     }
-    arksh_value_free(&cell_val);
+    arksh_value_free(cell_val);
+    free(cell_val);
   }
   return 0;
 }
@@ -9070,25 +9129,40 @@ static int matrix_method_to_maps(ArkshShell *shell, const ArkshValue *receiver, 
   arksh_value_init(out_value);
   out_value->kind = ARKSH_VALUE_LIST;
   for (row = 0; row < m->row_count; ++row) {
-    ArkshValue row_map;
-    arksh_value_set_map(&row_map);
+    ArkshValue *row_map = allocate_shell_value(out, out_size);
+
+    if (row_map == NULL) {
+      return 1;
+    }
+    arksh_value_set_map(row_map);
     for (col = 0; col < m->col_count; ++col) {
-      ArkshValue cell_val;
-      matrix_cell_get(&m->rows[row][col], &cell_val);
-      if (arksh_value_map_set(&row_map, m->col_names[col], &cell_val) != 0) {
-        arksh_value_free(&cell_val);
-        arksh_value_free(&row_map);
+      ArkshValue *cell_val = allocate_shell_value(out, out_size);
+
+      if (cell_val == NULL) {
+        arksh_value_free(row_map);
+        free(row_map);
+        return 1;
+      }
+      matrix_cell_get(&m->rows[row][col], cell_val);
+      if (arksh_value_map_set(row_map, m->col_names[col], cell_val) != 0) {
+        arksh_value_free(cell_val);
+        free(cell_val);
+        arksh_value_free(row_map);
+        free(row_map);
         snprintf(out, out_size, "to_maps: map too large");
         return 1;
       }
-      arksh_value_free(&cell_val);
+      arksh_value_free(cell_val);
+      free(cell_val);
     }
-    if (arksh_value_list_append_value(out_value, &row_map) != 0) {
-      arksh_value_free(&row_map);
+    if (arksh_value_list_append_value(out_value, row_map) != 0) {
+      arksh_value_free(row_map);
+      free(row_map);
       snprintf(out, out_size, "to_maps: list too large");
       return 1;
     }
-    arksh_value_free(&row_map);
+    arksh_value_free(row_map);
+    free(row_map);
   }
   return 0;
 }
@@ -9145,11 +9219,16 @@ static int matrix_method_from_maps(ArkshShell *shell, const ArkshValue *receiver
     for (col = 0; col < dst->col_count; ++col) {
       const ArkshValueItem *entry = arksh_value_map_get_item(map_val, dst->col_names[col]);
       if (entry != NULL) {
-        ArkshValue cell_val;
-        if (arksh_value_set_from_item(&cell_val, entry) == 0) {
-          matrix_cell_set(&dst->rows[dst->row_count][col], &cell_val);
-          arksh_value_free(&cell_val);
+        ArkshValue *cell_val = allocate_shell_value(out, out_size);
+
+        if (cell_val == NULL) {
+          return 1;
         }
+        if (arksh_value_set_from_item(cell_val, entry) == 0) {
+          matrix_cell_set(&dst->rows[dst->row_count][col], cell_val);
+          arksh_value_free(cell_val);
+        }
+        free(cell_val);
       }
     }
     dst->row_count++;
