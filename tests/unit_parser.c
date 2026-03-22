@@ -233,30 +233,39 @@ static void test_class_command(void) {
 static void test_object_expression_arrow(void) {
   ArkshAst ast = parse_ok(". -> type");
   EXPECT(ast.kind == ARKSH_AST_OBJECT_EXPRESSION, "obj expr arrow: kind");
-  EXPECT(strcmp(ast.as.object_expression.member, "type") == 0, "obj expr arrow: member == 'type'");
-  EXPECT(ast.as.object_expression.member_kind == ARKSH_MEMBER_PROPERTY,
+  EXPECT(ast.as.object_expression.member_count == 1, "obj expr arrow: member_count == 1");
+  EXPECT(strcmp(ast.as.object_expression.members[0].member, "type") == 0, "obj expr arrow: member == 'type'");
+  EXPECT(ast.as.object_expression.members[0].member_kind == ARKSH_MEMBER_PROPERTY,
          "obj expr arrow: member_kind PROPERTY");
 }
 
 static void test_object_expression_method(void) {
   ArkshAst ast = parse_ok(". -> children()");
   EXPECT(ast.kind == ARKSH_AST_OBJECT_EXPRESSION, "obj expr method: kind");
-  EXPECT(strcmp(ast.as.object_expression.member, "children") == 0, "obj expr method: member");
-  EXPECT(ast.as.object_expression.member_kind == ARKSH_MEMBER_METHOD,
+  EXPECT(ast.as.object_expression.member_count == 1, "obj expr method: member_count == 1");
+  EXPECT(strcmp(ast.as.object_expression.members[0].member, "children") == 0, "obj expr method: member");
+  EXPECT(ast.as.object_expression.members[0].member_kind == ARKSH_MEMBER_METHOD,
          "obj expr method: member_kind METHOD");
 }
 
 static void test_object_expression_chained_receiver(void) {
   ArkshAst ast = parse_ok("data.json -> read_json() -> get_path(\"a[2].b\")");
   EXPECT(ast.kind == ARKSH_AST_OBJECT_EXPRESSION, "obj expr chained: kind");
-  EXPECT(strcmp(ast.as.object_expression.raw_selector, "data.json -> read_json()") == 0,
-         "obj expr chained: raw_selector == chained receiver");
-  EXPECT(strcmp(ast.as.object_expression.member, "get_path") == 0,
-         "obj expr chained: member == 'get_path'");
-  EXPECT(ast.as.object_expression.member_kind == ARKSH_MEMBER_METHOD,
-         "obj expr chained: member_kind METHOD");
-  EXPECT(ast.as.object_expression.argc == 1, "obj expr chained: argc == 1");
-  EXPECT(strcmp(ast.as.object_expression.raw_argv[0], "\"a[2].b\"") == 0,
+  EXPECT(strcmp(ast.as.object_expression.raw_selector, "data.json") == 0,
+         "obj expr chained: raw_selector == data.json");
+  EXPECT(ast.as.object_expression.member_count == 2, "obj expr chained: member_count == 2");
+  EXPECT(strcmp(ast.as.object_expression.members[0].member, "read_json") == 0,
+         "obj expr chained: first member == 'read_json'");
+  EXPECT(ast.as.object_expression.members[0].member_kind == ARKSH_MEMBER_METHOD,
+         "obj expr chained: first member_kind METHOD");
+  EXPECT(strcmp(ast.as.object_expression.members[1].member, "get_path") == 0,
+         "obj expr chained: second member == 'get_path'");
+  EXPECT(ast.as.object_expression.members[1].member_kind == ARKSH_MEMBER_METHOD,
+         "obj expr chained: second member_kind METHOD");
+  EXPECT(ast.as.object_expression.members[1].argc == 1, "obj expr chained: argc == 1");
+  EXPECT(ast.as.object_expression.members[1].parsed_args[0].kind == ARKSH_PARSED_ARG_STRING_LITERAL,
+         "obj expr chained: parsed arg kind STRING_LITERAL");
+  EXPECT(strcmp(ast.as.object_expression.members[1].raw_argv[0], "\"a[2].b\"") == 0,
          "obj expr chained: raw arg preserved");
 }
 
@@ -275,6 +284,9 @@ static void test_object_pipeline_two_stages(void) {
   EXPECT(ast.as.pipeline.stage_count == 2, "obj pipeline 2: stage_count == 2");
   EXPECT(strcmp(ast.as.pipeline.stages[0].name, "grep") == 0, "obj pipeline 2: stage[0] name");
   EXPECT(strcmp(ast.as.pipeline.stages[1].name, "count") == 0, "obj pipeline 2: stage[1] name");
+  EXPECT(ast.as.pipeline.stages[0].argc == 1, "obj pipeline 2: grep argc == 1");
+  EXPECT(ast.as.pipeline.stages[0].parsed_args[0].kind == ARKSH_PARSED_ARG_STRING_LITERAL,
+         "obj pipeline 2: grep parsed arg STRING_LITERAL");
 }
 
 /* ------------------------------------------------------------------ VALUE_EXPRESSION */

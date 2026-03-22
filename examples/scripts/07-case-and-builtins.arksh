@@ -9,7 +9,7 @@ done
 
 case text("demo.txt") in *.md) text("markdown") -> print() ;; *.txt) text("text-file") -> print() ;; *) text("other") -> print() ;; esac
 
-eval "text(\"eval-ok\") -> print()"
+eval 'text("eval-ok") -> print()'
 
-trap "text(\"exit-trap\") -> print()" EXIT
+trap 'text("exit-trap") -> print()' EXIT
 text("script-end") -> print()

@@ -816,27 +816,161 @@ static int parse_method_args_csv(
   return 0;
 }
 
-static int parse_member_suffix(const char *selector_src, const char *suffix_src, ArkshObjectExpressionNode *out_expression, int legacy_syntax) {
+static int parse_block_literal_text(const char *line, ArkshBlock *out_block, char *error, size_t error_size);
+
+static void init_parsed_arg_node(ArkshParsedArgNode *node) {
+  if (node == NULL) {
+    return;
+  }
+
+  memset(node, 0, sizeof(*node));
+  node->kind = ARKSH_PARSED_ARG_RAW;
+}
+
+static int parse_shallow_arg_node(const char *text, const char *raw_text, ArkshParsedArgNode *out_node) {
+  char trimmed_text[ARKSH_MAX_LINE];
+  char trimmed_raw[ARKSH_MAX_LINE];
+  ArkshBlock block;
+  char block_error[2] = "";
+  size_t raw_len;
+
+  if (out_node == NULL) {
+    return 1;
+  }
+
+  init_parsed_arg_node(out_node);
+  trim_copy(text == NULL ? "" : text, trimmed_text, sizeof(trimmed_text));
+  trim_copy(raw_text == NULL ? trimmed_text : raw_text, trimmed_raw, sizeof(trimmed_raw));
+  copy_string(out_node->text, sizeof(out_node->text), trimmed_text);
+  copy_string(out_node->raw_text, sizeof(out_node->raw_text), trimmed_raw);
+
+  if (trimmed_raw[0] == '\0') {
+    return 0;
+  }
+
+  if (parse_block_literal_text(trimmed_raw, &block, block_error, sizeof(block_error)) == 0) {
+    out_node->kind = ARKSH_PARSED_ARG_BLOCK_LITERAL;
+    out_node->block = block;
+    return 0;
+  }
+
+  raw_len = strlen(trimmed_raw);
+  if ((trimmed_raw[0] == '"' || trimmed_raw[0] == '\'') && raw_len >= 2 && trimmed_raw[raw_len - 1] == trimmed_raw[0]) {
+    out_node->kind = ARKSH_PARSED_ARG_STRING_LITERAL;
+    return 0;
+  }
+
+  if (strcmp(trimmed_text, "true") == 0 || strcmp(trimmed_text, "false") == 0) {
+    out_node->kind = ARKSH_PARSED_ARG_BOOLEAN_LITERAL;
+    return 0;
+  }
+
+  if (is_numeric_text(trimmed_text)) {
+    out_node->kind = ARKSH_PARSED_ARG_NUMBER_LITERAL;
+    return 0;
+  }
+
+  return 0;
+}
+
+static int populate_parsed_args(
+  const char argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN],
+  const char raw_argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN],
+  ArkshParsedArgNode parsed_args[ARKSH_MAX_ARGS],
+  int argc
+) {
+  int i;
+
+  if (argv == NULL || raw_argv == NULL || parsed_args == NULL || argc < 0) {
+    return 1;
+  }
+
+  for (i = 0; i < argc && i < ARKSH_MAX_ARGS; ++i) {
+    if (parse_shallow_arg_node(argv[i], raw_argv[i], &parsed_args[i]) != 0) {
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+static int find_next_top_level_arrow(const char *text, size_t start, size_t *out_index) {
+  size_t i;
+  char quote = '\0';
+  int paren_depth = 0;
+  int brace_depth = 0;
+  int bracket_depth = 0;
+
+  if (text == NULL || out_index == NULL) {
+    return 1;
+  }
+
+  for (i = start; text[i] != '\0' && text[i + 1] != '\0'; ++i) {
+    char c = text[i];
+
+    if (quote != '\0') {
+      if (c == quote) {
+        quote = '\0';
+      } else if (quote == '"' && c == '\\' && text[i + 1] != '\0') {
+        i++;
+      }
+      continue;
+    }
+
+    if (c == '"' || c == '\'') {
+      quote = c;
+      continue;
+    }
+    if (c == '\\' && text[i + 1] != '\0') {
+      i++;
+      continue;
+    }
+    if (c == '(') {
+      paren_depth++;
+      continue;
+    }
+    if (c == ')' && paren_depth > 0) {
+      paren_depth--;
+      continue;
+    }
+    if (c == '{') {
+      brace_depth++;
+      continue;
+    }
+    if (c == '}' && brace_depth > 0) {
+      brace_depth--;
+      continue;
+    }
+    if (c == '[') {
+      bracket_depth++;
+      continue;
+    }
+    if (c == ']' && bracket_depth > 0) {
+      bracket_depth--;
+      continue;
+    }
+
+    if (c == '-' && text[i + 1] == '>' && quote == '\0' && paren_depth == 0 && brace_depth == 0 && bracket_depth == 0) {
+      *out_index = i;
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+static int parse_object_member_text(const char *suffix_src, ArkshObjectMemberNode *out_member) {
   char member_and_args[ARKSH_MAX_LINE];
   char args[ARKSH_MAX_LINE];
   const char *open_args = NULL;
   const char *close_args = NULL;
   size_t member_len;
 
-  if (selector_src == NULL || suffix_src == NULL || out_expression == NULL) {
+  if (suffix_src == NULL || out_member == NULL) {
     return 1;
   }
 
-  memset(out_expression, 0, sizeof(*out_expression));
-  trim_copy(selector_src, out_expression->raw_selector, sizeof(out_expression->raw_selector));
-  trim_copy(selector_src, out_expression->selector, sizeof(out_expression->selector));
-  strip_matching_quotes(out_expression->selector);
-  out_expression->legacy_syntax = legacy_syntax;
-
-  if (out_expression->selector[0] == '\0') {
-    return 1;
-  }
-
+  memset(out_member, 0, sizeof(*out_member));
   trim_copy(suffix_src, member_and_args, sizeof(member_and_args));
   if (member_and_args[0] == '\0') {
     return 1;
@@ -844,9 +978,9 @@ static int parse_member_suffix(const char *selector_src, const char *suffix_src,
 
   open_args = strchr(member_and_args, '(');
   if (open_args == NULL) {
-    copy_string(out_expression->member, sizeof(out_expression->member), member_and_args);
-    out_expression->member_kind = ARKSH_MEMBER_PROPERTY;
-    return out_expression->member[0] == '\0' ? 1 : 0;
+    copy_string(out_member->member, sizeof(out_member->member), member_and_args);
+    out_member->member_kind = ARKSH_MEMBER_PROPERTY;
+    return out_member->member[0] == '\0' ? 1 : 0;
   }
 
   close_args = strrchr(member_and_args, ')');
@@ -855,14 +989,14 @@ static int parse_member_suffix(const char *selector_src, const char *suffix_src,
   }
 
   member_len = (size_t) (open_args - member_and_args);
-  if (member_len >= sizeof(out_expression->member)) {
+  if (member_len >= sizeof(out_member->member)) {
     return 1;
   }
 
-  memcpy(out_expression->member, member_and_args, member_len);
-  out_expression->member[member_len] = '\0';
-  trim_copy(out_expression->member, out_expression->member, sizeof(out_expression->member));
-  if (out_expression->member[0] == '\0') {
+  memcpy(out_member->member, member_and_args, member_len);
+  out_member->member[member_len] = '\0';
+  trim_copy(out_member->member, out_member->member, sizeof(out_member->member));
+  if (out_member->member[0] == '\0') {
     return 1;
   }
 
@@ -872,11 +1006,14 @@ static int parse_member_suffix(const char *selector_src, const char *suffix_src,
 
   memcpy(args, open_args + 1, (size_t) (close_args - open_args - 1));
   args[close_args - open_args - 1] = '\0';
-  if (parse_method_args_csv(args, out_expression->argv, out_expression->raw_argv, &out_expression->argc) != 0) {
+  if (parse_method_args_csv(args, out_member->argv, out_member->raw_argv, &out_member->argc) != 0) {
+    return 1;
+  }
+  if (populate_parsed_args(out_member->argv, out_member->raw_argv, out_member->parsed_args, out_member->argc) != 0) {
     return 1;
   }
 
-  out_expression->member_kind = ARKSH_MEMBER_METHOD;
+  out_member->member_kind = ARKSH_MEMBER_METHOD;
   return 0;
 }
 
@@ -914,16 +1051,27 @@ static int parse_legacy_object_expression(const char *line, ArkshObjectExpressio
     return 1;
   }
 
-  return parse_member_suffix(selector, suffix + 1, out_expression, 1);
+  memset(out_expression, 0, sizeof(*out_expression));
+  trim_copy(selector, out_expression->raw_selector, sizeof(out_expression->raw_selector));
+  trim_copy(selector, out_expression->selector, sizeof(out_expression->selector));
+  strip_matching_quotes(out_expression->selector);
+  out_expression->legacy_syntax = 1;
+  if (out_expression->selector[0] == '\0') {
+    return 1;
+  }
+  if (parse_object_member_text(suffix + 1, &out_expression->members[0]) != 0) {
+    return 1;
+  }
+  out_expression->member_count = 1;
+  return 0;
 }
 
 static int parse_object_expression_text(const char *line, ArkshObjectExpressionNode *out_expression, char *error, size_t error_size) {
-  ArkshTokenStream stream;
-  size_t arrow_index = 0;
-  int found_arrow = 0;
+  char trimmed[ARKSH_MAX_LINE];
   char selector[ARKSH_MAX_LINE];
-  char suffix[ARKSH_MAX_LINE];
-  size_t i;
+  size_t arrow_index = 0;
+  size_t cursor;
+  size_t len;
 
   if (line == NULL || out_expression == NULL || error == NULL || error_size == 0) {
     return 1;
@@ -933,35 +1081,60 @@ static int parse_object_expression_text(const char *line, ArkshObjectExpressionN
     return 0;
   }
 
-  if (arksh_lex_line(line, &stream, error, error_size) != 0) {
+  trim_copy(line, trimmed, sizeof(trimmed));
+  if (find_next_top_level_arrow(trimmed, 0, &arrow_index) != 0) {
     return 1;
   }
-
-  for (i = 0; i < stream.count; ++i) {
-    if (stream.tokens[i].kind == ARKSH_TOKEN_ARROW &&
-        !position_is_inside_nested_structure(line, stream.tokens[i].position)) {
-      arrow_index = i;
-      found_arrow = 1;
-    }
-  }
-
-  if (!found_arrow) {
-    return 1;
-  }
-  if (arrow_index == 0 || stream.tokens[arrow_index + 1].kind == ARKSH_TOKEN_EOF) {
+  if (arrow_index == 0 || trimmed[arrow_index + 2] == '\0') {
     snprintf(error, error_size, "expected receiver and member around ->");
     return 1;
   }
 
-  copy_trimmed_slice(line, 0, stream.tokens[arrow_index].position, selector, sizeof(selector));
-  copy_trimmed_slice(
-    line,
-    stream.tokens[arrow_index].position + strlen(stream.tokens[arrow_index].text),
-    strlen(line),
-    suffix,
-    sizeof(suffix)
-  );
-  return parse_member_suffix(selector, suffix, out_expression, 0);
+  memset(out_expression, 0, sizeof(*out_expression));
+  copy_trimmed_slice(trimmed, 0, arrow_index, selector, sizeof(selector));
+  trim_copy(selector, out_expression->raw_selector, sizeof(out_expression->raw_selector));
+  trim_copy(selector, out_expression->selector, sizeof(out_expression->selector));
+  strip_matching_quotes(out_expression->selector);
+  if (out_expression->selector[0] == '\0') {
+    snprintf(error, error_size, "object expression requires a receiver");
+    return 1;
+  }
+
+  cursor = arrow_index + 2;
+  len = strlen(trimmed);
+  while (cursor < len) {
+    size_t next_arrow;
+    size_t segment_end = len;
+    char member_text[ARKSH_MAX_LINE];
+
+    if (out_expression->member_count >= ARKSH_MAX_OBJECT_MEMBERS) {
+      snprintf(error, error_size, "too many object members in chain");
+      return 1;
+    }
+
+    if (find_next_top_level_arrow(trimmed, cursor, &next_arrow) == 0) {
+      segment_end = next_arrow;
+    }
+
+    copy_trimmed_slice(trimmed, cursor, segment_end, member_text, sizeof(member_text));
+    if (parse_object_member_text(member_text, &out_expression->members[out_expression->member_count]) != 0) {
+      snprintf(error, error_size, "invalid object member: %s", member_text);
+      return 1;
+    }
+    out_expression->member_count++;
+
+    if (segment_end == len) {
+      break;
+    }
+    cursor = segment_end + 2;
+  }
+
+  if (out_expression->member_count == 0) {
+    snprintf(error, error_size, "object expression requires at least one member");
+    return 1;
+  }
+
+  return 0;
 }
 
 static int find_block_separator(const char *text, size_t len, size_t *out_index) {
@@ -1562,6 +1735,12 @@ static int parse_pipeline_stage_text(const char *text, ArkshPipelineStageNode *o
   memcpy(out_stage->raw_args, open + 1, args_len);
   out_stage->raw_args[args_len] = '\0';
   trim_copy(out_stage->raw_args, out_stage->raw_args, sizeof(out_stage->raw_args));
+  if (parse_method_args_csv(out_stage->raw_args, out_stage->argv, out_stage->raw_argv, &out_stage->argc) != 0) {
+    return 1;
+  }
+  if (populate_parsed_args(out_stage->argv, out_stage->raw_argv, out_stage->parsed_args, out_stage->argc) != 0) {
+    return 1;
+  }
   return out_stage->name[0] == '\0' ? 1 : 0;
 }
 

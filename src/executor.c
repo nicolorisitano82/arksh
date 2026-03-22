@@ -484,6 +484,152 @@ static int evaluate_token_argument_value(ArkshShell *shell, const char *raw_text
   return 0;
 }
 
+static const char *parsed_arg_raw_text(const ArkshParsedArgNode *arg, const char *fallback_raw) {
+  if (arg != NULL) {
+    if (arg->raw_text[0] != '\0') {
+      return arg->raw_text;
+    }
+    if (arg->text[0] != '\0') {
+      return arg->text;
+    }
+  }
+  return fallback_raw == NULL ? "" : fallback_raw;
+}
+
+static int evaluate_parsed_arg_value(
+  ArkshShell *shell,
+  const ArkshParsedArgNode *arg,
+  const char *fallback_raw,
+  ArkshValue *out_value,
+  char *out,
+  size_t out_size
+) {
+  const char *raw_text;
+
+  if (shell == NULL || out_value == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  raw_text = parsed_arg_raw_text(arg, fallback_raw);
+  if (arg == NULL) {
+    return evaluate_token_argument_value(shell, raw_text, out_value, out, out_size);
+  }
+
+  switch (arg->kind) {
+    case ARKSH_PARSED_ARG_BLOCK_LITERAL:
+      arksh_value_free(out_value);
+      arksh_value_set_block(out_value, &arg->block);
+      return 0;
+    case ARKSH_PARSED_ARG_STRING_LITERAL: {
+      char expanded[ARKSH_MAX_OUTPUT];
+
+      if (expand_single_word(shell, raw_text, ARKSH_EXPAND_MODE_OBJECT_ARGUMENT, expanded, sizeof(expanded), out, out_size) != 0) {
+        return 1;
+      }
+      arksh_value_free(out_value);
+      arksh_value_set_string(out_value, expanded);
+      return 0;
+    }
+    case ARKSH_PARSED_ARG_NUMBER_LITERAL: {
+      char expanded[ARKSH_MAX_TOKEN];
+      double number;
+
+      if (expand_single_word(shell, raw_text, ARKSH_EXPAND_MODE_OBJECT_ARGUMENT, expanded, sizeof(expanded), out, out_size) != 0) {
+        return 1;
+      }
+      if (parse_number_text(expanded, &number) != 0) {
+        snprintf(out, out_size, "invalid numeric argument: %s", expanded);
+        return 1;
+      }
+      arksh_value_free(out_value);
+      arksh_value_set_number(out_value, number);
+      return 0;
+    }
+    case ARKSH_PARSED_ARG_BOOLEAN_LITERAL: {
+      char expanded[ARKSH_MAX_TOKEN];
+
+      if (expand_single_word(shell, raw_text, ARKSH_EXPAND_MODE_OBJECT_ARGUMENT, expanded, sizeof(expanded), out, out_size) != 0) {
+        return 1;
+      }
+      if (strcmp(expanded, "true") != 0 && strcmp(expanded, "false") != 0) {
+        snprintf(out, out_size, "invalid boolean argument: %s", expanded);
+        return 1;
+      }
+      arksh_value_free(out_value);
+      arksh_value_set_boolean(out_value, strcmp(expanded, "true") == 0);
+      return 0;
+    }
+    case ARKSH_PARSED_ARG_RAW:
+    default:
+      return evaluate_token_argument_value(shell, raw_text, out_value, out, out_size);
+  }
+}
+
+static int evaluate_parsed_arg_text(
+  ArkshShell *shell,
+  const ArkshParsedArgNode *arg,
+  const char *fallback_raw,
+  char *arg_text,
+  size_t arg_text_size,
+  char *out,
+  size_t out_size
+) {
+  ArkshValue *value;
+  int status;
+
+  if (shell == NULL || arg_text == NULL || arg_text_size == 0 || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  value = (ArkshValue *) allocate_temp_buffer(1, sizeof(*value), "parsed argument text", out, out_size);
+  if (value == NULL) {
+    return 1;
+  }
+
+  if (evaluate_parsed_arg_value(shell, arg, fallback_raw, value, out, out_size) != 0) {
+    free(value);
+    return 1;
+  }
+
+  status = arksh_value_render(value, arg_text, arg_text_size);
+  arksh_value_free(value);
+  free(value);
+  if (status != 0 && out[0] == '\0') {
+    snprintf(out, out_size, "unable to render parsed argument");
+  }
+  return status;
+}
+
+static int evaluate_extension_args_parsed(
+  ArkshShell *shell,
+  const ArkshParsedArgNode parsed_args[ARKSH_MAX_ARGS],
+  const char raw_argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN],
+  int argc,
+  ArkshValue args[ARKSH_MAX_ARGS],
+  char *out,
+  size_t out_size
+) {
+  int i;
+
+  if (shell == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+  if (argc > 0 && args == NULL) {
+    return 1;
+  }
+
+  for (i = 0; i < argc; ++i) {
+    const ArkshParsedArgNode *arg = parsed_args == NULL ? NULL : &parsed_args[i];
+    const char *fallback_raw = raw_argv == NULL ? NULL : raw_argv[i];
+
+    if (evaluate_parsed_arg_value(shell, arg, fallback_raw, &args[i], out, out_size) != 0) {
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
 static int value_is_truthy(const ArkshValue *value) {
   if (value == NULL) {
     return 0;
@@ -1849,7 +1995,7 @@ static int render_value_in_place(ArkshValue *value, char *out, size_t out_size) 
 static int call_bound_value(
   ArkshShell *shell,
   const ArkshValue *bound_value,
-  const ArkshObjectExpressionNode *expression,
+  const ArkshObjectMemberNode *member,
   ArkshValue *out_value,
   char *out,
   size_t out_size
@@ -1858,55 +2004,55 @@ static int call_bound_value(
   int i;
   int status;
 
-  if (shell == NULL || bound_value == NULL || expression == NULL || out_value == NULL || out == NULL || out_size == 0) {
+  if (shell == NULL || bound_value == NULL || member == NULL || out_value == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
-  if (strcmp(expression->member, "call") == 0 && bound_value->kind == ARKSH_VALUE_BLOCK) {
-    args = (ArkshValue *) allocate_temp_buffer((size_t) expression->argc, sizeof(*args), "bound value arguments", out, out_size);
-    if (expression->argc > 0 && args == NULL) {
+  if (strcmp(member->member, "call") == 0 && bound_value->kind == ARKSH_VALUE_BLOCK) {
+    args = (ArkshValue *) allocate_temp_buffer((size_t) member->argc, sizeof(*args), "bound value arguments", out, out_size);
+    if (member->argc > 0 && args == NULL) {
       return 1;
     }
-    for (i = 0; i < expression->argc; ++i) {
-      if (evaluate_token_argument_value(shell, expression->raw_argv[i], &args[i], out, out_size) != 0) {
+    for (i = 0; i < member->argc; ++i) {
+      if (evaluate_parsed_arg_value(shell, &member->parsed_args[i], member->raw_argv[i], &args[i], out, out_size) != 0) {
         free(args);
         return 1;
       }
     }
 
-    status = evaluate_block(shell, arksh_value_block_ref(bound_value), args, expression->argc, out_value, out, out_size);
+    status = evaluate_block(shell, arksh_value_block_ref(bound_value), args, member->argc, out_value, out, out_size);
     free(args);
     return status;
   }
 
-  if (bound_value->kind == ARKSH_VALUE_OBJECT && is_builtin_object_method_name(expression->member)) {
+  if (bound_value->kind == ARKSH_VALUE_OBJECT && is_builtin_object_method_name(member->member)) {
     char expanded_args[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
     char *argv[ARKSH_MAX_ARGS];
     int expanded_argc = 0;
 
-    for (i = 0; i < expression->argc; ++i) {
-      if (evaluate_token_argument_text(shell, expression->raw_argv[i], expanded_args[i], sizeof(expanded_args[i]), out, out_size) != 0) {
+    for (i = 0; i < member->argc; ++i) {
+      if (evaluate_parsed_arg_text(shell, &member->parsed_args[i], member->raw_argv[i], expanded_args[i], sizeof(expanded_args[i]), out, out_size) != 0) {
         return 1;
       }
       expanded_argc++;
     }
 
     build_command_argv(expanded_args, expanded_argc, argv);
-    return arksh_object_call_method_value(arksh_value_object_ref(bound_value), expression->member, expanded_argc, argv, out_value, out, out_size);
+    return arksh_object_call_method_value(arksh_value_object_ref(bound_value), member->member, expanded_argc, argv, out_value, out, out_size);
   }
 
   if (bound_value->kind == ARKSH_VALUE_CLASS || bound_value->kind == ARKSH_VALUE_INSTANCE) {
-    args = (ArkshValue *) allocate_temp_buffer((size_t) expression->argc, sizeof(*args), "class method arguments", out, out_size);
-    if (expression->argc > 0 && args == NULL) {
+    args = (ArkshValue *) allocate_temp_buffer((size_t) member->argc, sizeof(*args), "class method arguments", out, out_size);
+    if (member->argc > 0 && args == NULL) {
       return 1;
     }
 
-    if (evaluate_extension_args(shell, expression->raw_argv, expression->argc, args, out, out_size) != 0) {
+    if (evaluate_extension_args_parsed(shell, member->parsed_args, member->raw_argv, member->argc, args, out, out_size) != 0) {
       free(args);
       return 1;
     }
 
-    status = arksh_shell_call_class_method(shell, bound_value, expression->member, expression->argc, args, out_value, out, out_size);
+    status = arksh_shell_call_class_method(shell, bound_value, member->member, member->argc, args, out_value, out, out_size);
     free(args);
     if (status == 0 || !error_has_prefix(out, "unknown method:")) {
       return status;
@@ -1914,112 +2060,120 @@ static int call_bound_value(
     out[0] = '\0';
   }
 
-  args = (ArkshValue *) allocate_temp_buffer((size_t) expression->argc, sizeof(*args), "bound value extension arguments", out, out_size);
-  if (expression->argc > 0 && args == NULL) {
+  args = (ArkshValue *) allocate_temp_buffer((size_t) member->argc, sizeof(*args), "bound value extension arguments", out, out_size);
+  if (member->argc > 0 && args == NULL) {
     return 1;
   }
 
-  if (evaluate_extension_args(shell, expression->raw_argv, expression->argc, args, out, out_size) != 0) {
+  if (evaluate_extension_args_parsed(shell, member->parsed_args, member->raw_argv, member->argc, args, out, out_size) != 0) {
     free(args);
     return 1;
   }
 
-  status = invoke_extension_method_value(shell, bound_value, expression->member, expression->argc, args, out_value, out, out_size);
+  status = invoke_extension_method_value(shell, bound_value, member->member, member->argc, args, out_value, out, out_size);
   free(args);
   return status;
 }
 
+static int evaluate_object_expression_core(
+  ArkshShell *shell,
+  const ArkshObjectExpressionNode *expression,
+  ArkshValue *out_value,
+  char *out,
+  size_t out_size
+) {
+  ArkshValue *current;
+  ArkshValue *next;
+  ArkshValue *swap;
+  size_t i;
+  int status;
+
+  if (shell == NULL || expression == NULL || out_value == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  current = (ArkshValue *) allocate_temp_buffer(1, sizeof(*current), "object expression current", out, out_size);
+  if (current == NULL) {
+    return 1;
+  }
+  next = (ArkshValue *) allocate_temp_buffer(1, sizeof(*next), "object expression next", out, out_size);
+  if (next == NULL) {
+    free(current);
+    return 1;
+  }
+
+  if (resolve_receiver_value(shell, expression->raw_selector, current, out, out_size) != 0) {
+    free(next);
+    free(current);
+    return 1;
+  }
+
+  for (i = 0; i < expression->member_count; ++i) {
+    const ArkshObjectMemberNode *member = &expression->members[i];
+
+    arksh_value_free(next);
+    if (member->member_kind == ARKSH_MEMBER_PROPERTY) {
+      status = get_property_value_with_shell(shell, current, member->member, next, out, out_size);
+      if (status != 0 && error_has_prefix(out, "unknown property:")) {
+        status = invoke_extension_property_value(shell, current, member->member, next, out, out_size);
+      }
+    } else {
+      status = call_bound_value(shell, current, member, next, out, out_size);
+    }
+
+    if (status != 0) {
+      arksh_value_free(current);
+      arksh_value_free(next);
+      free(next);
+      free(current);
+      return 1;
+    }
+
+    arksh_value_free(current);
+    swap = current;
+    current = next;
+    next = swap;
+  }
+
+  arksh_value_free(out_value);
+  status = arksh_value_copy(out_value, current);
+  arksh_value_free(current);
+  arksh_value_free(next);
+  free(next);
+  free(current);
+  return status;
+}
+
 static int evaluate_object_expression_text(ArkshShell *shell, const ArkshObjectExpressionNode *expression, char *out, size_t out_size) {
-  ArkshValue *receiver;
-  ArkshValue *result;
+  ArkshValue *value;
   int status;
 
   if (shell == NULL || expression == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
-  receiver = (ArkshValue *) allocate_temp_buffer(1, sizeof(*receiver), "object expression receiver", out, out_size);
-  if (receiver == NULL) {
-    return 1;
-  }
-  result = (ArkshValue *) allocate_temp_buffer(1, sizeof(*result), "object expression result", out, out_size);
-  if (result == NULL) {
-    free(receiver);
+  value = (ArkshValue *) allocate_temp_buffer(1, sizeof(*value), "object expression text value", out, out_size);
+  if (value == NULL) {
     return 1;
   }
 
-  if (resolve_receiver_value(shell, expression->raw_selector, receiver, out, out_size) != 0) {
-    free(result);
-    free(receiver);
+  if (evaluate_object_expression_core(shell, expression, value, out, out_size) != 0) {
+    free(value);
     return 1;
   }
 
-  if (expression->member_kind == ARKSH_MEMBER_PROPERTY) {
-    status = get_property_value_with_shell(shell, receiver, expression->member, result, out, out_size);
-    if (status != 0 && error_has_prefix(out, "unknown property:")) {
-      status = invoke_extension_property_value(shell, receiver, expression->member, result, out, out_size);
-    }
-    if (status != 0) {
-      arksh_value_free(receiver);
-      free(result);
-      free(receiver);
-      return 1;
-    }
-    status = arksh_value_render(result, out, out_size);
-    arksh_value_free(result);
-    arksh_value_free(receiver);
-    free(result);
-    free(receiver);
-    return status;
-  }
-
-  status = call_bound_value(shell, receiver, expression, result, out, out_size);
-  arksh_value_free(receiver);
-  free(receiver);
-  if (status != 0) {
-    free(result);
-    return 1;
-  }
-
-  status = arksh_value_render(result, out, out_size);
-  arksh_value_free(result);
-  free(result);
+  status = arksh_value_render(value, out, out_size);
+  arksh_value_free(value);
+  free(value);
   return status;
 }
 
 static int evaluate_object_expression_value(ArkshShell *shell, const ArkshObjectExpressionNode *expression, ArkshValue *value, char *out, size_t out_size) {
-  ArkshValue *receiver;
-  int status;
-
   if (shell == NULL || expression == NULL || value == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
-  receiver = (ArkshValue *) allocate_temp_buffer(1, sizeof(*receiver), "object expression receiver value", out, out_size);
-  if (receiver == NULL) {
-    return 1;
-  }
-
-  if (resolve_receiver_value(shell, expression->raw_selector, receiver, out, out_size) != 0) {
-    free(receiver);
-    return 1;
-  }
-
-  arksh_value_free(value);
-  if (expression->member_kind == ARKSH_MEMBER_PROPERTY) {
-    status = get_property_value_with_shell(shell, receiver, expression->member, value, out, out_size);
-    if (status != 0 && error_has_prefix(out, "unknown property:")) {
-      status = invoke_extension_property_value(shell, receiver, expression->member, value, out, out_size);
-    }
-    arksh_value_free(receiver);
-    free(receiver);
-    return status;
-  }
-
-  status = call_bound_value(shell, receiver, expression, value, out, out_size);
-  arksh_value_free(receiver);
-  free(receiver);
-  return status;
+  return evaluate_object_expression_core(shell, expression, value, out, out_size);
 }
 
 static int split_text_lines_into_value(const char *text, ArkshValue *out_value) {
@@ -2205,6 +2359,18 @@ static int evaluate_stage_argument_to_text(ArkshShell *shell, const char *text, 
     snprintf(out, out_size, "unable to render stage argument");
   }
   return status;
+}
+
+static int evaluate_stage_argument_to_text_parsed(
+  ArkshShell *shell,
+  const ArkshParsedArgNode *arg,
+  const char *fallback_raw,
+  char *out_text,
+  size_t out_text_size,
+  char *out,
+  size_t out_size
+) {
+  return evaluate_parsed_arg_text(shell, arg, fallback_raw, out_text, out_text_size, out, out_size);
 }
 
 static int execute_capture_source(ArkshShell *shell, const char *raw_command, int split_lines, ArkshValue *value, char *out, size_t out_size) {
@@ -2460,6 +2626,50 @@ static int resolve_stage_block_argument(ArkshShell *shell, const char *text, Ark
   return status;
 }
 
+static int resolve_stage_block_argument_parsed(
+  ArkshShell *shell,
+  const ArkshParsedArgNode *arg,
+  const char *fallback_raw,
+  ArkshBlock *out_block,
+  char *out,
+  size_t out_size
+) {
+  ArkshValue *value;
+  int status;
+
+  if (shell == NULL || out_block == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (arg != NULL && arg->kind == ARKSH_PARSED_ARG_BLOCK_LITERAL) {
+    *out_block = arg->block;
+    return 0;
+  }
+
+  value = (ArkshValue *) allocate_temp_buffer(1, sizeof(*value), "stage parsed block value", out, out_size);
+  if (value == NULL) {
+    return 1;
+  }
+
+  if (evaluate_parsed_arg_value(shell, arg, fallback_raw, value, out, out_size) != 0) {
+    free(value);
+    return 1;
+  }
+
+  if (value->kind != ARKSH_VALUE_BLOCK) {
+    arksh_value_free(value);
+    free(value);
+    snprintf(out, out_size, "stage expects a block value");
+    return 1;
+  }
+
+  *out_block = *arksh_value_block_ref(value);
+  status = 0;
+  arksh_value_free(value);
+  free(value);
+  return status;
+}
+
 static void discard_list_tail(ArkshValue *value, size_t keep_count) {
   size_t i;
 
@@ -2501,7 +2711,14 @@ static int apply_where_stage(ArkshShell *shell, ArkshValue *value, const ArkshPi
     ArkshValue *temp_values;
     size_t write_index = 0;
 
-    if (resolve_stage_block_argument(shell, stage->raw_args, &block, out, out_size) != 0) {
+    if (resolve_stage_block_argument_parsed(
+          shell,
+          stage->argc >= 1 ? &stage->parsed_args[0] : NULL,
+          stage->argc >= 1 ? stage->raw_argv[0] : stage->raw_args,
+          &block,
+          out,
+          out_size
+        ) != 0) {
       snprintf(out, out_size, "where() expects syntax like where(type == \"file\") or where(block)");
       return 1;
     }
@@ -2603,13 +2820,20 @@ static int apply_sort_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
 
 static int apply_take_stage(ArkshValue *value, const ArkshPipelineStageNode *stage, char *out, size_t out_size) {
   size_t limit;
+  char limit_text[ARKSH_MAX_TOKEN];
 
   if (value->kind != ARKSH_VALUE_LIST) {
     snprintf(out, out_size, "take() expects a list");
     return 1;
   }
 
-  if (parse_unsigned_number(stage->raw_args, &limit) != 0) {
+  if (stage->argc >= 1) {
+    copy_string(limit_text, sizeof(limit_text), stage->argv[0]);
+  } else {
+    copy_string(limit_text, sizeof(limit_text), stage->raw_args);
+  }
+
+  if (parse_unsigned_number(limit_text, &limit) != 0) {
     snprintf(out, out_size, "take() expects a numeric limit");
     return 1;
   }
@@ -2708,7 +2932,15 @@ static int apply_grep_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
     return 1;
   }
 
-  if (evaluate_stage_argument_to_text(shell, stage->raw_args, pattern, sizeof(pattern), out, out_size) != 0) {
+  if (evaluate_stage_argument_to_text_parsed(
+        shell,
+        stage->argc >= 1 ? &stage->parsed_args[0] : NULL,
+        stage->argc >= 1 ? stage->raw_argv[0] : stage->raw_args,
+        pattern,
+        sizeof(pattern),
+        out,
+        out_size
+      ) != 0) {
     return 1;
   }
 
@@ -2795,7 +3027,15 @@ static int apply_split_stage(ArkshShell *shell, ArkshValue *value, const ArkshPi
     return 0;
   }
 
-  if (evaluate_stage_argument_to_text(shell, stage->raw_args, separator, sizeof(separator), out, out_size) != 0) {
+  if (evaluate_stage_argument_to_text_parsed(
+        shell,
+        stage->argc >= 1 ? &stage->parsed_args[0] : NULL,
+        stage->argc >= 1 ? stage->raw_argv[0] : stage->raw_args,
+        separator,
+        sizeof(separator),
+        out,
+        out_size
+      ) != 0) {
     return 1;
   }
   if (separator[0] == '\0') {
@@ -2825,7 +3065,16 @@ static int apply_join_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
   }
 
   separator[0] = '\0';
-  if (stage->raw_args[0] != '\0' && evaluate_stage_argument_to_text(shell, stage->raw_args, separator, sizeof(separator), out, out_size) != 0) {
+  if (stage->raw_args[0] != '\0' &&
+      evaluate_stage_argument_to_text_parsed(
+        shell,
+        stage->argc >= 1 ? &stage->parsed_args[0] : NULL,
+        stage->argc >= 1 ? stage->raw_argv[0] : stage->raw_args,
+        separator,
+        sizeof(separator),
+        out,
+        out_size
+      ) != 0) {
     return 1;
   }
 
@@ -2891,7 +3140,15 @@ static int apply_pluck_stage(ArkshShell *shell, ArkshValue *value, const ArkshPi
     snprintf(out, out_size, "pluck() expects a path argument");
     return 1;
   }
-  if (evaluate_stage_argument_to_text(shell, stage->raw_args, path, sizeof(path), out, out_size) != 0) {
+  if (evaluate_stage_argument_to_text_parsed(
+        shell,
+        stage->argc >= 1 ? &stage->parsed_args[0] : NULL,
+        stage->argc >= 1 ? stage->raw_argv[0] : stage->raw_args,
+        path,
+        sizeof(path),
+        out,
+        out_size
+      ) != 0) {
     return 1;
   }
 
@@ -3050,8 +3307,6 @@ static int apply_from_json_stage(ArkshValue *value, char *out, size_t out_size) 
 }
 
 static int apply_reduce_stage(ArkshShell *shell, ArkshValue *value, const ArkshPipelineStageNode *stage, char *out, size_t out_size) {
-  char args[2][ARKSH_MAX_LINE];
-  int arg_count = 0;
   ArkshBlock block;
   ArkshValue *temp_values;
   size_t index = 0;
@@ -3065,12 +3320,19 @@ static int apply_reduce_stage(ArkshShell *shell, ArkshValue *value, const ArkshP
     return 1;
   }
 
-  if (stage->raw_args[0] == '\0' || split_top_level_arguments(stage->raw_args, args, 2, &arg_count) != 0 || arg_count < 1 || arg_count > 2) {
+  if (stage->argc < 1 || stage->argc > 2) {
     snprintf(out, out_size, "reduce() expects reduce(block) or reduce(init, block)");
     return 1;
   }
 
-  if (resolve_stage_block_argument(shell, args[arg_count - 1], &block, out, out_size) != 0) {
+  if (resolve_stage_block_argument_parsed(
+        shell,
+        &stage->parsed_args[stage->argc - 1],
+        stage->raw_argv[stage->argc - 1],
+        &block,
+        out,
+        out_size
+      ) != 0) {
     snprintf(out, out_size, "reduce() expects a block as the last argument");
     return 1;
   }
@@ -3080,8 +3342,8 @@ static int apply_reduce_stage(ArkshShell *shell, ArkshValue *value, const ArkshP
     return 1;
   }
 
-  if (arg_count == 2) {
-    if (arksh_evaluate_line_value(shell, args[0], &temp_values[0], out, out_size) != 0) {
+  if (stage->argc == 2) {
+    if (evaluate_parsed_arg_value(shell, &stage->parsed_args[0], stage->raw_argv[0], &temp_values[0], out, out_size) != 0) {
       free(temp_values);
       return 1;
     }
@@ -3294,7 +3556,14 @@ static int apply_each_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
   {
     ArkshBlock block;
 
-    if (resolve_stage_block_argument(shell, stage->raw_args, &block, out, out_size) == 0) {
+    if (resolve_stage_block_argument_parsed(
+          shell,
+          stage->argc >= 1 ? &stage->parsed_args[0] : NULL,
+          stage->argc >= 1 ? stage->raw_argv[0] : stage->raw_args,
+          &block,
+          out,
+          out_size
+        ) == 0) {
       ArkshValue *temp_values;
 
       result = (ArkshValue *) allocate_temp_buffer(1, sizeof(*result), "each() result", out, out_size);
@@ -3369,7 +3638,7 @@ static int apply_each_stage(ArkshShell *shell, ArkshValue *value, const ArkshPip
     out[0] = '\0';
   }
 
-  if (parse_each_selector(stage->raw_args, &selector, out, out_size) != 0) {
+  if (parse_each_selector(stage->argc == 1 ? stage->raw_argv[0] : stage->raw_args, &selector, out, out_size) != 0) {
     return 1;
   }
 
@@ -3450,7 +3719,14 @@ static int apply_map_stage(ArkshShell *shell, ArkshValue *value, const ArkshPipe
     return 1;
   }
 
-  if (resolve_stage_block_argument(shell, stage->raw_args, &block, out, out_size) != 0) {
+  if (resolve_stage_block_argument_parsed(
+        shell,
+        stage->argc >= 1 ? &stage->parsed_args[0] : NULL,
+        stage->argc >= 1 ? stage->raw_argv[0] : stage->raw_args,
+        &block,
+        out,
+        out_size
+      ) != 0) {
     snprintf(out, out_size, "map() expects a block: map([:it | ...])");
     return 1;
   }
@@ -3544,7 +3820,14 @@ static int apply_flat_map_stage(ArkshShell *shell, ArkshValue *value, const Arks
     return 1;
   }
 
-  if (resolve_stage_block_argument(shell, stage->raw_args, &block, out, out_size) != 0) {
+  if (resolve_stage_block_argument_parsed(
+        shell,
+        stage->argc >= 1 ? &stage->parsed_args[0] : NULL,
+        stage->argc >= 1 ? stage->raw_argv[0] : stage->raw_args,
+        &block,
+        out,
+        out_size
+      ) != 0) {
     snprintf(out, out_size, "flat_map() expects a block: flat_map([:it | ...])");
     return 1;
   }
@@ -3655,12 +3938,21 @@ static int apply_group_by_stage(ArkshShell *shell, ArkshValue *value, const Arks
     return 1;
   }
 
-  if (resolve_stage_block_argument(shell, stage->raw_args, &block, out, out_size) == 0) {
+  if (resolve_stage_block_argument_parsed(
+        shell,
+        stage->argc >= 1 ? &stage->parsed_args[0] : NULL,
+        stage->argc >= 1 ? stage->raw_argv[0] : stage->raw_args,
+        &block,
+        out,
+        out_size
+      ) == 0) {
     use_block = 1;
     out[0] = '\0';
   } else {
     out[0] = '\0';
-    if (sscanf(stage->raw_args, "%127s", property) != 1 || property[0] == '\0') {
+    if ((stage->argc >= 1 && snprintf(property, sizeof(property), "%s", stage->argv[0]) >= (int) sizeof(property)) ||
+        (stage->argc == 0 && sscanf(stage->raw_args, "%127s", property) != 1) ||
+        property[0] == '\0') {
       snprintf(out, out_size, "group_by() expects a property name or block");
       return 1;
     }

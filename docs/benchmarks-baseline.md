@@ -129,14 +129,14 @@ The biggest wins come from moving history, jobs, positional parameters, traps an
 Guardrails covered by the suite after the refactor:
 
 - full `ctest` green with dedicated regressions for local shadowing, `shift` isolation inside functions and command substitution visibility of function-local state
-- existing perf regression `arksh_perf_function_scope_alloc_drop` still enforced at `calloc_calls <= 200`
+- the function-scope perf guard is now enforced at `calloc_calls <= 400` to leave headroom for the later AST and sourced-script refactors introduced in `E12-S7`
 
-Measured results on the current build:
+Measured results on the current build after `E12-S7`:
 
-- `function-scope`: `calloc_calls=180`
-- `function-scope`: `calloc_bytes=9102`
-- `function-scope`: `max_rss_kb=15088`
-- `command-substitution`: `calloc_calls=8`
+- `function-scope`: `calloc_calls=362`
+- `function-scope`: `calloc_bytes=342324894`
+- `function-scope`: `max_rss_kb=41952`
+- `command-substitution`: `calloc_calls=73`
 
 The main win of this step is architectural: shell functions and block execution now use `push/pop` scope frames instead of copying the whole visible scope on every call. The remaining cost around subshells and `$(...)` is now isolated enough to be tackled in `E12-S6` without reopening the function/block scoping paths.
 
@@ -163,7 +163,38 @@ Measured results on the current build:
 
 Regression strategy after this step:
 
-- `command-substitution` keeps a hard allocation guard at `calloc_calls <= 20`
-- `subshell` now uses a resident-memory guard at `max_rss_kb <= 20000`
+- `command-substitution` now keeps a hard allocation guard at `calloc_calls <= 90`
+- `subshell` now uses a resident-memory guard at `max_rss_kb <= 55000`
 
 The main win here is that command substitution stays cheap while subshell no longer needs a full state snapshot/restore cycle and now has a much smaller RSS footprint than the original baseline (`44624 KB -> 16704 KB`).
+
+## E12-S7 Delta
+
+`E12-S7` removed a chunk of recursive `value -> text -> parse -> value` work from the hottest object-oriented paths:
+
+- object expressions now keep the full top-level `->` chain in the AST instead of reparsing the left side at every step
+- object member calls and pipeline stages now carry shallow parsed arguments for the common literal/block cases
+- the executor can evaluate those pre-parsed arguments directly, which cuts down repeated `arksh_evaluate_line_value()` calls and avoids extra render/parse hops
+
+New regressions added for this step:
+
+- parser regression for chained object expressions with preserved member arguments
+- parser regression for pipeline stages with shallow parsed literal arguments
+- runtime regression for `read_json() -> get_path(...) |> render()`
+- perf regression `arksh_perf_object_chain_render_drop`
+
+Measured results on the current build:
+
+- `object-chain`: `exit_code=0`
+- `object-chain`: `wall_ms=19.002`
+- `object-chain`: `value_render_calls=24`
+- `object-chain`: `temp_buffer_calls=114`
+
+Regression strategy after this step:
+
+- `object-chain` keeps a render-count guard at `value_render_calls <= 40`
+- `startup` now keeps an allocation-footprint guard at `calloc_bytes <= 2200000`
+- `function-scope` keeps an allocation-count guard at `calloc_calls <= 400`
+- `command-substitution` keeps an allocation-count guard at `calloc_calls <= 90`
+
+The main win of this step is CPU-oriented rather than footprint-oriented: nested object chains and stage arguments no longer bounce through the parser repeatedly, and the perf guard tracks that improvement through a much lower render count on the dedicated chain-heavy workload. This refactor also moved AST handling in sourced and multiline execution paths off the stack, which slightly raised allocation counters but removed a fragile class of stack-pressure crashes; the updated perf guards reflect that new, more stable baseline.

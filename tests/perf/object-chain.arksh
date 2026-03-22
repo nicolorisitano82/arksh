@@ -1,0 +1,8 @@
+perf reset
+
+for round in list(1, 2, 3, 4, 5, 6, 7, 8)
+do
+let names = list(tests/fixtures/json/nested.json -> read_json() -> get_path("name"), tests/fixtures/json/nested.json -> read_json() -> get_path("name"), tests/fixtures/json/nested.json -> read_json() -> get_path("name")) |> join(",")
+done
+
+perf show

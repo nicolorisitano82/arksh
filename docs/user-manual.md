@@ -134,6 +134,8 @@ ARKSH_PERF=1 ./build/arksh -c '. -> children() |> where(type == "file") |> sort(
 
 Repeatable benchmark workloads live in `tests/perf/`, and the `arksh_perf` CMake target runs the bundle.
 
+The bundle also includes `tests/perf/object-chain.arksh`, which focuses on nested `->` chains and chained object calls.
+
 The initial baseline is documented in [benchmarks-baseline.md](benchmarks-baseline.md).
 
 ## 4. Core Syntax
@@ -152,7 +154,10 @@ Examples:
 ```text
 . -> type
 README.md -> read_text(64)
+tests/fixtures/json/nested.json -> read_json() -> get_path("a[2].b")
 ```
+
+Top-level `->` chains are parsed as one structured expression, so nested calls like `file -> read_json() -> get_path(...)` do not need an intermediate `let` just to stay efficient.
 
 ### 4.2 Value constructors
 
@@ -225,6 +230,7 @@ Examples:
 list(1, 20, 3) |> sort(value desc)
 text(" a, b , c ") |> trim() |> split(",") |> join(" | ")
 list(1, 2, 3) |> reduce(number(0), [:acc :n | acc + n])
+tests/fixtures/json/nested.json -> read_json() -> get_path("a[2].b") |> render()
 ```
 
 Common stages:
@@ -562,6 +568,14 @@ let data = data.json -> read_json()
 data -> set_path("meta.version", number(2))
 list(map("profile", map("name", "alpha")), map("profile", map("name", "beta"))) |> pluck("profile.name")
 ```
+
+Direct chaining is the preferred form when you only need a one-off query:
+
+```text
+data.json -> read_json() -> get_path("meta.version")
+```
+
+Use an intermediate `let` only when you want to reuse the parsed JSON value multiple times in the same script.
 
 Useful query and transform helpers:
 

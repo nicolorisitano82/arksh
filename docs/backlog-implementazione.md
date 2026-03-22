@@ -1057,12 +1057,12 @@ Stato story: `[x]`
 
 ### E12-S7. Riduzione di parse/render ricorsivi
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E12-S7-T1` estendere l'AST per rappresentare meglio le chain `->` e i selector annidati senza ripassare da stringhe
-- `[ ]` `E12-S7-T2` far sì che stage e member call ricevano argomenti gia parse-ati quando possibile
-- `[ ]` `E12-S7-T3` ridurre i passaggi `value -> text -> parse -> value` nei path caldi dell'executor
-- `[ ]` `E12-S7-T4` aggiungere regressioni specifiche sulle forme annidate e benchmark sul calo di CPU
+- `[x]` `E12-S7-T1` estendere l'AST per rappresentare meglio le chain `->` e i selector annidati senza ripassare da stringhe
+- `[x]` `E12-S7-T2` far sì che stage e member call ricevano argomenti gia parse-ati quando possibile
+- `[x]` `E12-S7-T3` ridurre i passaggi `value -> text -> parse -> value` nei path caldi dell'executor
+- `[x]` `E12-S7-T4` aggiungere regressioni specifiche sulle forme annidate e benchmark sul calo di CPU
 
 ### E12-S8. Ottimizzazioni mirate e indicizzazione
 
@@ -1079,7 +1079,7 @@ Stato story: `[ ]`
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`
 **In corso:** nessuna
-**Aperte:** E9 (release), E10 (HTTP plugin), E11 (POSIX core), E12 (performance e footprint)
+**Aperte:** E9 (release), E10 (HTTP plugin), E11 (POSIX core), E12 (performance e footprint: resta `E12-S8`)
 
 > **Completati in E6:** S1 (path/fs), S2 (custom types), S3 (pipeline stages), S4 (shell integration), S5 (numeric types), S6 (Dict), S7 (base64), S8 (Matrix), S9 (trash plugin), S10 (plugin autoload). E6 chiusa.
 > **Extra:** esecuzione diretta di script `arksh file.arksh [args]` aggiunta a `main.c`.
@@ -1196,6 +1196,8 @@ Note: `E11-S7` prima di `E11-S5` perché l'introduzione dello stack di frame var
 ### Percorso P — performance e footprint (E12)
 
 Nuova epoca dedicata a CPU, allocazioni e memoria residente, derivata da [docs/studio-cpu-memoria.md](/Users/nicolo/Desktop/oosh/docs/studio-cpu-memoria.md).
+
+Stato corrente: `E12-S1` .. `E12-S7` completate, resta aperta solo `E12-S8`.
 
 Ordine consigliato:
 

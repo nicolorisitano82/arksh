@@ -134,6 +134,8 @@ ARKSH_PERF=1 ./build/arksh -c '. -> children() |> where(type == "file") |> sort(
 
 I workload benchmark ripetibili vivono in `tests/perf/`, e il target CMake `arksh_perf` li esegue in sequenza.
 
+Nel bundle c'è anche `tests/perf/object-chain.arksh`, dedicato alle chain annidate con `->` e alle chiamate oggetto concatenate.
+
 La baseline iniziale è documentata in [benchmarks-baseline.md](benchmarks-baseline.md).
 
 ## 4. Sintassi di base
@@ -152,7 +154,10 @@ Esempi:
 ```text
 . -> type
 README.md -> read_text(64)
+tests/fixtures/json/nested.json -> read_json() -> get_path("a[2].b")
 ```
+
+Le chain top-level con `->` vengono parse-ate come un'unica espressione strutturata, quindi forme come `file -> read_json() -> get_path(...)` non richiedono un `let` intermedio per restare efficienti.
 
 ### 4.2 Costruttori di valore
 
@@ -225,6 +230,7 @@ Esempi:
 list(1, 20, 3) |> sort(value desc)
 text(" a, b , c ") |> trim() |> split(",") |> join(" | ")
 list(1, 2, 3) |> reduce(number(0), [:acc :n | acc + n])
+tests/fixtures/json/nested.json -> read_json() -> get_path("a[2].b") |> render()
 ```
 
 Stage comuni:
@@ -562,6 +568,14 @@ let data = data.json -> read_json()
 data -> set_path("meta.version", number(2))
 list(map("profile", map("name", "alpha")), map("profile", map("name", "beta"))) |> pluck("profile.name")
 ```
+
+La forma diretta e quella consigliata quando serve una query una tantum:
+
+```text
+data.json -> read_json() -> get_path("meta.version")
+```
+
+Usa `let` intermedio solo se vuoi riutilizzare piu volte il valore JSON gia parse-ato nello stesso script.
 
 Query e trasformazioni utili:
 

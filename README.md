@@ -11,6 +11,8 @@ README.md -> read_text(256)
 . -> children() |> where(type == "file") |> sort(size desc)
 ```
 
+Nested member chains are first-class syntax, so direct forms like `data.json -> read_json() -> get_path("a[2].b")` are parsed once and executed without bouncing back through string reparsing at each `->` step.
+
 ## Implemented Features
 
 - Interactive REPL and `-c` command mode
@@ -105,6 +107,8 @@ Repeatable benchmark workloads live under `tests/perf/`, and the CMake target be
 ```bash
 cmake --build build --target arksh_perf
 ```
+
+The bundle includes an `object-chain` workload dedicated to nested `->` chains and stage-heavy object expressions, which is the main regression target added in `E12-S7`.
 
 The initial measured baseline is documented in [docs/benchmarks-baseline.md](docs/benchmarks-baseline.md).
 

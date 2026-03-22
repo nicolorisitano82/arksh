@@ -27,9 +27,9 @@ method rename = [:self :next | self -> set("name", next)]
 endclass
 classes Named
 functions greet
-eval "text(\"hi\") -> print()"
+eval 'text("hi") -> print()'
 wait %1
-trap "text(\"bye\") -> print()" EXIT
+trap 'text("bye") -> print()' EXIT
 extend directory property child_count = [:it | it -> children() |> count()]
 extend object method label = [:it :prefix | prefix]
 extend
@@ -67,8 +67,15 @@ plugin autoload list
 README.md -> read_text(128)
 README.md -> parent()
 . -> describe()
+data.json -> read_json() -> get_path("a[2].b")
 obj(".").type
 ```
+
+Note pratiche:
+
+- le chain top-level con `->` vengono parse-ate come una sola object expression strutturata
+- il receiver puo essere a sua volta il risultato di una chain precedente, senza passare da un `let` intermedio
+- l'executor puo quindi evitare round-trip ripetuti `value -> text -> parse -> value` sui member successivi
 
 ### 1.3 Pipeline oggetti supportata
 
@@ -227,6 +234,7 @@ Regole pratiche:
 - `return [value-expression]` chiude la funzione corrente e, se presente, restituisce il valore come output
 - al termine di una funzione, `vars` e `bindings` vengono ripristinati allo stato esterno
 - `eval "..."` riesegue la stringa nel contesto shell corrente
+- per `eval` e `trap`, la forma piu robusta sulla singola riga resta quella con apici singoli attorno al comando completo
 - `exec cmd ...` esegue il comando e poi termina la shell corrente
 - `wait [%job]` aspetta la fine di un background job
 - `trap "comando" EXIT` registra un trap minimo eseguito all'uscita della shell

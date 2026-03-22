@@ -378,7 +378,7 @@ static int parse_error_is_unterminated_heredoc(const char *error) {
 }
 
 static int command_requires_more_input(const char *text, char *error, size_t error_size) {
-  ArkshAst ast;
+  ArkshAst *ast;
   char parse_error[ARKSH_MAX_OUTPUT];
   char trimmed[ARKSH_MAX_LINE];
   int has_newline;
@@ -405,12 +405,21 @@ static int command_requires_more_input(const char *text, char *error, size_t err
     }
   }
 
+  ast = (ArkshAst *) calloc(1, sizeof(*ast));
+  if (ast == NULL) {
+    copy_string(error, error_size, "unable to allocate parser state");
+    return -1;
+  }
+  arksh_ast_init(ast);
+
   parse_error[0] = '\0';
-  if (arksh_parse_line(text, &ast, parse_error, sizeof(parse_error)) == 0) {
+  if (arksh_parse_line(text, ast, parse_error, sizeof(parse_error)) == 0) {
+    free(ast);
     error[0] = '\0';
     return 0;
   }
 
+  free(ast);
   copy_string(error, error_size, parse_error);
   return parse_error_is_incomplete_compound(parse_error) ? 1 : -1;
 }
@@ -11556,7 +11565,7 @@ int arksh_shell_load_config(ArkshShell *shell, const char *path, char *out, size
 }
 
 int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, size_t out_size) {
-  ArkshAst ast;
+  ArkshAst *ast;
   char expanded_line[ARKSH_MAX_LINE];
   char parse_error[ARKSH_MAX_OUTPUT];
   int status;
@@ -11566,6 +11575,7 @@ int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, siz
   }
 
   out[0] = '\0';
+  ast = NULL;
 
   if (is_blank_or_comment_line(line)) {
     shell->last_status = 0;
@@ -11618,13 +11628,23 @@ int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, siz
     }
   }
 
-  if (arksh_parse_line(expanded_line, &ast, parse_error, sizeof(parse_error)) != 0) {
+  ast = (ArkshAst *) calloc(1, sizeof(*ast));
+  if (ast == NULL) {
+    snprintf(out, out_size, "unable to allocate parser state");
+    shell->last_status = 1;
+    return 1;
+  }
+  arksh_ast_init(ast);
+
+  if (arksh_parse_line(expanded_line, ast, parse_error, sizeof(parse_error)) != 0) {
+    free(ast);
     snprintf(out, out_size, "%s", parse_error[0] == '\0' ? "parse error" : parse_error);
     shell->last_status = 1;
     return 1;
   }
 
-  status = arksh_execute_ast(shell, &ast, out, out_size);
+  status = arksh_execute_ast(shell, ast, out, out_size);
+  free(ast);
   shell->last_status = status;
 
   /* E1-S6-T1: fire any pending async signal traps. */

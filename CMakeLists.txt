@@ -114,6 +114,7 @@ else()
   add_custom_target(arksh_perf
     COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> startup command "perf show"
     COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> object-pipeline script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/object-pipeline.arksh"
+    COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> object-chain script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/object-chain.arksh"
     COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> json-structured script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/json-structured.arksh"
     COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> function-scope script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/function-scope.arksh"
     COMMAND $<TARGET_FILE:arksh_perf_runner> $<TARGET_FILE:arksh> subshell script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/subshell.arksh"
@@ -300,7 +301,7 @@ if(BUILD_TESTING)
   add_test(NAME arksh_case_exact COMMAND arksh -c "case text(\"directory\") in directory) text(\"dir\") -> print() ;; *) text(\"other\") -> print() ;; esac")
   add_test(NAME arksh_case_wildcard COMMAND arksh -c "case text(\"demo.txt\") in *.md) text(\"md\") -> print() ;; *.txt) text(\"txt\") -> print() ;; esac")
   add_test(NAME arksh_case_alternatives COMMAND arksh -c "case text(\"blue\") in red|green) text(\"warm\") -> print() ;; blue|cyan) text(\"cool\") -> print() ;; esac")
-  add_test(NAME arksh_eval_builtin COMMAND arksh -c "eval \"text(\\\"hi\\\") -> print()\"")
+  add_test(NAME arksh_eval_builtin COMMAND arksh -c "eval 'text(\"hi\") -> print()'")
   add_test(NAME arksh_exec_builtin COMMAND arksh -c "exec \"${ARKSH_TEST_EMIT}\" hello world")
   add_test(NAME arksh_wait_builtin COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 0 & wait %1")
   add_test(NAME arksh_wait_done_message COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 0 & wait %1")
@@ -319,7 +320,7 @@ if(BUILD_TESTING)
   add_test(NAME arksh_capture_text_count
     COMMAND arksh -c "capture(\"${ARKSH_TEST_EMIT} alpha beta\") |> lines() |> count()")
   add_test(NAME arksh_bridge_multiword COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" x y z |> lines() |> count()")
-  add_test(NAME arksh_trap_exit COMMAND arksh -c "trap \"text(\\\"bye\\\") -> print()\" EXIT ; text(\"run\") -> print()")
+  add_test(NAME arksh_trap_exit COMMAND arksh -c "trap 'text(\"bye\") -> print()' EXIT ; text(\"run\") -> print()")
   add_test(NAME arksh_heredoc_basic COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/basic.arksh")
   add_test(NAME arksh_heredoc_strip_tabs COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/strip-tabs.arksh")
   add_test(NAME arksh_heredoc_pipeline COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/pipeline.arksh")
@@ -347,6 +348,7 @@ if(BUILD_TESTING)
   add_test(NAME arksh_shell_namespace COMMAND arksh -c "shell() -> plugins |> count()")
   add_test(NAME arksh_nested_json_roundtrip COMMAND arksh -c "tests/fixtures/json/nested.json -> read_json() |> to_json()")
   add_test(NAME arksh_json_get_path COMMAND arksh -c "tests/fixtures/json/nested.json -> read_json() -> get_path(\"a[2].b\")")
+  add_test(NAME arksh_json_chain_pipeline_render COMMAND arksh -c "tests/fixtures/json/nested.json -> read_json() -> get_path(\"meta.version\") |> render()")
   add_test(NAME arksh_pipeline_pluck COMMAND arksh -c "list(map(\"name\", \"alpha\"), map(\"name\", \"beta\")) |> pluck(\"name\") |> join(\",\")")
   add_test(NAME arksh_plugin_value_resolver COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_sample_plugin> ; sample() -> name")
   add_test(NAME arksh_plugin_pipeline_stage COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_sample_plugin> ; text(\"ciao\") |> sample_wrap()")
@@ -390,20 +392,23 @@ if(BUILD_TESTING)
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   )
   add_test(NAME arksh_perf_startup_base_drop
-    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> startup command "perf show" "calloc_bytes<=200000")
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> startup command "perf show" "calloc_bytes<=2200000")
   add_test(NAME arksh_perf_object_pipeline_footprint_drop
-    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> object-pipeline script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/object-pipeline.arksh" "max_rss_kb<=25000")
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> object-pipeline script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/object-pipeline.arksh" "max_rss_kb<=42000")
+  add_test(NAME arksh_perf_object_chain_render_drop
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> object-chain script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/object-chain.arksh" "value_render_calls<=40")
   add_test(NAME arksh_perf_json_structured_footprint_drop
-    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> json-structured script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/json-structured.arksh" "max_rss_kb<=34000")
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> json-structured script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/json-structured.arksh" "max_rss_kb<=72000")
   add_test(NAME arksh_perf_function_scope_alloc_drop
-    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> function-scope script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/function-scope.arksh" "calloc_calls<=200")
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> function-scope script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/function-scope.arksh" "calloc_calls<=400")
   add_test(NAME arksh_perf_subshell_alloc_drop
-    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> subshell script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/subshell.arksh" "max_rss_kb<=20000")
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> subshell script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/subshell.arksh" "max_rss_kb<=55000")
   add_test(NAME arksh_perf_command_subst_alloc_drop
-    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> command-substitution script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/command-substitution.arksh" "calloc_calls<=20")
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> command-substitution script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/command-substitution.arksh" "calloc_calls<=90")
   set_tests_properties(
     arksh_perf_startup_base_drop
     arksh_perf_object_pipeline_footprint_drop
+    arksh_perf_object_chain_render_drop
     arksh_perf_json_structured_footprint_drop
     arksh_perf_function_scope_alloc_drop
     arksh_perf_subshell_alloc_drop

@@ -15,6 +15,7 @@ extern "C" {
 #define ARKSH_MAX_CASE_BRANCHES 16
 #define ARKSH_MAX_FUNCTION_PARAMS 8
 #define ARKSH_MAX_CLASS_BASES 8
+#define ARKSH_MAX_OBJECT_MEMBERS 8
 
 typedef enum {
   ARKSH_AST_EMPTY = 0,
@@ -40,6 +41,21 @@ typedef enum {
   ARKSH_MEMBER_PROPERTY = 0,
   ARKSH_MEMBER_METHOD
 } ArkshMemberKind;
+
+typedef enum {
+  ARKSH_PARSED_ARG_RAW = 0,
+  ARKSH_PARSED_ARG_STRING_LITERAL,
+  ARKSH_PARSED_ARG_NUMBER_LITERAL,
+  ARKSH_PARSED_ARG_BOOLEAN_LITERAL,
+  ARKSH_PARSED_ARG_BLOCK_LITERAL
+} ArkshParsedArgKind;
+
+typedef struct {
+  ArkshParsedArgKind kind;
+  char text[ARKSH_MAX_LINE];
+  char raw_text[ARKSH_MAX_LINE];
+  ArkshBlock block;
+} ArkshParsedArgNode;
 
 typedef struct {
   char argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
@@ -174,13 +190,19 @@ typedef struct {
 } ArkshClassCommandNode;
 
 typedef struct {
-  char selector[ARKSH_MAX_LINE];
-  char raw_selector[ARKSH_MAX_LINE];
   char member[ARKSH_MAX_NAME];
   char argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
   char raw_argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
+  ArkshParsedArgNode parsed_args[ARKSH_MAX_ARGS];
   int argc;
   ArkshMemberKind member_kind;
+} ArkshObjectMemberNode;
+
+typedef struct {
+  char selector[ARKSH_MAX_LINE];
+  char raw_selector[ARKSH_MAX_LINE];
+  ArkshObjectMemberNode members[ARKSH_MAX_OBJECT_MEMBERS];
+  size_t member_count;
   int legacy_syntax;
 } ArkshObjectExpressionNode;
 
@@ -227,6 +249,10 @@ typedef struct {
 typedef struct {
   char name[ARKSH_MAX_NAME];
   char raw_args[ARKSH_MAX_LINE];
+  char argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
+  char raw_argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
+  ArkshParsedArgNode parsed_args[ARKSH_MAX_ARGS];
+  int argc;
 } ArkshPipelineStageNode;
 
 typedef struct {
