@@ -6162,16 +6162,28 @@ static int execute_command_list(ArkshShell *shell, const ArkshCommandListNode *l
 
   for (i = 0; i < list->count; ++i) {
     char segment_output[ARKSH_MAX_OUTPUT];
+    int suppress_errexit;
 
     if (!should_run_list_entry(list->entries[i].condition, previous_status)) {
       continue;
     }
 
     segment_output[0] = '\0';
+    suppress_errexit = 0;
+    if (i + 1u < list->count) {
+      suppress_errexit = list->entries[i + 1u].condition == ARKSH_LIST_CONDITION_ON_SUCCESS ||
+                         list->entries[i + 1u].condition == ARKSH_LIST_CONDITION_ON_FAILURE;
+    }
+    if (suppress_errexit) {
+      shell->errexit_suppressed++;
+    }
     if (list->entries[i].run_in_background) {
       previous_status = arksh_shell_start_background_job(shell, list->entries[i].text, segment_output, sizeof(segment_output));
     } else {
       previous_status = arksh_shell_execute_line(shell, list->entries[i].text, segment_output, sizeof(segment_output));
+    }
+    if (suppress_errexit && shell->errexit_suppressed > 0) {
+      shell->errexit_suppressed--;
     }
 
     if (append_output_segment(out, out_size, segment_output) != 0) {

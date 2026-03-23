@@ -1162,6 +1162,14 @@ if(BUILD_TESTING)
     COMMAND arksh -c "set -e; /usr/bin/false; echo after"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_set_errexit_or_lhs
+    COMMAND arksh -c "set -e; /usr/bin/false || echo ok"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_set_errexit_and_or_chain
+    COMMAND arksh -c "set -e; /usr/bin/true && /usr/bin/false || echo recovered; echo after"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   add_test(NAME arksh_set_nounset
     COMMAND arksh -c "set -u; echo \${UNSET_VAR_12345:-ok}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -1219,8 +1227,9 @@ if(BUILD_TESTING)
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
   set_tests_properties(
-    arksh_trap_posix_all arksh_trap_err arksh_set_errexit arksh_set_nounset
-    arksh_ps4_default arksh_set_plus_e arksh_xtrace_uses_ps4
+    arksh_trap_posix_all arksh_trap_err arksh_set_errexit
+    arksh_set_errexit_or_lhs arksh_set_errexit_and_or_chain
+    arksh_set_nounset arksh_ps4_default arksh_set_plus_e arksh_xtrace_uses_ps4
     arksh_printf_basic arksh_param_subst_single arksh_param_subst_global
     arksh_test_builtin_string arksh_test_bracket_numeric
     arksh_double_bracket_glob arksh_double_bracket_regex
@@ -1231,6 +1240,8 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_trap_posix_all    PROPERTIES PASS_REGULAR_EXPRESSION "TERM")
   set_tests_properties(arksh_trap_err          PROPERTIES PASS_REGULAR_EXPRESSION "err")
   set_tests_properties(arksh_set_errexit       PROPERTIES WILL_FAIL TRUE)
+  set_tests_properties(arksh_set_errexit_or_lhs PROPERTIES PASS_REGULAR_EXPRESSION "ok")
+  set_tests_properties(arksh_set_errexit_and_or_chain PROPERTIES PASS_REGULAR_EXPRESSION "recovered[\r\n]+after")
   set_tests_properties(arksh_set_nounset       PROPERTIES PASS_REGULAR_EXPRESSION "ok")
   set_tests_properties(arksh_ps4_default       PROPERTIES PASS_REGULAR_EXPRESSION "\\+ ")
   set_tests_properties(arksh_set_plus_e        PROPERTIES PASS_REGULAR_EXPRESSION "after")

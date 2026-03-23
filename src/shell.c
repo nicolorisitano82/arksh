@@ -13172,7 +13172,10 @@ int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, siz
   fire_pending_traps(shell, out, out_size);
 
   /* E1-S6-T2: ERR trap and errexit — fire only when not in a condition. */
-  if (status != 0 && shell->in_condition == 0 && !shell->running_exit_trap) {
+  if (status != 0 &&
+      shell->in_condition == 0 &&
+      shell->errexit_suppressed == 0 &&
+      !shell->running_exit_trap) {
     if (shell->traps[ARKSH_TRAP_ERR].active && shell->traps[ARKSH_TRAP_ERR].command[0] != '\0') {
       char err_out[ARKSH_MAX_OUTPUT];
       err_out[0] = '\0';

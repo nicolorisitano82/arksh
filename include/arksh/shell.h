@@ -348,6 +348,7 @@ typedef struct ArkshShell {
   int opt_xtrace;    /* -x: print commands before execution */
   int opt_pipefail;  /* -o pipefail: pipeline fails if any stage fails */
   int in_condition;  /* true while evaluating if/while/until condition */
+  int errexit_suppressed; /* >0 while failures must not trigger ERR trap / errexit */
   char (*positional_params)[ARKSH_MAX_VAR_VALUE];
   int positional_count;
   size_t positional_capacity;
