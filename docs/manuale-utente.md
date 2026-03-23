@@ -266,7 +266,11 @@ Le pipeline shell usano `|` e lavorano su stream di testo:
 ls -1 | wc -l
 cat < README.md | wc -l
 ls missing 2>&1 | wc -l
+./arksh_test_echo_stdin <<< "hello"
+read line <<< "$HOME"
 ```
+
+`<<<` e una here-string: espande l'argomento, aggiunge un newline finale e lo passa allo `stdin` del comando. E utile sia con comandi esterni sia con built-in che leggono da input, come `read`.
 
 Per condizioni shell estese puoi usare anche `[[ ... ]]`:
 

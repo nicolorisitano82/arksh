@@ -266,7 +266,11 @@ Shell pipelines use `|` and operate on text streams:
 ls -1 | wc -l
 cat < README.md | wc -l
 ls missing 2>&1 | wc -l
+./arksh_test_echo_stdin <<< "hello"
+read line <<< "$HOME"
 ```
+
+`<<<` is a here-string: it expands the argument, appends a trailing newline, and feeds the result to the target command's `stdin`. It works with both external commands and built-ins that read from input, such as `read`.
 
 For extended shell conditionals you can also use `[[ ... ]]`:
 

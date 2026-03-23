@@ -11,10 +11,10 @@ Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostitu
 | Requisito | Stato in arksh |
 |-----------|----------------|
 | Shebang `#!/usr/bin/env arksh` funzionante end-to-end | Parziale — esiste `-c`, ma il comportamento con shebang non è verificato su tutti i target |
-| `set -e` (errexit) | Non implementato |
-| `set -u` (nounset) | Non implementato |
-| `set -o pipefail` | Non implementato |
-| `set -x` (xtrace) | Non implementato |
+| `set -e` (errexit) | Implementato |
+| `set -u` (nounset) | Implementato |
+| `set -o pipefail` | Implementato |
+| `set -x` (xtrace) | Implementato |
 | Aritmetica `$(( ))` | Non implementata |
 | Sostituzione di processo `<(cmd)` / `>(cmd)` | Non implementata |
 | `getopts` | Implementato (flusso POSIX base, `OPTIND`/`OPTARG`, cluster opzioni) |
@@ -22,12 +22,12 @@ Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostitu
 | `umask` | Implementato su POSIX, stub su Windows |
 | `read` con `-r`, `-p`, timeout | Parziale |
 | `printf` completo (tutti i formati POSIX) | Parziale |
-| Here-string `<<<` | Non implementata |
-| Doppio bracket `[[ ]]` | Non implementato |
+| Here-string `<<<` | Implementata |
+| Doppio bracket `[[ ]]` | Implementato |
 | Test `-f`, `-d`, `-x`, `-z`, `-n`, … | Parziale — disponibile via `[ ]` built-in, non esaustivo |
 | Funzioni con `local` scope | Parziale |
-| Subshell esplicite `( cmd )` | Non implementate |
-| Gruppi di comandi `{ cmd; }` | Non implementati |
+| Subshell esplicite `( cmd )` | Implementate |
+| Gruppi di comandi `{ cmd; }` | Implementati |
 | `exec` con redirection (`exec >file`) | Non implementato |
 | `$LINENO`, `$FUNCNAME`, `$BASH_SOURCE` | Non implementati |
 | Array associativi POSIX-compatible | Non implementati |
