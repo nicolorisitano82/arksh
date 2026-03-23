@@ -957,12 +957,12 @@ Stato story: `[ ]`
 
 ### E11-S6. `getopts`, `ulimit`, `umask`
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E11-S6-T1` **`getopts optstring name [args]`** — implementare secondo POSIX; gestire `OPTIND` (reset con `OPTIND=1`), `OPTARG`, `:` nella optstring per argomenti obbligatori mancanti (silenzioso vs. errore); restituire exit status 1 quando gli argomenti sono esauriti.
-- `[ ]` `E11-S6-T2` **`ulimit`** — su POSIX usare `getrlimit`/`setrlimit` per leggere e impostare i limiti di risorsa; flag `-a` stampa tutti i limiti correnti; flag `-c`, `-d`, `-f`, `-l`, `-m`, `-n`, `-s`, `-t`, `-u`, `-v` per risorse specifiche; `-S`/`-H` per soft/hard limit; su Windows implementare come stub che stampa `ulimit: not supported on this platform`.
-- `[ ]` `E11-S6-T3` **`umask [mode]`** — senza argomento stampa la maschera corrente in ottale (es. `022`); con argomento ottale o simbolico imposta la maschera via `umask(2)`; su Windows stub.
-- `[ ]` `E11-S6-T4` **Test** — golden script: `getopts` con loop standard; `umask` legge e imposta; `ulimit -n` stampa un numero.
+- `[x]` `E11-S6-T1` **`getopts optstring name [args]`** — implementato il flusso POSIX base con cluster di opzioni (`-abvalue`), `OPTIND`, `OPTARG`, reset con `OPTIND=1`, modalità silenziosa con optstring che inizia con `:` e stato `1` a fine opzioni.
+- `[x]` `E11-S6-T2` **`ulimit`** — su POSIX usa `getrlimit`/`setrlimit`; supporta `-a`, `-c`, `-d`, `-f`, `-l`, `-m`, `-n`, `-s`, `-t`, `-u`, `-v` e `-S`/`-H`; su Windows resta stub con messaggio esplicito.
+- `[x]` `E11-S6-T3` **`umask [mode]`** — implementato output ottale senza argomenti e set via modalità ottale o simbolica (`u=...`, `g=...`, `o=...`, con clausole separate da virgola); su Windows resta stub.
+- `[x]` `E11-S6-T4` **Test** — aggiunti CTest per loop `getopts`, `umask` read/set ottale/simbolico e `ulimit -n`.
 
 ### E11-S7. `local` nelle funzioni
 
@@ -1086,10 +1086,9 @@ Stato story: `[x]`
 Questa è la priorità più alta se l'obiettivo resta usare `arksh` come shell di sistema.
 Le parti più chiaramente mancanti oggi sono:
 
-1. `E11-S6` — completare `getopts`, aggiungere `ulimit` e `umask`
-2. `E11-S8` — here-string `<<<`
-3. `E11-S9` — sostituzione di processo `<()` / `>()`
-4. `E11-S3` — chiudere i primari POSIX mancanti di `[ ]`
+1. `E11-S8` — here-string `<<<`
+2. `E11-S9` — sostituzione di processo `<()` / `>()`
+3. `E11-S3` — chiudere i primari POSIX mancanti di `[ ]`
 
 Nota operativa:
 
@@ -1113,16 +1112,15 @@ Dopo il POSIX core, il valore più alto è chiudere packaging e release:
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E11-S6`
-2. `E11-S8`
-3. `E11-S9`
-4. `E11-S3`
-5. audit backlog su `E11-S1`, `E11-S2`, `E11-S5`, `E11-S7`
-6. `E9-S2`
-7. `E9-S3`
-8. `E9-S4`
-9. `E9-S5`
-10. `E10-S1`
+1. `E11-S8`
+2. `E11-S9`
+3. `E11-S3`
+4. audit backlog su `E11-S1`, `E11-S2`, `E11-S5`, `E11-S7`
+5. `E9-S2`
+6. `E9-S3`
+7. `E9-S4`
+8. `E9-S5`
+9. `E10-S1`
 
 ---
 

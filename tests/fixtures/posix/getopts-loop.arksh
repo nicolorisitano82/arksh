@@ -1,0 +1,25 @@
+OPTIND=1
+while getopts ":ab:" opt "-abvalue" "-x"
+do
+case "$opt" in
+a) text("A") -> print() ;;
+b) text("B=%s") -> print("$OPTARG") ;;
+:) text("M=%s") -> print("$OPTARG") ;;
+?) text("E=%s") -> print("$OPTARG") ;;
+esac
+done
+text("OPTIND=%s") -> print("$OPTIND")
+
+OPTIND=1
+while getopts ":b:" opt "-b"
+do
+case "$opt" in
+:) text("MISS=%s") -> print("$OPTARG") ;;
+esac
+done
+
+OPTIND=1
+while getopts "a" opt "-a"
+do
+text("RESET=%s") -> print("$opt")
+done

@@ -30,6 +30,11 @@ functions greet
 eval 'text("hi") -> print()'
 wait %1
 trap 'text("bye") -> print()' EXIT
+while getopts ":ab:" opt "-abvalue" "-x" ; do echo "$opt:$OPTARG" ; done
+umask
+umask 077
+umask "u=rwx,g=rx,o="
+ulimit -n
 extend directory property child_count = [:it | it -> children() |> count()]
 extend object method label = [:it :prefix | prefix]
 extend

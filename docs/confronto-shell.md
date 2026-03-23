@@ -108,7 +108,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 | `echo -e` / `-n`                       | Si     | Si     | Si     | Si      | Parziale | Si |
 | `readonly`                             | Si     | Si     | No     | Si      | Si     | Si |
 | `getopts` built-in                     | Si     | Si     | No     | No      | Si     | Si (POSIX base, `OPTIND`/`OPTARG`) |
-| `ulimit` / `umask`                     | Si     | Si     | No     | No      | Si     | No / da completare |
+| `ulimit` / `umask`                     | Si     | Si     | No     | No      | Si     | Si (POSIX su Unix, stub espliciti su Windows) |
 | `test` / `[` / `[[ ]]`                 | Si     | Si     | Si     | Si      | Si     | Parziale avanzato (`[[ ]]` con glob/regex, `[ ]` ancora da completare sui primari POSIX) |
 | `$((...))` arithmetic expansion        | Si     | Si     | `math` | Nativi  | Si     | Si |
 | Operatore ternario                     | No     | No     | No     | `if` inline | No | Si (`? :`) |

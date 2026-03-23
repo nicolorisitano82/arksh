@@ -17,9 +17,9 @@ Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostitu
 | `set -x` (xtrace) | Non implementato |
 | Aritmetica `$(( ))` | Non implementata |
 | Sostituzione di processo `<(cmd)` / `>(cmd)` | Non implementata |
-| `getopts` | Non implementato |
-| `ulimit` | Non implementato |
-| `umask` | Non implementato |
+| `getopts` | Implementato (flusso POSIX base, `OPTIND`/`OPTARG`, cluster opzioni) |
+| `ulimit` | Implementato su POSIX, stub su Windows |
+| `umask` | Implementato su POSIX, stub su Windows |
 | `read` con `-r`, `-p`, timeout | Parziale |
 | `printf` completo (tutti i formati POSIX) | Parziale |
 | Here-string `<<<` | Non implementata |

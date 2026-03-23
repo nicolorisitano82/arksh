@@ -11,6 +11,7 @@
 #include <fnmatch.h>
 #include <regex.h>
 #include <signal.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -10093,17 +10094,71 @@ static int command_printf(ArkshShell *shell, int argc, char **argv, char *out, s
 /* =========================================================================
    E1-S6-T6: getopts built-in
    ========================================================================= */
+static int getopts_current_optind(const ArkshShell *shell) {
+  const char *optind_str = arksh_shell_get_var(shell, "OPTIND");
+  int optind_val = (optind_str != NULL && optind_str[0] != '\0') ? atoi(optind_str) : 1;
+
+  return optind_val < 1 ? 1 : optind_val;
+}
+
+static int getopts_current_subindex(const ArkshShell *shell) {
+  const char *subindex_str = arksh_shell_get_var(shell, "__ARKSH_GETOPTS_SUBINDEX");
+  int subindex = (subindex_str != NULL && subindex_str[0] != '\0') ? atoi(subindex_str) : 1;
+
+  return subindex < 1 ? 1 : subindex;
+}
+
+static int getopts_current_last_optind(const ArkshShell *shell) {
+  const char *last_str = arksh_shell_get_var(shell, "__ARKSH_GETOPTS_LAST_OPTIND");
+  int last_optind = (last_str != NULL && last_str[0] != '\0') ? atoi(last_str) : 1;
+
+  return last_optind < 1 ? 1 : last_optind;
+}
+
+static int getopts_store_state(ArkshShell *shell, int optind_val, int subindex) {
+  char optind_buf[32];
+  char subindex_buf[32];
+  char last_optind_buf[32];
+
+  snprintf(optind_buf, sizeof(optind_buf), "%d", optind_val);
+  snprintf(subindex_buf, sizeof(subindex_buf), "%d", subindex);
+  snprintf(last_optind_buf, sizeof(last_optind_buf), "%d", optind_val);
+  if (arksh_shell_set_var(shell, "OPTIND", optind_buf, 0) != 0) {
+    return 1;
+  }
+  if (arksh_shell_set_var(shell, "__ARKSH_GETOPTS_SUBINDEX", subindex_buf, 0) != 0) {
+    return 1;
+  }
+  return arksh_shell_set_var(shell, "__ARKSH_GETOPTS_LAST_OPTIND", last_optind_buf, 0);
+}
+
+static const char *getopts_argument_at(
+  ArkshShell *shell,
+  int argc,
+  char **argv,
+  int args_start,
+  int one_based_index
+) {
+  if (one_based_index < 1) {
+    return NULL;
+  }
+
+  if (args_start >= 0) {
+    return argv[args_start + one_based_index - 1];
+  }
+  return arksh_shell_get_positional(shell, one_based_index - 1);
+}
+
 static int command_getopts(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
   const char *optstring;
   const char *varname;
-  const char *optind_str;
   int optind_val;
+  int subindex;
   int args_start;
   int nargs;
-  const char *arg;
-  char ch;
-  char optarg_buf[ARKSH_MAX_VAR_VALUE];
-  char optind_new[32];
+  int silent;
+  const char *scan;
+  char ch_str[2];
 
   if (argc < 3) {
     snprintf(out, out_size, "getopts: usage: getopts optstring name [args]");
@@ -10113,12 +10168,13 @@ static int command_getopts(ArkshShell *shell, int argc, char **argv, char *out, 
   optstring = argv[1];
   varname   = argv[2];
   args_start = 3; /* use argv[3..] or positional params if not provided */
+  silent = (optstring[0] == ':');
+  scan = silent ? optstring + 1 : optstring;
 
-  /* Get current OPTIND (default 1). */
-  optind_str = arksh_shell_get_var(shell, "OPTIND");
-  optind_val = (optind_str != NULL && optind_str[0] != '\0') ? atoi(optind_str) : 1;
-  if (optind_val < 1) {
-    optind_val = 1;
+  optind_val = getopts_current_optind(shell);
+  subindex = getopts_current_subindex(shell);
+  if (optind_val != getopts_current_last_optind(shell)) {
+    subindex = 1;
   }
 
   /* Build the argument list to scan. */
@@ -10130,97 +10186,507 @@ static int command_getopts(ArkshShell *shell, int argc, char **argv, char *out, 
     args_start = -1; /* signal: use positional */
   }
 
-  /* Find argument at OPTIND. */
-  {
-    int arg_index = optind_val; /* 1-based */
-    if (arg_index > nargs) {
-      /* No more options. */
+  while (1) {
+    const char *arg;
+    const char *found;
+    char ch;
+
+    if (optind_val > nargs) {
       arksh_shell_set_var(shell, varname, "?", 0);
-      if (out != NULL && out_size > 0) out[0] = '\0';
+      arksh_shell_set_var(shell, "OPTARG", "", 0);
+      getopts_store_state(shell, optind_val, 1);
+      if (out != NULL && out_size > 0) {
+        out[0] = '\0';
+      }
       return 1;
     }
 
-    arg = (args_start >= 0) ? argv[args_start + arg_index - 1]
-                             : arksh_shell_get_positional(shell, arg_index - 1);
-  }
-
-  /* Check if we're past options. */
-  if (arg[0] != '-' || arg[1] == '\0' || strcmp(arg, "--") == 0) {
-    arksh_shell_set_var(shell, varname, "?", 0);
-    if (out != NULL && out_size > 0) out[0] = '\0';
-    return 1;
-  }
-
-  ch = arg[1];
-
-  /* Look for ch in optstring. */
-  {
-    const char *p = optstring;
-    int silent = (p[0] == ':');
-    if (silent) p++;
-
-    const char *found = strchr(p, (int) ch);
-    if (found == NULL) {
-      /* Unknown option. */
-      char ch_str[2] = { ch, '\0' };
-      arksh_shell_set_var(shell, varname, silent ? "?" : "?", 0);
-      if (!silent) {
-        snprintf(out, out_size, "getopts: illegal option -- %c", ch);
-      } else {
-        arksh_shell_set_var(shell, "OPTARG", ch_str, 0);
-        if (out != NULL && out_size > 0) out[0] = '\0';
+    arg = getopts_argument_at(shell, argc, argv, args_start, optind_val);
+    if (arg == NULL) {
+      arksh_shell_set_var(shell, varname, "?", 0);
+      arksh_shell_set_var(shell, "OPTARG", "", 0);
+      getopts_store_state(shell, optind_val, 1);
+      if (out != NULL && out_size > 0) {
+        out[0] = '\0';
       }
-      /* Advance OPTIND. */
-      snprintf(optind_new, sizeof(optind_new), "%d", optind_val + 1);
-      arksh_shell_set_var(shell, "OPTIND", optind_new, 0);
+      return 1;
+    }
+
+    if (subindex <= 1) {
+      if (strcmp(arg, "--") == 0) {
+        arksh_shell_set_var(shell, varname, "?", 0);
+        arksh_shell_set_var(shell, "OPTARG", "", 0);
+        getopts_store_state(shell, optind_val + 1, 1);
+        if (out != NULL && out_size > 0) {
+          out[0] = '\0';
+        }
+        return 1;
+      }
+      if (arg[0] != '-' || arg[1] == '\0') {
+        arksh_shell_set_var(shell, varname, "?", 0);
+        arksh_shell_set_var(shell, "OPTARG", "", 0);
+        getopts_store_state(shell, optind_val, 1);
+        if (out != NULL && out_size > 0) {
+          out[0] = '\0';
+        }
+        return 1;
+      }
+      subindex = 1;
+    }
+
+    if (arg[subindex] == '\0') {
+      optind_val++;
+      subindex = 1;
+      continue;
+    }
+
+    ch = arg[subindex];
+    ch_str[0] = ch;
+    ch_str[1] = '\0';
+    found = strchr(scan, (int) ch);
+    if (found == NULL || ch == ':') {
+      arksh_shell_set_var(shell, varname, "?", 0);
+      if (silent) {
+        arksh_shell_set_var(shell, "OPTARG", ch_str, 0);
+        if (out != NULL && out_size > 0) {
+          out[0] = '\0';
+        }
+      } else {
+        arksh_shell_set_var(shell, "OPTARG", "", 0);
+        snprintf(out, out_size, "getopts: illegal option -- %c", ch);
+      }
+
+      if (arg[subindex + 1] == '\0') {
+        optind_val++;
+        subindex = 1;
+      } else {
+        subindex++;
+      }
+      getopts_store_state(shell, optind_val, subindex);
       return 0;
     }
 
-    /* Does option take an argument? */
-    if (*(found + 1) == ':') {
-      /* Need an argument. */
-      if (arg[2] != '\0') {
-        /* Argument is concatenated. */
-        copy_string(optarg_buf, sizeof(optarg_buf), arg + 2);
-        snprintf(optind_new, sizeof(optind_new), "%d", optind_val + 1);
-      } else {
-        /* Argument is next item. */
-        int next_idx = optind_val + 1;
-        const char *next_arg;
-        if (next_idx > nargs) {
-          if (silent) {
-            arksh_shell_set_var(shell, varname, ":", 0);
-          } else {
-            arksh_shell_set_var(shell, varname, "?", 0);
-            snprintf(out, out_size, "getopts: option requires an argument -- %c", ch);
-          }
-          snprintf(optind_new, sizeof(optind_new), "%d", next_idx);
-          arksh_shell_set_var(shell, "OPTIND", optind_new, 0);
-          return 0;
+    if (found[1] == ':') {
+      if (arg[subindex + 1] != '\0') {
+        arksh_shell_set_var(shell, "OPTARG", arg + subindex + 1, 0);
+        arksh_shell_set_var(shell, varname, ch_str, 0);
+        getopts_store_state(shell, optind_val + 1, 1);
+        if (out != NULL && out_size > 0) {
+          out[0] = '\0';
         }
-        next_arg = (args_start >= 0) ? argv[args_start + next_idx - 1]
-                                     : arksh_shell_get_positional(shell, next_idx - 1);
-        copy_string(optarg_buf, sizeof(optarg_buf), next_arg);
-        snprintf(optind_new, sizeof(optind_new), "%d", next_idx + 1);
+        return 0;
       }
-      arksh_shell_set_var(shell, "OPTARG", optarg_buf, 0);
+
+      if (optind_val + 1 <= nargs) {
+        const char *next_arg = getopts_argument_at(shell, argc, argv, args_start, optind_val + 1);
+
+        arksh_shell_set_var(shell, "OPTARG", next_arg == NULL ? "" : next_arg, 0);
+        arksh_shell_set_var(shell, varname, ch_str, 0);
+        getopts_store_state(shell, optind_val + 2, 1);
+        if (out != NULL && out_size > 0) {
+          out[0] = '\0';
+        }
+        return 0;
+      }
+
+      if (silent) {
+        arksh_shell_set_var(shell, varname, ":", 0);
+        arksh_shell_set_var(shell, "OPTARG", ch_str, 0);
+        if (out != NULL && out_size > 0) {
+          out[0] = '\0';
+        }
+      } else {
+        arksh_shell_set_var(shell, varname, "?", 0);
+        arksh_shell_set_var(shell, "OPTARG", "", 0);
+        snprintf(out, out_size, "getopts: option requires an argument -- %c", ch);
+      }
+      getopts_store_state(shell, optind_val + 1, 1);
+      return 0;
+    }
+
+    arksh_shell_set_var(shell, "OPTARG", "", 0);
+    arksh_shell_set_var(shell, varname, ch_str, 0);
+    if (arg[subindex + 1] == '\0') {
+      getopts_store_state(shell, optind_val + 1, 1);
     } else {
-      /* No argument. */
-      arksh_shell_set_var(shell, "OPTARG", "", 0);
-      snprintf(optind_new, sizeof(optind_new), "%d", optind_val + 1);
+      getopts_store_state(shell, optind_val, subindex + 1);
+    }
+    if (out != NULL && out_size > 0) {
+      out[0] = '\0';
+    }
+    return 0;
+  }
+}
+
+typedef struct {
+  char flag;
+  const char *label;
+  int resource;
+} ArkshUlimitSpec;
+
+#ifndef _WIN32
+static const ArkshUlimitSpec s_ulimit_specs[] = {
+#ifdef RLIMIT_CORE
+  { 'c', "core file size", RLIMIT_CORE },
+#endif
+#ifdef RLIMIT_DATA
+  { 'd', "data seg size", RLIMIT_DATA },
+#endif
+#ifdef RLIMIT_FSIZE
+  { 'f', "file size", RLIMIT_FSIZE },
+#endif
+#ifdef RLIMIT_MEMLOCK
+  { 'l', "locked memory", RLIMIT_MEMLOCK },
+#endif
+#ifdef RLIMIT_RSS
+  { 'm', "resident set size", RLIMIT_RSS },
+#endif
+#ifdef RLIMIT_NOFILE
+  { 'n', "open files", RLIMIT_NOFILE },
+#endif
+#ifdef RLIMIT_STACK
+  { 's', "stack size", RLIMIT_STACK },
+#endif
+#ifdef RLIMIT_CPU
+  { 't', "cpu time", RLIMIT_CPU },
+#endif
+#ifdef RLIMIT_NPROC
+  { 'u', "user processes", RLIMIT_NPROC },
+#endif
+#ifdef RLIMIT_AS
+  { 'v', "virtual memory", RLIMIT_AS },
+#endif
+  { '\0', NULL, 0 }
+};
+#endif
+
+static int parse_octal_umask(const char *text, mode_t *out_mask) {
+  unsigned long value = 0;
+  size_t i;
+
+  if (text == NULL || text[0] == '\0' || out_mask == NULL) {
+    return 1;
+  }
+
+  for (i = 0; text[i] != '\0'; ++i) {
+    if (text[i] < '0' || text[i] > '7') {
+      return 1;
+    }
+    value = (value * 8u) + (unsigned long) (text[i] - '0');
+    if (value > 0777u) {
+      return 1;
     }
   }
 
-  {
-    char ch_str[2] = { ch, '\0' };
-    arksh_shell_set_var(shell, varname, ch_str, 0);
+  *out_mask = (mode_t) value;
+  return 0;
+}
+
+static mode_t umask_bits_for_who(int who_mask, char perm) {
+  mode_t bits = 0;
+
+  if ((who_mask & 1) != 0) {
+    if (perm == 'r') bits |= 0400;
+    if (perm == 'w') bits |= 0200;
+    if (perm == 'x') bits |= 0100;
   }
-  arksh_shell_set_var(shell, "OPTIND", optind_new, 0);
+  if ((who_mask & 2) != 0) {
+    if (perm == 'r') bits |= 0040;
+    if (perm == 'w') bits |= 0020;
+    if (perm == 'x') bits |= 0010;
+  }
+  if ((who_mask & 4) != 0) {
+    if (perm == 'r') bits |= 0004;
+    if (perm == 'w') bits |= 0002;
+    if (perm == 'x') bits |= 0001;
+  }
+
+  return bits;
+}
+
+static mode_t umask_scope_bits(int who_mask) {
+  mode_t bits = 0;
+
+  if ((who_mask & 1) != 0) bits |= 0700;
+  if ((who_mask & 2) != 0) bits |= 0070;
+  if ((who_mask & 4) != 0) bits |= 0007;
+  return bits;
+}
+
+static int apply_symbolic_umask(mode_t current_mask, const char *spec, mode_t *out_mask) {
+  mode_t perms;
+  const char *cursor;
+
+  if (spec == NULL || spec[0] == '\0' || out_mask == NULL) {
+    return 1;
+  }
+
+  perms = (mode_t) (0777 & ~current_mask);
+  cursor = spec;
+
+  while (*cursor != '\0') {
+    int who_mask = 0;
+    char op;
+    mode_t perm_bits = 0;
+    mode_t scope_bits;
+
+    while (*cursor == 'u' || *cursor == 'g' || *cursor == 'o' || *cursor == 'a') {
+      if (*cursor == 'u') who_mask |= 1;
+      else if (*cursor == 'g') who_mask |= 2;
+      else if (*cursor == 'o') who_mask |= 4;
+      else if (*cursor == 'a') who_mask |= 7;
+      cursor++;
+    }
+    if (who_mask == 0) {
+      who_mask = 7;
+    }
+
+    op = *cursor;
+    if (op != '+' && op != '-' && op != '=') {
+      return 1;
+    }
+    cursor++;
+
+    while (*cursor == 'r' || *cursor == 'w' || *cursor == 'x') {
+      perm_bits |= umask_bits_for_who(who_mask, *cursor);
+      cursor++;
+    }
+
+    scope_bits = umask_scope_bits(who_mask);
+    if (op == '+') {
+      perms |= perm_bits;
+    } else if (op == '-') {
+      perms &= (mode_t) ~perm_bits;
+    } else {
+      perms = (mode_t) ((perms & ~scope_bits) | (perm_bits & scope_bits));
+    }
+
+    if (*cursor == ',') {
+      cursor++;
+      continue;
+    }
+    if (*cursor != '\0') {
+      return 1;
+    }
+  }
+
+  *out_mask = (mode_t) (0777 & ~perms);
+  return 0;
+}
+
+static int command_umask(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+#ifdef _WIN32
+  (void) shell;
+  (void) argc;
+  (void) argv;
+  snprintf(out, out_size, "umask: not supported on this platform");
+  return 1;
+#else
+  mode_t current_mask;
+
+  (void) shell;
+
+  current_mask = umask(0);
+  umask(current_mask);
+
+  if (argc <= 1) {
+    snprintf(out, out_size, "%03o", (unsigned int) (current_mask & 0777));
+    return 0;
+  }
+
+  {
+    mode_t new_mask;
+
+    if (parse_octal_umask(argv[1], &new_mask) != 0 &&
+        apply_symbolic_umask(current_mask, argv[1], &new_mask) != 0) {
+      snprintf(out, out_size, "umask: invalid mode: %s", argv[1]);
+      return 1;
+    }
+
+    umask(new_mask);
+  }
 
   if (out != NULL && out_size > 0) {
     out[0] = '\0';
   }
   return 0;
+#endif
+}
+
+static const ArkshUlimitSpec *find_ulimit_spec(char flag_char) {
+#ifndef _WIN32
+  size_t i;
+
+  for (i = 0; s_ulimit_specs[i].flag != '\0'; ++i) {
+    if (s_ulimit_specs[i].flag == flag_char) {
+      return &s_ulimit_specs[i];
+    }
+  }
+#else
+  (void) flag_char;
+#endif
+  return NULL;
+}
+
+#ifndef _WIN32
+static int render_rlim_value(rlim_t value, char *out, size_t out_size) {
+  if (value == RLIM_INFINITY) {
+    snprintf(out, out_size, "unlimited");
+    return 0;
+  }
+  snprintf(out, out_size, "%llu", (unsigned long long) value);
+  return 0;
+}
+
+static int parse_rlim_value(const char *text, rlim_t *out_value) {
+  char *endptr = NULL;
+  unsigned long long parsed;
+
+  if (text == NULL || text[0] == '\0' || out_value == NULL) {
+    return 1;
+  }
+  if (strcmp(text, "unlimited") == 0) {
+    *out_value = RLIM_INFINITY;
+    return 0;
+  }
+
+  errno = 0;
+  parsed = strtoull(text, &endptr, 10);
+  if (errno != 0 || endptr == NULL || *endptr != '\0') {
+    return 1;
+  }
+  *out_value = (rlim_t) parsed;
+  return 0;
+}
+#endif
+
+static int command_ulimit(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+#ifdef _WIN32
+  (void) shell;
+  (void) argc;
+  (void) argv;
+  snprintf(out, out_size, "ulimit: not supported on this platform");
+  return 1;
+#else
+  const ArkshUlimitSpec *selected = NULL;
+  int show_all = 0;
+  int use_soft = 0;
+  int use_hard = 0;
+  const char *value_arg = NULL;
+  int i;
+
+  (void) shell;
+
+  for (i = 1; i < argc; ++i) {
+    const char *arg = argv[i];
+
+    if (arg[0] != '-' || arg[1] == '\0' || strcmp(arg, "--") == 0) {
+      value_arg = arg;
+      break;
+    }
+
+    {
+      int j;
+
+      for (j = 1; arg[j] != '\0'; ++j) {
+        if (arg[j] == 'a') {
+          show_all = 1;
+        } else if (arg[j] == 'S') {
+          use_soft = 1;
+        } else if (arg[j] == 'H') {
+          use_hard = 1;
+        } else {
+          const ArkshUlimitSpec *spec = (const ArkshUlimitSpec *) find_ulimit_spec(arg[j]);
+
+          if (spec == NULL) {
+            snprintf(out, out_size, "ulimit: unsupported option -%c", arg[j]);
+            return 1;
+          }
+          selected = spec;
+        }
+      }
+    }
+  }
+
+  if (!use_soft && !use_hard) {
+    use_soft = 1;
+  }
+  if (!show_all && selected == NULL) {
+    selected = (const ArkshUlimitSpec *) find_ulimit_spec('f');
+  }
+
+  if (show_all) {
+    size_t i_spec;
+
+    out[0] = '\0';
+    for (i_spec = 0; s_ulimit_specs[i_spec].flag != '\0'; ++i_spec) {
+      struct rlimit lim;
+      char value_buf[64];
+      rlim_t shown;
+
+      if (getrlimit(s_ulimit_specs[i_spec].resource, &lim) != 0) {
+        continue;
+      }
+      shown = use_hard ? lim.rlim_max : lim.rlim_cur;
+      render_rlim_value(shown, value_buf, sizeof(value_buf));
+      snprintf(out + strlen(out), out_size - strlen(out),
+               "%s%s (-%c): %s",
+               out[0] == '\0' ? "" : "\n",
+               s_ulimit_specs[i_spec].label,
+               s_ulimit_specs[i_spec].flag,
+               value_buf);
+    }
+    return 0;
+  }
+
+  if (selected == NULL) {
+    snprintf(out, out_size, "ulimit: no resource selected");
+    return 1;
+  }
+
+  {
+    struct rlimit lim;
+    char value_buf[64];
+
+    if (getrlimit(selected->resource, &lim) != 0) {
+      snprintf(out, out_size, "ulimit: unable to read limit -%c", selected->flag);
+      return 1;
+    }
+
+    if (value_arg == NULL) {
+      rlim_t shown = use_hard ? lim.rlim_max : lim.rlim_cur;
+
+      render_rlim_value(shown, value_buf, sizeof(value_buf));
+      copy_string(out, out_size, value_buf);
+      return 0;
+    }
+
+    {
+      rlim_t new_value;
+
+      if (parse_rlim_value(value_arg, &new_value) != 0) {
+        snprintf(out, out_size, "ulimit: invalid limit: %s", value_arg);
+        return 1;
+      }
+
+      if (use_soft) {
+        lim.rlim_cur = new_value;
+      }
+      if (use_hard) {
+        lim.rlim_max = new_value;
+      }
+      if (setrlimit(selected->resource, &lim) != 0) {
+        snprintf(out, out_size, "ulimit: unable to update limit -%c: %s", selected->flag, strerror(errno));
+        return 1;
+      }
+    }
+  }
+
+  if (out != NULL && out_size > 0) {
+    out[0] = '\0';
+  }
+  return 0;
+#endif
 }
 
 /* =========================================================================
@@ -10967,6 +11433,8 @@ static int register_builtin_commands(ArkshShell *shell) {
       register_builtin(shell, "wait",     "wait for background jobs to complete",           command_wait,     ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "read",     "read a line from stdin into variables",          command_read,     ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "getopts",  "parse option flags from positional arguments",   command_getopts,  ARKSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "umask",    "show or change the process file mode creation mask", command_umask, ARKSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "ulimit",   "show or change POSIX resource limits",           command_ulimit,   ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "shift",    "shift positional parameters left by n",          command_shift,    ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "local",    "declare function-local variables",               command_local,    ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "readonly", "mark variables as read-only",                    command_readonly, ARKSH_BUILTIN_MUTANT) != 0 ||
@@ -12212,6 +12680,10 @@ void arksh_shell_print_help(const ArkshShell *shell, char *out, size_t out_size)
     "  wait %%1\n"
     "  eval \"text(\\\"hello\\\") -> print()\"\n"
     "  trap \"text(\\\"bye\\\") -> print()\" EXIT\n"
+    "  while getopts \":ab:\" opt \"-abvalue\" \"-x\" ; do echo \"$opt:$OPTARG\" ; done\n"
+    "  umask\n"
+    "  umask 077\n"
+    "  ulimit -n\n"
     "  true && text(\"ok\") -> print()\n"
     "  bool(true) ? \"yes\" : \"no\"\n"
     "  if true ; then text(\"ok\") -> print() ; fi\n"

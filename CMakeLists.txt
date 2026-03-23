@@ -1234,9 +1234,32 @@ if(BUILD_TESTING)
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/posix-positional.arksh"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_getopts_loop
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/posix/getopts-loop.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  if(NOT WIN32)
+    add_test(NAME arksh_ulimit_nofile
+      COMMAND arksh -c "ulimit -n"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+    add_test(NAME arksh_umask_read
+      COMMAND arksh -c "umask"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+    add_test(NAME arksh_umask_set_octal
+      COMMAND arksh -c "umask 077 ; umask"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+    add_test(NAME arksh_umask_set_symbolic
+      COMMAND arksh -c "umask 077 ; umask \"u=rwx,g=rx,o=\" ; umask"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+  endif()
   set_tests_properties(
     arksh_posix_assign_single arksh_posix_assign_multi arksh_posix_assign_expand
     arksh_posix_assign_env_prefix arksh_posix_fn_basic arksh_posix_fn_positional
+    arksh_getopts_loop
     PROPERTIES TIMEOUT 10
   )
   set_tests_properties(arksh_posix_assign_single    PROPERTIES PASS_REGULAR_EXPRESSION "hello")
@@ -1245,6 +1268,13 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_posix_assign_env_prefix PROPERTIES PASS_REGULAR_EXPRESSION "GREETING=hi")
   set_tests_properties(arksh_posix_fn_basic         PROPERTIES PASS_REGULAR_EXPRESSION "hello")
   set_tests_properties(arksh_posix_fn_positional    PROPERTIES PASS_REGULAR_EXPRESSION "foo bar")
+  set_tests_properties(arksh_getopts_loop           PROPERTIES PASS_REGULAR_EXPRESSION "RESET=a")
+  if(NOT WIN32)
+    set_tests_properties(arksh_ulimit_nofile        PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+|unlimited")
+    set_tests_properties(arksh_umask_read           PROPERTIES PASS_REGULAR_EXPRESSION "[0-7][0-7][0-7]")
+    set_tests_properties(arksh_umask_set_octal      PROPERTIES PASS_REGULAR_EXPRESSION "077")
+    set_tests_properties(arksh_umask_set_symbolic   PROPERTIES PASS_REGULAR_EXPRESSION "027")
+  endif()
 
   # E8-S1-T1: lexer unit tests
   add_test(NAME arksh_unit_lexer COMMAND arksh_unit_lexer)
