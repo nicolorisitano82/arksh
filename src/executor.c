@@ -5296,9 +5296,14 @@ static int execute_simple_command(ArkshShell *shell, const ArkshSimpleCommandNod
   /* E1-S6-T2: xtrace — print expanded command to stderr before execution. */
   if (shell->opt_xtrace) {
     int ti;
-    fprintf(stderr, "+");
+    const char *ps4 = arksh_shell_get_var(shell, "PS4");
+
+    if (ps4 == NULL || ps4[0] == '\0') {
+      ps4 = "+ ";
+    }
+    fputs(ps4, stderr);
     for (ti = 0; ti < expanded_argc; ti++) {
-      fprintf(stderr, " %s", expanded_argv[ti]);
+      fprintf(stderr, "%s%s", ti == 0 ? "" : " ", expanded_argv[ti]);
     }
     fprintf(stderr, "\n");
     fflush(stderr);

@@ -1166,6 +1166,18 @@ if(BUILD_TESTING)
     COMMAND arksh -c "set -u; echo \${UNSET_VAR_12345:-ok}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_ps4_default
+    COMMAND arksh -c "text(\"%s\") -> print(\"$PS4\")"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_set_plus_e
+    COMMAND arksh -c "set -e +e; /usr/bin/false; echo after"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_xtrace_uses_ps4
+    COMMAND arksh -c "set PS4 'TRACE: '; set -x; echo hi"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   add_test(NAME arksh_printf_basic
     COMMAND arksh -c "printf '%s %d' hello 42"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -1208,6 +1220,7 @@ if(BUILD_TESTING)
   )
   set_tests_properties(
     arksh_trap_posix_all arksh_trap_err arksh_set_errexit arksh_set_nounset
+    arksh_ps4_default arksh_set_plus_e arksh_xtrace_uses_ps4
     arksh_printf_basic arksh_param_subst_single arksh_param_subst_global
     arksh_test_builtin_string arksh_test_bracket_numeric
     arksh_double_bracket_glob arksh_double_bracket_regex
@@ -1219,6 +1232,9 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_trap_err          PROPERTIES PASS_REGULAR_EXPRESSION "err")
   set_tests_properties(arksh_set_errexit       PROPERTIES WILL_FAIL TRUE)
   set_tests_properties(arksh_set_nounset       PROPERTIES PASS_REGULAR_EXPRESSION "ok")
+  set_tests_properties(arksh_ps4_default       PROPERTIES PASS_REGULAR_EXPRESSION "\\+ ")
+  set_tests_properties(arksh_set_plus_e        PROPERTIES PASS_REGULAR_EXPRESSION "after")
+  set_tests_properties(arksh_xtrace_uses_ps4   PROPERTIES PASS_REGULAR_EXPRESSION "TRACE: echo hi")
   set_tests_properties(arksh_printf_basic      PROPERTIES PASS_REGULAR_EXPRESSION "hello 42")
   set_tests_properties(arksh_param_subst_single PROPERTIES PASS_REGULAR_EXPRESSION "hELLo")
   set_tests_properties(arksh_param_subst_global PROPERTIES PASS_REGULAR_EXPRESSION "aaXXcc")

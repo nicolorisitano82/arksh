@@ -910,7 +910,7 @@ Obiettivo: permettere ad arksh di eseguire script POSIX di media complessità se
 
 Stato story: `[ ]`
 
-- `[ ]` `E11-S1-T1` **Struttura interna** — aggiungere i flag booleani `errexit`, `nounset`, `pipefail`, `xtrace` a `ArkshShell`; estendere `command_set` per riconoscere `-e`, `-u`, `-o pipefail`, `-x` e le rispettive forme di disabilitazione `+e`, `+u`, ecc.; aggiungere `$PS4` (default `"+ "`) come variabile shell.
+- `[x]` `E11-S1-T1` **Struttura interna** — flag booleani `errexit`, `nounset`, `pipefail`, `xtrace` presenti in `ArkshShell`; `command_set` riconosce `-e`, `-u`, `-o pipefail`, `-x` e le forme di disabilitazione `+e`, `+u`, `+x`, `+o pipefail`; aggiunta `$PS4` con default `"+ "` e uso come prefisso di `xtrace`.
 - `[ ]` `E11-S1-T2` **`set -e` (errexit)** — dopo ogni comando non-condizionale in `arksh_shell_execute_line` e nei loop di command list, se `errexit` è attivo e lo status è non-zero, uscire con quello status; casi esclusi secondo POSIX: condizione di `if`/`while`/`until`, LHS di `&&`/`||`, comandi preceduti da `!`.
 - `[ ]` `E11-S1-T3` **`set -u` (nounset)** — in `expand.c` durante l'espansione di `$VAR` e `${VAR}`, se la variabile non è definita e `nounset` è attivo, restituire un errore descrittivo invece di stringa vuota; non applicare a `${VAR:-default}` e simili.
 - `[ ]` `E11-S1-T4` **`set -o pipefail`** — in `platform.c` per pipeline shell multi-stage, conservare l'exit status di ogni segmento; se `pipefail` è attivo, lo status dell'intera pipeline è il più alto status non-zero tra i segmenti (o zero se tutti sono zero).

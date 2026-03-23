@@ -6996,6 +6996,8 @@ static void initialize_default_variables(ArkshShell *shell) {
 
   /* POSIX default field separator: space, tab, newline. */
   arksh_shell_set_var(shell, "IFS", " \t\n", 0);
+  /* POSIX xtrace prefix. */
+  arksh_shell_set_var(shell, "PS4", "+ ", 0);
 }
 
 static int join_runtime_path(const char *base, const char *name, char *out, size_t out_size) {
