@@ -291,6 +291,8 @@ if(BUILD_TESTING)
   add_test(NAME arksh_function_scope COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/functions/scope.arksh")
   add_test(NAME arksh_function_local_shadow
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/scope/function-local-shadow.arksh")
+  add_test(NAME arksh_golden_posix_local_scope
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/posix-local-scope.arksh")
   add_test(NAME arksh_function_shift_scope
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/scope/function-shift-scope.arksh")
   add_test(NAME arksh_command_substitution_local_scope
@@ -368,6 +370,10 @@ if(BUILD_TESTING)
   add_test(NAME arksh_subshell_redirection COMMAND arksh -c "( text(\"isolated\") -> print() ) > subshell_scope.out ; subshell_scope.out -> read_text(32)")
   add_test(NAME arksh_group_input_redirection COMMAND arksh -c "{ ${ARKSH_TEST_COUNT} ; } < ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/basic.arksh")
   add_test(NAME arksh_subshell_input_redirection COMMAND arksh -c "( ${ARKSH_TEST_COUNT} ) < ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/heredoc/basic.arksh")
+  add_test(NAME arksh_golden_posix_group_subshell
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/posix-group-subshell.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   add_test(NAME arksh_class_basic COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/basic.arksh")
   add_test(NAME arksh_class_init_inheritance COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/init-and-inheritance.arksh")
   add_test(NAME arksh_class_multiple_inheritance COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/multiple-inheritance.arksh")
@@ -849,6 +855,16 @@ if(BUILD_TESTING)
     arksh_subshell_input_redirection
     PROPERTIES
       PASS_REGULAR_EXPRESSION "4"
+  )
+  set_tests_properties(
+    arksh_golden_posix_local_scope
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "local_scope_done"
+  )
+  set_tests_properties(
+    arksh_golden_posix_group_subshell
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "subshell_group_done"
   )
   set_tests_properties(
     arksh_print_format_method

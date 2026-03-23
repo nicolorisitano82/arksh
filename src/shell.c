@@ -9837,6 +9837,11 @@ static int command_local(ArkshShell *shell, int argc, char **argv, char *out, si
 
   out[0] = '\0';
 
+  if (shell->function_depth <= 0) {
+    snprintf(out, out_size, "local: not in a function");
+    return 1;
+  }
+
   if (argc == 1) {
     return 0; /* nothing to do */
   }

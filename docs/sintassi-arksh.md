@@ -531,11 +531,26 @@ Nel body di un block e supportata anche la forma:
 local <identifier> = <value-expression> ; <expression_body>
 ```
 
-Regole pratiche:
+Regole pratiche per i block:
 
-- `local` e valido solo nel body di un block
-- il binding creato da `local` e typed e usa lo stesso modello di `let`
+- `local` nel body di un block crea un binding typed
+- il binding creato da `local` usa lo stesso modello di `let`
 - lo scope dura solo per la valutazione del block corrente
+
+Nelle funzioni shell e supportato anche il builtin POSIX-like:
+
+```text
+function demo(name) do
+  local prefix=hello
+  text("%s %s") -> print("$prefix", name)
+endfunction
+```
+
+Regole pratiche per le funzioni shell:
+
+- `local` e valido dentro una funzione shell
+- fuori da una funzione shell restituisce `local: not in a function`
+- una variabile `local` puo fare shadowing di una variabile esterna senza modificarla
 call            = primary , "." , identifier , "(" , [ argument_list ] , ")" ;
 primary         = constructor | identifier | string | number ;
 constructor     = identifier , "(" , [ argument_list ] , ")" ;

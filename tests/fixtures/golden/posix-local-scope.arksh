@@ -1,0 +1,16 @@
+set NAME outer
+
+function show() do
+local NAME=inner
+local TEMP
+[ "$NAME" = inner ] || false
+[ -z "$TEMP" ] || false
+set TEMP filled
+[ "$TEMP" = filled ] || false
+echo local_inside_ok
+endfunction
+
+show
+[ "$NAME" = outer ] || false
+[ "${TEMP:-unset}" = unset ] || false
+echo local_scope_done

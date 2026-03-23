@@ -24,6 +24,7 @@ Nested member chains are first-class syntax, so direct forms like `data.json -> 
 - Object pipelines with `|>`: `where`, `sort`, `take`, `first`, `count`, `sum`, `min`, `max`, `render`, `lines`, `trim`, `split`, `join`, `grep`, `each`, `map`, `flat_map`, `group_by`, `reduce`, `to_json`, `from_json`, `base64_encode`, `base64_decode`, `transpose`, `fill_na`
 - Native execution of external commands with shell pipes, redirections, heredoc, here-string (`<<<`), and POSIX process substitution (`<(...)`, `>(...)`) support
 - POSIX shell mode flags: `set -e`, `set -u`, `set -x`, and `set -o pipefail`
+- POSIX core milestone completed for medium-complexity shell scripts: arithmetic expansion, `[ ]`, `[[ ]]`, `local`, here-string, and process substitution
 - Shell/object bridge: external command output can become typed pipeline input
 - Control flow: `if`, `elif`, `else`, `while`, `until`, `for`, `break`, `continue`, `return`, ternary `?:`, `switch`, and `case`
 - Extended conditionals with `[[ ... ]]`, glob matching on `==`, and POSIX ERE regex matching via `=~`

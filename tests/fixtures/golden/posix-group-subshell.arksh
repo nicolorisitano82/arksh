@@ -1,0 +1,25 @@
+set TESTDIR /tmp/arksh_posix_group_subshell_$$
+
+mkdir -p $TESTDIR
+
+pwd > $TESTDIR/pwd_before.txt
+( pwd ) > $TESTDIR/sub_pwd.txt
+pwd > $TESTDIR/pwd_after.txt
+
+[ "$(cat $TESTDIR/pwd_before.txt)" = "$(cat $TESTDIR/pwd_after.txt)" ] || exit 1
+echo cwd_restored
+
+set MODE outer
+( set MODE inner )
+[ "$MODE" = "outer" ] || exit 1
+echo $MODE
+
+( proc() -> pid ) > $TESTDIR/sub_pid.txt
+{ proc() -> pid ; } > $TESTDIR/parent_pid.txt
+[ ! "$(cat $TESTDIR/sub_pid.txt)" = "$(cat $TESTDIR/parent_pid.txt)" ] || exit 1
+echo pid_isolated
+
+{ echo alpha; echo beta; } > $TESTDIR/group.out
+cat $TESTDIR/group.out
+
+echo subshell_group_done

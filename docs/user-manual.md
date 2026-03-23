@@ -423,6 +423,8 @@ function demo(name) do
 endfunction
 ```
 
+Outside a shell function, `local` fails with `local: not in a function`.
+
 Use `builtin` to bypass an override:
 
 ```text

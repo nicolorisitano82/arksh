@@ -2,7 +2,7 @@
 
 Questo documento confronta `arksh` con le shell Unix più diffuse lungo le dimensioni che ne definiscono il posizionamento: modello dei dati, ergonomia interattiva, scripting e portabilità.
 
-Stato del confronto: repository aggiornato al `2026-03-22`.
+Stato del confronto: repository aggiornato al `2026-03-23`.
 
 Le shell analizzate sono: **bash**, **zsh**, **fish**, **nushell**, **dash** e **arksh**.
 
@@ -14,7 +14,7 @@ Le shell analizzate sono: **bash**, **zsh**, **fish**, **nushell**, **dash** e *
 |------------------------|-------------------|--------------------|--------------------|--------------------|--------------------|--------------------|
 | Anno di prima release  | 1989              | 1990               | 2005               | 2019               | 1997               | 2026               |
 | Linguaggio principale  | C                 | C                  | C++                | Rust               | C                  | C (C11)            |
-| Standard di riferimento| POSIX + GNU ext.  | POSIX + Zsh ext.   | Proprio            | Proprio            | POSIX stretto      | Proprio + core POSIX parziale |
+| Standard di riferimento| POSIX + GNU ext.  | POSIX + Zsh ext.   | Proprio            | Proprio            | POSIX stretto      | Proprio + core POSIX ampio |
 | Licenza                | GPL 3             | MIT-like (vari)    | GPL 2              | MIT                | BSD                | MIT                |
 | Portabilità OS         | Linux, macOS, Win | Linux, macOS       | Linux, macOS, Win  | Linux, macOS, Win  | Linux, macOS, Unix | Linux, macOS, Win  |
 | Shell di login default | Linux (comune)    | macOS (da 10.15)   | Opzionale          | Opzionale          | Debian `/bin/sh`   | No                 |
@@ -86,7 +86,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 
 | Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
-| Sintassi compatibile POSIX             | Largamente | Largamente | No  | No     | Si (stretto) | Parziale avanzata |
+| Sintassi compatibile POSIX             | Largamente | Largamente | No  | No     | Si (stretto) | Ampia (core POSIX chiuso) |
 | `VAR=value` standalone assignment      | Si     | Si     | Si     | Si      | Si     | Si     |
 | `VAR=val cmd` env-prefix               | Si     | Si     | Si     | Si      | Si     | Si     |
 | `if` / `while` / `for`                 | Si     | Si     | Si     | Si      | Si     | Si     |
@@ -94,7 +94,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 | `case` pattern `word)` e `(word)`      | Si     | Si     | —      | —       | Si     | Si     |
 | Funzioni con sintassi POSIX `f() {}`   | Si     | Si     | No     | No      | Si     | Si     |
 | Funzioni con parametri nominali        | No     | No     | No     | Si      | No     | Si (`function f(a b) do ... endfunction`) |
-| Scope locale per variabili (`local`)   | Parziale | Si   | Si     | Si      | Parziale | Si (funzioni e block) |
+| Scope locale per variabili (`local`)   | Parziale | Si   | Si     | Si      | Parziale | Si (funzioni shell + block typed) |
 | `shift [n]` / `set -- args`           | Si     | Si     | No     | No      | Si     | Si     |
 | Funzioni come valori                   | No     | No     | No     | Si      | No     | Parziale (block sono valori) |
 | Override di built-in con funzioni      | Si     | Si     | Si     | Si      | Si     | Si + `builtin` per escape |
@@ -157,7 +157,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 | Binario singolo                | Si     | Si     | No (richiede libs) | Si | Si | Si |
 | Dipendenze a runtime           | libc, readline | libc, ncurses | vari | libc | libc | libc |
 | Scripting cross-platform nativo| No (POSIX non su Windows) | No | Parziale | Si | No | Si (stesso codice) |
-| Adatto come shell di sistema   | Si     | Si     | No     | No      | Si (minimalismo) | Non ancora |
+| Adatto come shell di sistema   | Si     | Si     | No     | No      | Si (minimalismo) | Non ancora (mancano login/signals/release) |
 | Adatto come shell interattiva  | Si     | Si (ottima) | Si (ottima) | Si (ottima) | No (minima) | Si (gia usabile, ancora in evoluzione) |
 
 ---
@@ -179,7 +179,7 @@ Asse 2: Scripting puro                    ←———————————�
 | fish    | UX out-of-the-box eccellente, highlighting nativo  | Rompe POSIX, nessun tipo strutturato           |
 | nushell | Dati strutturati, pipeline tipizzate               | Rottura totale con shell classica, no classi   |
 | dash    | Velocità, POSIX stretto, shell di sistema          | Nessuna funzione interattiva                   |
-| arksh   | Object model + pipeline tipizzate + namespace di sistema + tipi numerici espliciti + JSON nativo + Matrix/Dict + plugin ABI in C + UX interattiva + base POSIX gia ampia | Ecosistema piccolo, backlog POSIX ancora aperto, non ancora shell di sistema |
+| arksh   | Object model + pipeline tipizzate + namespace di sistema + tipi numerici espliciti + JSON nativo + Matrix/Dict + plugin ABI in C + UX interattiva + core POSIX chiuso | Ecosistema piccolo, mancano ancora login shell robusta, segnali completi e packaging/release |
 
 ---
 
@@ -191,7 +191,7 @@ Nushell è la shell che si avvicina di più al posizionamento di arksh. Le diffe
 |-------------------------------------|------------------------------------------|------------------------------------------------|
 | Modello dati                        | Tabelle e record strutturati             | Oggetti filesystem + tipi scalari + classi     |
 | Sintassi                            | Propria (rompe completamente con POSIX)  | Shell-compatibile su `;`, `&&`, `\|`, redirection |
-| Compatibilità script POSIX          | Nessuna                                  | Parziale avanzata (`VAR=val`, `f() {}`, `case`, `shift`, `local`, `trap`, `getopts`, `$((...))`, …) |
+| Compatibilità script POSIX          | Nessuna                                  | Ampia per script di media complessità (`VAR=val`, `f() {}`, `case`, `shift`, `local`, `trap`, `getopts`, `$((...))`, `[[ ]]`, here-string, process substitution, …) |
 | Funzioni con parametri nominali     | Si                                       | Si (`function f(a b) do ... endfunction`)      |
 | Funzioni POSIX `f() { ... }`        | No                                       | Si                                             |
 | Classi definibili dall'utente       | No                                       | Si                                             |

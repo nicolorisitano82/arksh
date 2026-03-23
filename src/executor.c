@@ -1,10 +1,12 @@
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
 #include <io.h>
 #else
+#include <sys/wait.h>
 #include <unistd.h>
 #endif
 
@@ -5655,12 +5657,87 @@ static int execute_group_command(
   return execute_compound_body(shell, compound, out, out_size);
 }
 
+#ifndef _WIN32
+static int read_child_output_fd(int fd, char *out, size_t out_size) {
+  size_t total = 0;
+
+  if (out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  out[0] = '\0';
+  while (total + 1 < out_size) {
+    ssize_t read_count = read(fd, out + total, out_size - total - 1);
+
+    if (read_count < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      return 1;
+    }
+    if (read_count == 0) {
+      break;
+    }
+    total += (size_t) read_count;
+  }
+  out[total] = '\0';
+
+  if (total + 1 >= out_size) {
+    char sink[256];
+
+    for (;;) {
+      ssize_t read_count = read(fd, sink, sizeof(sink));
+
+      if (read_count < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        return 1;
+      }
+      if (read_count == 0) {
+        break;
+      }
+    }
+  }
+
+  return 0;
+}
+
+static void write_child_output_fd(int fd, const char *text) {
+  const char *cursor;
+  size_t remaining;
+
+  if (text == NULL || text[0] == '\0') {
+    return;
+  }
+
+  cursor = text;
+  remaining = strlen(text);
+  while (remaining > 0) {
+    ssize_t written = write(fd, cursor, remaining);
+
+    if (written < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      break;
+    }
+    if (written == 0) {
+      break;
+    }
+    cursor += (size_t) written;
+    remaining -= (size_t) written;
+  }
+}
+#endif
+
 static int execute_subshell_command(
   ArkshShell *shell,
   const ArkshCompoundCommandNode *compound,
   char *out,
   size_t out_size
 ) {
+#ifdef _WIN32
   ArkshShell *subshell;
   char command_output[ARKSH_MAX_OUTPUT];
   int status;
@@ -5683,6 +5760,77 @@ static int execute_subshell_command(
   arksh_shell_destroy_subshell(subshell);
   copy_string(out, out_size, command_output);
   return status;
+#else
+  ArkshShell *subshell;
+  char command_output[ARKSH_MAX_OUTPUT];
+  int pipefd[2];
+  pid_t pid;
+  int wait_status = 0;
+
+  if (shell == NULL || compound == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (arksh_shell_clone_subshell(shell, &subshell, out, out_size) != 0) {
+    return 1;
+  }
+  if (pipe(pipefd) != 0) {
+    arksh_shell_destroy_subshell(subshell);
+    snprintf(out, out_size, "unable to create subshell output pipe");
+    return 1;
+  }
+
+  pid = fork();
+  if (pid < 0) {
+    close(pipefd[0]);
+    close(pipefd[1]);
+    arksh_shell_destroy_subshell(subshell);
+    snprintf(out, out_size, "unable to fork subshell");
+    return 1;
+  }
+
+  if (pid == 0) {
+    int child_status;
+
+    close(pipefd[0]);
+    command_output[0] = '\0';
+    child_status = execute_compound_body(subshell, compound, command_output, sizeof(command_output));
+    write_child_output_fd(pipefd[1], command_output);
+    close(pipefd[1]);
+    arksh_shell_destroy_subshell(subshell);
+    _exit(child_status & 0xff);
+  }
+
+  close(pipefd[1]);
+  arksh_shell_destroy_subshell(subshell);
+  if (read_child_output_fd(pipefd[0], out, out_size) != 0) {
+    close(pipefd[0]);
+    snprintf(out, out_size, "unable to read subshell output");
+    return 1;
+  }
+  close(pipefd[0]);
+
+  for (;;) {
+    pid_t waited = waitpid(pid, &wait_status, 0);
+
+    if (waited < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      snprintf(out, out_size, "unable to wait for subshell");
+      return 1;
+    }
+    break;
+  }
+
+  if (WIFEXITED(wait_status)) {
+    return WEXITSTATUS(wait_status);
+  }
+  if (WIFSIGNALED(wait_status)) {
+    return 128 + WTERMSIG(wait_status);
+  }
+  return 1;
+#endif
 }
 
 static int execute_object_pipeline(ArkshShell *shell, const ArkshObjectPipelineNode *pipeline, char *out, size_t out_size) {

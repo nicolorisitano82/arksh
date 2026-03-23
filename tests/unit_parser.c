@@ -203,6 +203,18 @@ static void test_group_command(void) {
   EXPECT(ast.as.group_command.body[0] != '\0', "group command: body non-empty");
 }
 
+static void test_group_command_requires_separator(void) {
+  ArkshAst ast;
+  char error[512];
+  int rc;
+
+  arksh_ast_init(&ast);
+  rc = arksh_parse_line("{ true }", &ast, error, sizeof(error));
+  EXPECT(rc != 0, "group separator: parse fails");
+  EXPECT(strstr(error, "requires ';' or newline before }") != NULL,
+         "group separator: clear error");
+}
+
 static void test_subshell_command(void) {
   ArkshAst ast = parse_ok("( true )");
   EXPECT(ast.kind == ARKSH_AST_SUBSHELL_COMMAND, "subshell command: kind");
@@ -423,6 +435,7 @@ int main(void) {
 
   /* GROUP / SUBSHELL */
   test_group_command();
+  test_group_command_requires_separator();
   test_subshell_command();
 
   /* IF */

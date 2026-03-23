@@ -178,6 +178,16 @@ static void test_posix_function_redefine(void) {
   EXPECT(strcmp(out, "second") == 0, "POSIX function: redefinition works");
 }
 
+static void test_local_outside_function_invalid(void) {
+  char out[ARKSH_MAX_OUTPUT];
+  int rc = arksh_shell_execute_line(g_shell, "local NAME=oops", out, sizeof(out));
+
+  trim_nl(out);
+  EXPECT(rc != 0, "local outside function: fails");
+  EXPECT(strstr(out, "local: not in a function") != NULL,
+         "local outside function: clear error");
+}
+
 /* ------------------------------------------------------------------ value evaluation */
 
 static void test_eval_string(void) {
@@ -344,6 +354,7 @@ int main(void) {
   test_posix_function_basic();
   test_posix_function_positional();
   test_posix_function_redefine();
+  test_local_outside_function_invalid();
 
   /* value evaluation */
   test_eval_string();

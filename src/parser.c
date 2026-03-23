@@ -2563,6 +2563,7 @@ static int parse_group_command_text(const char *line, ArkshCompoundCommandNode *
   char tail[ARKSH_MAX_LINE];
   ArkshParsedHeredocList heredocs;
   size_t heredoc_index = 0;
+  size_t cursor;
 
   if (line == NULL || out_group == NULL || error == NULL || error_size == 0) {
     return 1;
@@ -2574,6 +2575,15 @@ static int parse_group_command_text(const char *line, ArkshCompoundCommandNode *
   memset(out_group, 0, sizeof(*out_group));
   if (find_matching_delimiter(line, '{', '}', &close_index) != 0) {
     snprintf(error, error_size, "unterminated group command: missing }");
+    return 1;
+  }
+
+  cursor = close_index;
+  while (cursor > 0 && (line[cursor - 1] == ' ' || line[cursor - 1] == '\t' || line[cursor - 1] == '\r')) {
+    cursor--;
+  }
+  if (cursor == 0 || (line[cursor - 1] != ';' && line[cursor - 1] != '\n')) {
+    snprintf(error, error_size, "group command requires ';' or newline before }");
     return 1;
   }
 

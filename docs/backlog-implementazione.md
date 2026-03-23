@@ -904,7 +904,7 @@ Stato story: `[ ]`
 
 ## E11. POSIX core — completamento per uso come shell di sistema
 
-Stato epoca: `[~]`
+Stato epoca: `[x]`
 
 Obiettivo: permettere ad arksh di eseguire script POSIX di media complessità senza errori, rimuovendo i blocchi principali che impediscono l'uso come shell di sistema. Vedi `docs/arksh-come-shell-di-sistema.md` §2 Fase A.
 
@@ -949,13 +949,13 @@ Stato story: `[x]`
 
 ### E11-S5. Subshell `( )` e gruppi `{ }`
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E11-S5-T1` **Lexer/parser subshell** — riconoscere `( cmd_list )` come nodo AST `SUBSHELL`; distinguerlo dall'invocazione di metodo e dai resolver (contesto rilevato dal parser).
-- `[ ]` `E11-S5-T2` **Executor subshell** — eseguire il `cmd_list` in un processo figlio (`fork`); le modifiche a variabili, `cd`, alias e funzioni nel figlio non influenzano il padre; lo status di uscita è lo status dell'ultimo comando del figlio.
-- `[ ]` `E11-S5-T3` **Lexer/parser gruppo** — riconoscere `{ cmd_list; }` come nodo AST `CMD_GROUP`; la `}` richiede un separatore (`;` o newline) prima di sé.
-- `[ ]` `E11-S5-T4` **Executor gruppo** — eseguire `cmd_list` nello stesso processo e scope; utile per raggruppare redirection senza fork.
-- `[ ]` `E11-S5-T5` **Test** — golden script: variabili modificate in subshell non trapelano; `cd` in subshell non cambia la directory del padre; `{ echo a; echo b; } > out.txt` redirige l'intero gruppo.
+- `[x]` `E11-S5-T1` **Lexer/parser subshell** — `( cmd_list )` è riconosciuto come nodo AST `SUBSHELL` e continua a restare distinto dalle invocation expression e dai resolver.
+- `[x]` `E11-S5-T2` **Executor subshell** — su POSIX la subshell viene ora eseguita in un vero processo figlio (`fork`), con raccolta dell'output nel parent; modifiche a variabili, `cd`, alias e funzioni non trapelano al padre.
+- `[x]` `E11-S5-T3` **Lexer/parser gruppo** — `{ cmd_list; }` resta un nodo AST `CMD_GROUP`, e il parser richiede esplicitamente `;` o newline prima di `}`.
+- `[x]` `E11-S5-T4` **Executor gruppo** — il group command continua a eseguire `cmd_list` nello stesso processo e scope, utile per raggruppare redirection senza fork.
+- `[x]` `E11-S5-T5` **Test** — aggiunti CTest e una fixture golden auto-verificante per pid isolato in subshell, `cwd` invariato nel parent, variabili non propagate e redirection dell'intero gruppo.
 
 ### E11-S6. `getopts`, `ulimit`, `umask`
 
@@ -968,12 +968,12 @@ Stato story: `[x]`
 
 ### E11-S7. `local` nelle funzioni
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E11-S7-T1` **Parser** — riconoscere `local name[=value]` come statement valido dentro il corpo di una funzione; fuori da una funzione deve restituire errore `local: not in a function`.
-- `[ ]` `E11-S7-T2` **Frame di scope** — introdurre uno stack di frame variabili in `ArkshShell`; all'ingresso in una funzione, creare un nuovo frame; `local` alloca la variabile nel frame corrente; la lookup di variabili scala i frame dall'interno verso l'esterno; al ritorno dalla funzione, distruggere il frame corrente.
-- `[ ]` `E11-S7-T3` **Shadowing** — una variabile `local` con lo stesso nome di una variabile esterna la oscura all'interno della funzione; al ritorno la variabile esterna riprende il valore originale.
-- `[ ]` `E11-S7-T4` **Test** — golden script: variabile locale non trapela fuori; variabile esterna omonima preserva il valore originale dopo la chiamata; `local` con inizializzatore.
+- `[x]` `E11-S7-T1` **Parser / comando** — `local name[=value]` è accettato come comando valido nel corpo di una funzione shell; fuori funzione restituisce ora l'errore esplicito `local: not in a function`.
+- `[x]` `E11-S7-T2` **Frame di scope** — `local` usa i frame di scope già introdotti in `ArkshShell`; all'ingresso nella funzione viene aperto un frame, la lookup scala correttamente verso l'esterno e il frame viene distrutto al ritorno.
+- `[x]` `E11-S7-T3` **Shadowing** — una variabile `local` con lo stesso nome di una variabile esterna la oscura all'interno della funzione; al ritorno la variabile esterna riprende il valore originale.
+- `[x]` `E11-S7-T4` **Test** — aggiunti test unitari per l'errore fuori funzione e una fixture golden per `local` con inizializzatore, shadowing e non-propagazione fuori dalla funzione.
 
 ### E11-S8. Here-string `<<<`
 
@@ -1079,34 +1079,20 @@ Stato story: `[x]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E12 `[x]`
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E11 `[x]`, E12 `[x]`
 **In corso:** nessuna
-**Aperte:** E9 (release), E10 (HTTP plugin), E11 (POSIX core)
+**Aperte:** E9 (release), E10 (HTTP plugin)
 
-### Priorità 1 — chiudere il POSIX core rimasto aperto (E11)
+### Priorità 1 — portare il progetto a livello distribuzione (E9)
 
-Questa è la priorità più alta se l'obiettivo resta usare `arksh` come shell di sistema.
-Le parti più chiaramente mancanti oggi sono:
-
-1. `E11-S5` — riallineare formalmente subshell e group command al backlog POSIX
-2. `E11-S7` — `local` in funzioni shell in forma POSIX-like
-
-Nota operativa:
-
-- `E11-S2`, `E11-S3`, `E11-S4`, `E11-S6`, `E11-S8` e `E11-S9` sono chiuse e non sono piu blocchi attivi
-- `E11-S1` è chiusa
-- `E11-S5` e `E11-S7` hanno copertura parziale o sostanziale nel codice e nella suite test, ma vanno chiuse story-per-story nel backlog prima di considerare completata l'epoca
-
-### Priorità 2 — portare il progetto a livello distribuzione (E9)
-
-Dopo il POSIX core, il valore più alto è chiudere packaging e release:
+Con il POSIX core chiuso, il valore più alto adesso è chiudere packaging e release:
 
 1. `E9-S2` — packaging target (`Homebrew`, pacchetto Linux, strategia Windows)
 2. `E9-S3` — ABI plugin e versioning
 3. `E9-S4` — documentazione finale e troubleshooting
 4. `E9-S5` — release process, changelog e criteri `1.0`
 
-### Priorità 3 — plugin HTTP ufficiale (E10)
+### Priorità 2 — plugin HTTP ufficiale (E10)
 
 `E10-S1` resta importante ma non blocca il core shell. Conviene affrontarla:
 
@@ -1115,13 +1101,11 @@ Dopo il POSIX core, il valore più alto è chiudere packaging e release:
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. audit/chiusura backlog su `E11-S5`
-2. audit/chiusura backlog su `E11-S7`
-3. `E9-S2`
-4. `E9-S3`
-5. `E9-S4`
-6. `E9-S5`
-7. `E10-S1`
+1. `E9-S2`
+2. `E9-S3`
+3. `E9-S4`
+4. `E9-S5`
+5. `E10-S1`
 
 ---
 

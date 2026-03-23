@@ -2,7 +2,7 @@
 
 ## 1. Cosa manca oggi
 
-Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostituire `sh` o `bash` come shell di login, essere invocata dagli script di sistema, gestire segnali e terminale in modo robusto, e funzionare in ambienti ridotti (container, busybox, recovery). arksh non soddisfa ancora questi requisiti. Di seguito sono elencati i gap principali.
+Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostituire `sh` o `bash` come shell di login, essere invocata dagli script di sistema, gestire segnali e terminale in modo robusto, e funzionare in ambienti ridotti (container, busybox, recovery). arksh oggi ha chiuso il core POSIX del backlog (`E11`), ma non soddisfa ancora tutti i requisiti da shell di sistema. Di seguito sono elencati i gap residui.
 
 ---
 
@@ -15,7 +15,7 @@ Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostitu
 | `set -u` (nounset) | Implementato |
 | `set -o pipefail` | Implementato |
 | `set -x` (xtrace) | Implementato |
-| Aritmetica `$(( ))` | Non implementata |
+| Aritmetica `$(( ))` | Implementata |
 | Sostituzione di processo `<(cmd)` / `>(cmd)` | Implementata su POSIX |
 | `getopts` | Implementato (flusso POSIX base, `OPTIND`/`OPTARG`, cluster opzioni) |
 | `ulimit` | Implementato su POSIX, stub su Windows |
@@ -25,7 +25,7 @@ Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostitu
 | Here-string `<<<` | Implementata |
 | Doppio bracket `[[ ]]` | Implementato |
 | Test `-f`, `-d`, `-x`, `-z`, `-n`, confronti stringa/numerici, primari POSIX principali | Implementato |
-| Funzioni con `local` scope | Parziale |
+| Funzioni con `local` scope | Implementato |
 | Subshell esplicite `( cmd )` | Implementate |
 | Gruppi di comandi `{ cmd; }` | Implementati |
 | `exec` con redirection (`exec >file`) | Non implementato |
@@ -50,18 +50,18 @@ Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostitu
 
 ### 1.3 Script di compatibilità
 
-Quasi tutti gli script di sistema e gli strumenti (Docker entrypoint, systemd service, initrd, CI runners) assumono `sh` o `bash`. arksh non è un sostituto drop-in per questi script perché:
+Quasi tutti gli script di sistema e gli strumenti (Docker entrypoint, systemd service, initrd, CI runners) assumono `sh` o `bash`. arksh oggi copre una parte molto più ampia della sintassi POSIX, ma non è ancora un sostituto drop-in per questi script perché:
 
 - La sintassi object-pipeline (`|>`, `->`) non è POSIX e nessuno strumento la conosce.
-- Mancano feature che gli script POSIX usano quotidianamente (`$(( ))`, `[[ ]]`, subshell, gruppi).
+- Manca ancora una modalità di compatibilità `sh` che disabiliti esplicitamente le estensioni non-POSIX.
 - Il parsing di shebang multi-riga o di script complessi non è stato testato su corpora reali.
-- Manca un modalità di compatibilità `sh` che disabiliti le estensioni non-POSIX.
+- Restano scoperte diverse aree tipiche da shell di sistema: login shell, segnali completi, `exec` con redirection, variabili speciali stile bash (`$LINENO`, `$FUNCNAME`, `$BASH_SOURCE`).
 
 ---
 
 ### 1.4 Performance di avvio
 
-Le shell di sistema vengono avviate migliaia di volte al giorno (ogni `$(cmd)`, ogni pipeline, ogni script di build). Il tempo di startup deve essere nell'ordine dei millisecondi. arksh non ha ancora un benchmark di startup né ottimizzazioni specifiche per questo scenario.
+Le shell di sistema vengono avviate migliaia di volte al giorno (ogni `$(cmd)`, ogni pipeline, ogni script di build). Il tempo di startup deve essere nell'ordine dei millisecondi. arksh ora ha benchmark dedicati e un percorso esplicito di ottimizzazione (`docs/benchmarks-baseline.md` e `docs/studio-cpu-memoria.md`), ma non ha ancora un audit finale mirato allo scenario `/bin/sh` o login shell.
 
 ---
 
@@ -93,13 +93,15 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 
 ---
 
-### Fase A — Completamento POSIX core (priorità massima)
+### Fase A — Completamento POSIX core
 
-**Obiettivo:** arksh può eseguire script POSIX di media complessità senza errori.
+**Stato:** completata nel backlog `E11`.
 
-1. Aritmetica `$(( espressione ))` — parser per espressioni aritmetiche intere; supporto operatori `+`, `-`, `*`, `/`, `%`, `**`, `<<`, `>>`, `&`, `|`, `^`, `!`, confronti.
-2. `local` nelle funzioni — scope isolato per le variabili dichiarate con `local`.
-3. Refinement finale su subshell, group command e test POSIX end-to-end.
+**Obiettivo raggiunto:** arksh può eseguire script POSIX di media complessità senza errori nelle aree coperte dal core.
+
+1. Aritmetica `$(( espressione ))` — implementata.
+2. `local` nelle funzioni — implementato con scope isolato e shadowing corretto.
+3. Refinement finale su subshell, group command e test POSIX end-to-end — completato.
 
 ---
 
@@ -165,7 +167,7 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 |-----|-------------|------|
 | Shell interattiva personale | Si (con limitazioni) | Mancano alcune feature avanzate, ma l'uso quotidiano base funziona |
 | Shell di sviluppo in progetti arksh | Si | E il caso d'uso primario del repository |
-| Scripting su sistemi POSIX | Parziale | I flag `set -e/-u/-x/pipefail`, `[ ]`, subshell, here-string e process substitution ci sono; restano da chiudere soprattutto `$(( ))`, `local` POSIX-like e alcuni dettagli POSIX |
+| Scripting su sistemi POSIX | Si, con limiti | Il core POSIX del progetto e chiuso; restano fuori soprattutto modalita `sh`, segnali completi, `exec` con redirection e alcune variabili/feature stile bash |
 | Shell di sistema (`/bin/sh` replacement) | No | Mancano conformità POSIX, signal handling completo, modalità login |
 | Shell in container / initrd | No | Mancano robustezza, startup performance verificata e un audit finale POSIX/login |
 | Default shell utente (`chsh`) | Parziale | Possibile su macOS/Linux per chi conosce le limitazioni; sconsigliato per uso generale |
