@@ -474,6 +474,7 @@ static int is_redirect_token(ArkshTokenKind kind) {
   return kind == ARKSH_TOKEN_REDIRECT_IN ||
          kind == ARKSH_TOKEN_REDIRECT_OUT ||
          kind == ARKSH_TOKEN_REDIRECT_APPEND ||
+         kind == ARKSH_TOKEN_HERE_STRING ||
          kind == ARKSH_TOKEN_HEREDOC ||
          kind == ARKSH_TOKEN_HEREDOC_STRIP ||
          kind == ARKSH_TOKEN_REDIRECT_ERROR ||
@@ -1915,6 +1916,29 @@ static int parse_command_stage_tokens(
         continue;
       }
 
+      if (kind == ARKSH_TOKEN_HERE_STRING) {
+        if (index + 1 >= end_index || !is_value_token(stream->tokens[index + 1].kind)) {
+          snprintf(error, error_size, "redirection %s expects a string value", arksh_token_kind_name(kind));
+          return 1;
+        }
+        if (append_redirection(
+              out_stage,
+              ARKSH_REDIRECT_HERESTRING,
+              0,
+              -1,
+              0,
+              stream->tokens[index + 1].text,
+              stream->tokens[index + 1].raw,
+              "",
+              "",
+              error,
+              error_size) != 0) {
+          return 1;
+        }
+        index++;
+        continue;
+      }
+
       switch (kind) {
         case ARKSH_TOKEN_REDIRECT_IN:
           redirect_kind = ARKSH_REDIRECT_INPUT;
@@ -2468,6 +2492,27 @@ static int parse_compound_redirection_tail(
         index++;
         continue;
       }
+      case ARKSH_TOKEN_HERE_STRING:
+        if (index + 1 >= stream.count || !is_value_token(stream.tokens[index + 1].kind)) {
+          snprintf(error, error_size, "unexpected token after %s", closing_token == NULL ? "compound command" : closing_token);
+          return 1;
+        }
+        if (append_redirection(
+              &stage,
+              ARKSH_REDIRECT_HERESTRING,
+              0,
+              -1,
+              0,
+              stream.tokens[index + 1].text,
+              stream.tokens[index + 1].raw,
+              "",
+              "",
+              error,
+              error_size) != 0) {
+          return 1;
+        }
+        index++;
+        continue;
       default:
         snprintf(error, error_size, "unexpected token after %s", closing_token == NULL ? "compound command" : closing_token);
         return 1;

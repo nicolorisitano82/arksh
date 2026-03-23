@@ -975,12 +975,12 @@ Stato story: `[ ]`
 
 ### E11-S8. Here-string `<<<`
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E11-S8-T1` **Lexer** — token `HERE_STRING` (`<<<`); la parola successiva è l'argomento (soggetto a espansione variabili e command substitution).
-- `[ ]` `E11-S8-T2` **Parser** — nodo di redirection `REDIRECT_HERESTRING` con l'espressione destra; può combinarsi con altri redirect sulla stessa riga.
-- `[ ]` `E11-S8-T3` **Executor** — creare una pipe anonima; scrivere la stringa espansa seguita da un newline nel write-end; passare il read-end come stdin al comando target; chiudere il write-end dopo la scrittura.
-- `[ ]` `E11-S8-T4` **Test** — golden script: `cat <<< "hello"` → `hello`; `read line <<< "word"` → `line=word`; espansione variabile `<<< "$HOME"`.
+- `[x]` `E11-S8-T1` **Lexer** — token `HERE_STRING` (`<<<`); la parola successiva è l'argomento (soggetto a espansione variabili e command substitution).
+- `[x]` `E11-S8-T2` **Parser** — nodo di redirection `REDIRECT_HERESTRING` con l'espressione destra; può combinarsi con altri redirect sulla stessa riga.
+- `[x]` `E11-S8-T3` **Executor** — creare una pipe anonima; scrivere la stringa espansa seguita da un newline nel write-end; passare il read-end come stdin al comando target; chiudere il write-end dopo la scrittura.
+- `[x]` `E11-S8-T4` **Test** — golden script: `cat <<< "hello"` → `hello`; `read line <<< "word"` → `line=word`; espansione variabile `<<< "$HOME"`.
 
 ### E11-S9. Sostituzione di processo `<( )` e `>( )`
 

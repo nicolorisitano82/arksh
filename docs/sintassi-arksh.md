@@ -131,6 +131,7 @@ ls > out.txt
 printf hello >> out.txt
 ls missing 2> err.txt
 ls missing 2>&1 | wc -l
+./arksh_test_echo_stdin <<< "hello"
 ./arksh_test_count_lines <<EOF
 one
 two
@@ -279,6 +280,7 @@ Note pratiche:
 
 - `<<EOF ... EOF` invia un heredoc al `stdin`
 - `<<-EOF ... EOF` rimuove i tab iniziali dal body
+- `<<< "text"` invia una stringa espansa seguita da newline al `stdin`
 - `3>`, `n>&m` e `n<&m` permettono redirection e duplicazione su file descriptor arbitrari
 - i fd custom oltre `0/1/2` sono verificati sui build POSIX
 
@@ -495,6 +497,7 @@ redirection     = "<" , token
                 | "2>" , token
                 | "2>>" , token
                 | "2>&1"
+                | "<<<" , token
                 | "<<" , token , heredoc_body
                 | "<<-" , token , heredoc_body
                 | integer , ">" , token

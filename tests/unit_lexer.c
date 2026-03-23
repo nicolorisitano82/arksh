@@ -200,6 +200,20 @@ static void test_heredoc_strip(void) {
   EXPECT(found, "heredoc strip: HEREDOC_STRIP present");
 }
 
+static void test_here_string(void) {
+  ArkshTokenStream s = lex_ok("cat <<< \"hello\"");
+  int found = 0;
+  size_t i;
+  for (i = 0; i < s.count; i++) {
+    if (s.tokens[i].kind == ARKSH_TOKEN_HERE_STRING) {
+      found = 1;
+      EXPECT(strcmp(s.tokens[i].text, "<<<") == 0, "here-string: text is '<<<'");
+      break;
+    }
+  }
+  EXPECT(found, "here-string: HERE_STRING present");
+}
+
 static void test_redirect_error(void) {
   /* "2>" is handled by match_fd_redirection_token, which produces
    * REDIRECT_FD_OUT with fd==2 — the same effect as stderr redirect. */
@@ -403,6 +417,7 @@ static void test_token_kind_name(void) {
     ARKSH_TOKEN_INVALID, ARKSH_TOKEN_EOF, ARKSH_TOKEN_WORD, ARKSH_TOKEN_STRING,
     ARKSH_TOKEN_ARROW, ARKSH_TOKEN_OBJECT_PIPE, ARKSH_TOKEN_SHELL_PIPE,
     ARKSH_TOKEN_REDIRECT_IN, ARKSH_TOKEN_REDIRECT_OUT, ARKSH_TOKEN_REDIRECT_APPEND,
+    ARKSH_TOKEN_HERE_STRING,
     ARKSH_TOKEN_HEREDOC, ARKSH_TOKEN_HEREDOC_STRIP,
     ARKSH_TOKEN_REDIRECT_ERROR, ARKSH_TOKEN_REDIRECT_ERROR_APPEND,
     ARKSH_TOKEN_REDIRECT_ERROR_TO_OUTPUT,
@@ -437,6 +452,7 @@ int main(void) {
   test_redirect_in();
   test_redirect_out();
   test_redirect_append();
+  test_here_string();
   test_heredoc();
   test_heredoc_strip();
   test_redirect_error();

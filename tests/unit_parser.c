@@ -102,6 +102,17 @@ static void test_command_pipeline_three_stages(void) {
   EXPECT(ast.as.command_pipeline.stage_count == 3, "cmd pipeline 3: stage_count == 3");
 }
 
+static void test_command_here_string_redirection(void) {
+  ArkshAst ast = parse_ok("read line <<< \"$HOME\"");
+  EXPECT(ast.kind == ARKSH_AST_COMMAND_PIPELINE, "here-string cmd: kind");
+  EXPECT(ast.as.command_pipeline.stage_count == 1, "here-string cmd: stage_count == 1");
+  EXPECT(ast.as.command_pipeline.stages[0].redirection_count == 1, "here-string cmd: one redirection");
+  EXPECT(ast.as.command_pipeline.stages[0].redirections[0].kind == ARKSH_REDIRECT_HERESTRING,
+         "here-string cmd: redirection kind HERESTRING");
+  EXPECT(strcmp(ast.as.command_pipeline.stages[0].redirections[0].raw_target, "\"$HOME\"") == 0,
+         "here-string cmd: raw target preserved");
+}
+
 /* ------------------------------------------------------------------ COMMAND_LIST */
 
 static void test_command_list_sequence(void) {
@@ -352,6 +363,7 @@ int main(void) {
   /* COMMAND_PIPELINE */
   test_command_pipeline_two_stages();
   test_command_pipeline_three_stages();
+  test_command_here_string_redirection();
 
   /* COMMAND_LIST */
   test_command_list_sequence();

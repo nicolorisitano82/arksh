@@ -2,6 +2,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 #include "arksh/expand.h"
 #include "arksh/executor.h"
@@ -11,6 +16,18 @@
 #include "arksh/perf.h"
 #include "arksh/platform.h"
 #include "arksh/shell.h"
+
+#ifdef _WIN32
+#define arksh_dup_fd _dup
+#define arksh_dup2_fd _dup2
+#define arksh_close_fd _close
+#define arksh_fileno _fileno
+#else
+#define arksh_dup_fd dup
+#define arksh_dup2_fd dup2
+#define arksh_close_fd close
+#define arksh_fileno fileno
+#endif
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {
   if (dest_size == 0) {
@@ -203,6 +220,37 @@ static int expand_single_word(
   }
 
   copy_string(out, out_size, values[0]);
+  return 0;
+}
+
+static int build_here_string_text(
+  ArkshShell *shell,
+  const ArkshRedirectionNode *redirection,
+  char *text,
+  size_t text_size,
+  char *out,
+  size_t out_size
+) {
+  char expanded[ARKSH_MAX_TOKEN];
+  size_t length;
+
+  if (shell == NULL || redirection == NULL || text == NULL || text_size == 0 || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (expand_single_word(shell, redirection->raw_target, ARKSH_EXPAND_MODE_REDIRECT_TARGET, expanded, sizeof(expanded), out, out_size) != 0) {
+    return 1;
+  }
+
+  length = strlen(expanded);
+  if (length + 2 > text_size) {
+    snprintf(out, out_size, "here-string is too large");
+    return 1;
+  }
+
+  memcpy(text, expanded, length);
+  text[length] = '\n';
+  text[length + 1] = '\0';
   return 0;
 }
 
@@ -4677,6 +4725,12 @@ static int populate_process_spec_from_stage(ArkshShell *shell, const ArkshComman
         redirect->input_mode = 1;
         copy_string(redirect->text, sizeof(redirect->text), stage->redirections[i].heredoc_body);
         break;
+      case ARKSH_REDIRECT_HERESTRING:
+        redirect->input_mode = 1;
+        if (build_here_string_text(shell, &stage->redirections[i], redirect->text, sizeof(redirect->text), out, out_size) != 0) {
+          return 1;
+        }
+        break;
       default:
         snprintf(out, out_size, "unsupported redirection kind");
         return 1;
@@ -4693,6 +4747,7 @@ static int redirection_affects_stdin(const ArkshRedirectionNode *redirection) {
 
   switch (redirection->kind) {
     case ARKSH_REDIRECT_INPUT:
+    case ARKSH_REDIRECT_HERESTRING:
     case ARKSH_REDIRECT_HEREDOC:
       return 1;
     case ARKSH_REDIRECT_FD_INPUT:
@@ -4754,6 +4809,12 @@ static int append_input_redirection_to_process_spec(
     case ARKSH_REDIRECT_HEREDOC:
       redirect->input_mode = 1;
       copy_string(redirect->text, sizeof(redirect->text), redirection->heredoc_body);
+      return 0;
+    case ARKSH_REDIRECT_HERESTRING:
+      redirect->input_mode = 1;
+      if (build_here_string_text(shell, redirection, redirect->text, sizeof(redirect->text), out, out_size) != 0) {
+        return 1;
+      }
       return 0;
     case ARKSH_REDIRECT_FD_DUP_INPUT:
       return 0;
@@ -4840,6 +4901,9 @@ static int execute_builtin_with_redirection(
   char expanded_argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
   char *argv[ARKSH_MAX_ARGS];
   char command_output[ARKSH_MAX_OUTPUT];
+  const ArkshRedirectionNode *stdin_redirection = NULL;
+  FILE *stdin_file = NULL;
+  int saved_stdin_fd = -1;
   int expanded_argc = 0;
   size_t i;
 
@@ -4852,9 +4916,108 @@ static int execute_builtin_with_redirection(
   }
 
   build_command_argv(expanded_argv, expanded_argc, argv);
+  for (i = 0; i < stage->redirection_count; ++i) {
+    switch (stage->redirections[i].kind) {
+      case ARKSH_REDIRECT_INPUT:
+      case ARKSH_REDIRECT_FD_INPUT:
+        if (stage->redirections[i].fd == 0) {
+          stdin_redirection = &stage->redirections[i];
+        }
+        break;
+      case ARKSH_REDIRECT_HEREDOC:
+      case ARKSH_REDIRECT_HERESTRING:
+        stdin_redirection = &stage->redirections[i];
+        break;
+      default:
+        break;
+    }
+  }
+  if (stdin_redirection == NULL &&
+      shell->inherited_input_active &&
+      redirection_affects_stdin(&shell->inherited_input_redirection)) {
+    stdin_redirection = &shell->inherited_input_redirection;
+  }
+
+  if (stdin_redirection != NULL) {
+    saved_stdin_fd = arksh_dup_fd(0);
+    if (saved_stdin_fd < 0) {
+      snprintf(out, out_size, "unable to save builtin stdin");
+      return 1;
+    }
+
+    switch (stdin_redirection->kind) {
+      case ARKSH_REDIRECT_INPUT:
+      case ARKSH_REDIRECT_FD_INPUT: {
+        char expanded_target[ARKSH_MAX_TOKEN];
+
+        if (expand_single_word(shell, stdin_redirection->raw_target, ARKSH_EXPAND_MODE_REDIRECT_TARGET, expanded_target, sizeof(expanded_target), out, out_size) != 0) {
+          goto builtin_input_cleanup_error;
+        }
+        stdin_file = fopen(expanded_target, "rb");
+        if (stdin_file == NULL) {
+          snprintf(out, out_size, "unable to open redirected input: %s", expanded_target);
+          goto builtin_input_cleanup_error;
+        }
+        break;
+      }
+      case ARKSH_REDIRECT_HEREDOC:
+      case ARKSH_REDIRECT_HERESTRING: {
+        char input_text[ARKSH_MAX_OUTPUT];
+
+        stdin_file = tmpfile();
+        if (stdin_file == NULL) {
+          snprintf(out, out_size, "unable to create builtin input stream");
+          goto builtin_input_cleanup_error;
+        }
+        if (stdin_redirection->kind == ARKSH_REDIRECT_HERESTRING) {
+          if (build_here_string_text(shell, stdin_redirection, input_text, sizeof(input_text), out, out_size) != 0) {
+            goto builtin_input_cleanup_error;
+          }
+        } else {
+          copy_string(input_text, sizeof(input_text), stdin_redirection->heredoc_body);
+        }
+        if (fwrite(input_text, 1, strlen(input_text), stdin_file) != strlen(input_text)) {
+          snprintf(out, out_size, "unable to write builtin input stream");
+          goto builtin_input_cleanup_error;
+        }
+        rewind(stdin_file);
+        break;
+      }
+      default:
+        break;
+    }
+
+    if (stdin_file != NULL) {
+      clearerr(stdin);
+      if (arksh_dup2_fd(arksh_fileno(stdin_file), 0) < 0) {
+        snprintf(out, out_size, "unable to redirect builtin stdin");
+        goto builtin_input_cleanup_error;
+      }
+    }
+  }
+
   if (command_def->fn(shell, expanded_argc, argv, command_output, sizeof(command_output)) != 0) {
+    if (saved_stdin_fd >= 0) {
+      clearerr(stdin);
+      arksh_dup2_fd(saved_stdin_fd, 0);
+      arksh_close_fd(saved_stdin_fd);
+    }
+    if (stdin_file != NULL) {
+      fclose(stdin_file);
+    }
     copy_string(out, out_size, command_output);
     return 1;
+  }
+
+  if (saved_stdin_fd >= 0) {
+    clearerr(stdin);
+    arksh_dup2_fd(saved_stdin_fd, 0);
+    arksh_close_fd(saved_stdin_fd);
+    saved_stdin_fd = -1;
+  }
+  if (stdin_file != NULL) {
+    fclose(stdin_file);
+    stdin_file = NULL;
   }
 
   for (i = 0; i < stage->redirection_count; ++i) {
@@ -4862,8 +5025,9 @@ static int execute_builtin_with_redirection(
 
     switch (stage->redirections[i].kind) {
       case ARKSH_REDIRECT_INPUT:
+      case ARKSH_REDIRECT_HERESTRING:
       case ARKSH_REDIRECT_HEREDOC:
-        /* Built-ins do not read from stdin; ignore input redirections. */
+        /* Already applied before executing the built-in. */
         break;
       case ARKSH_REDIRECT_OUTPUT_TRUNCATE:
         if (expand_single_word(shell, stage->redirections[i].raw_target, ARKSH_EXPAND_MODE_REDIRECT_TARGET, expanded_target, sizeof(expanded_target), out, out_size) != 0) {
@@ -4913,6 +5077,17 @@ static int execute_builtin_with_redirection(
 
   copy_string(out, out_size, command_output);
   return 0;
+
+builtin_input_cleanup_error:
+  if (saved_stdin_fd >= 0) {
+    clearerr(stdin);
+    arksh_dup2_fd(saved_stdin_fd, 0);
+    arksh_close_fd(saved_stdin_fd);
+  }
+  if (stdin_file != NULL) {
+    fclose(stdin_file);
+  }
+  return 1;
 }
 
 static int execute_function_definition(
@@ -5347,6 +5522,7 @@ static int apply_compound_command_redirections(
 
     switch (redirections[i].kind) {
       case ARKSH_REDIRECT_INPUT:
+      case ARKSH_REDIRECT_HERESTRING:
       case ARKSH_REDIRECT_HEREDOC:
         break;
       case ARKSH_REDIRECT_OUTPUT_TRUNCATE:

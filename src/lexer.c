@@ -358,6 +358,8 @@ const char *arksh_token_kind_name(ArkshTokenKind kind) {
       return "redirect-out";
     case ARKSH_TOKEN_REDIRECT_APPEND:
       return "redirect-append";
+    case ARKSH_TOKEN_HERE_STRING:
+      return "here-string";
     case ARKSH_TOKEN_HEREDOC:
       return "heredoc";
     case ARKSH_TOKEN_HEREDOC_STRIP:
@@ -610,6 +612,16 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i += 2;
+      pending_redirect_target = 1;
+      continue;
+    }
+
+    if (c == '<' && i + 2 < len && line[i + 1] == '<' && line[i + 2] == '<') {
+      if (push_token(out_stream, ARKSH_TOKEN_HERE_STRING, "<<<", "<<<", i) != 0) {
+        snprintf(error, error_size, "too many tokens");
+        return 1;
+      }
+      i += 3;
       pending_redirect_target = 1;
       continue;
     }
