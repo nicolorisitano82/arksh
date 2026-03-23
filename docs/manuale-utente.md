@@ -268,9 +268,15 @@ cat < README.md | wc -l
 ls missing 2>&1 | wc -l
 ./arksh_test_echo_stdin <<< "hello"
 read line <<< "$HOME"
+wc -l <(printf "a\nb\n")
+printf hi > >(wc -c)
 ```
 
 `<<<` e una here-string: espande l'argomento, aggiunge un newline finale e lo passa allo `stdin` del comando. E utile sia con comandi esterni sia con built-in che leggono da input, come `read`.
+
+Su runtime POSIX puoi usare anche la sostituzione di processo:
+- `<(cmd)` espone l'output di `cmd` come path leggibile
+- `>(cmd)` espone un path scrivibile che alimenta lo `stdin` di `cmd`
 
 Per condizioni shell estese puoi usare anche `[[ ... ]]`:
 

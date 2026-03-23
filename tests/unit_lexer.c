@@ -214,6 +214,36 @@ static void test_here_string(void) {
   EXPECT(found, "here-string: HERE_STRING present");
 }
 
+static void test_process_subst_in(void) {
+  ArkshTokenStream s = lex_ok("diff <(printf \"a\\n\") other");
+  int found = 0;
+  size_t i;
+  for (i = 0; i < s.count; i++) {
+    if (s.tokens[i].kind == ARKSH_TOKEN_PROC_SUBST_IN) {
+      found = 1;
+      EXPECT(strcmp(s.tokens[i].text, "<(printf \"a\\n\")") == 0, "proc subst in: text preserved");
+      EXPECT(strcmp(s.tokens[i].raw, "<(printf \"a\\n\")") == 0, "proc subst in: raw preserved");
+      break;
+    }
+  }
+  EXPECT(found, "proc subst in: PROC_SUBST_IN present");
+}
+
+static void test_process_subst_out(void) {
+  ArkshTokenStream s = lex_ok("printf hi > >(wc -c)");
+  int found = 0;
+  size_t i;
+  for (i = 0; i < s.count; i++) {
+    if (s.tokens[i].kind == ARKSH_TOKEN_PROC_SUBST_OUT) {
+      found = 1;
+      EXPECT(strcmp(s.tokens[i].text, ">(wc -c)") == 0, "proc subst out: text preserved");
+      EXPECT(strcmp(s.tokens[i].raw, ">(wc -c)") == 0, "proc subst out: raw preserved");
+      break;
+    }
+  }
+  EXPECT(found, "proc subst out: PROC_SUBST_OUT present");
+}
+
 static void test_redirect_error(void) {
   /* "2>" is handled by match_fd_redirection_token, which produces
    * REDIRECT_FD_OUT with fd==2 — the same effect as stderr redirect. */
@@ -417,6 +447,7 @@ static void test_token_kind_name(void) {
     ARKSH_TOKEN_INVALID, ARKSH_TOKEN_EOF, ARKSH_TOKEN_WORD, ARKSH_TOKEN_STRING,
     ARKSH_TOKEN_ARROW, ARKSH_TOKEN_OBJECT_PIPE, ARKSH_TOKEN_SHELL_PIPE,
     ARKSH_TOKEN_REDIRECT_IN, ARKSH_TOKEN_REDIRECT_OUT, ARKSH_TOKEN_REDIRECT_APPEND,
+    ARKSH_TOKEN_PROC_SUBST_IN, ARKSH_TOKEN_PROC_SUBST_OUT,
     ARKSH_TOKEN_HERE_STRING,
     ARKSH_TOKEN_HEREDOC, ARKSH_TOKEN_HEREDOC_STRIP,
     ARKSH_TOKEN_REDIRECT_ERROR, ARKSH_TOKEN_REDIRECT_ERROR_APPEND,
@@ -452,6 +483,8 @@ int main(void) {
   test_redirect_in();
   test_redirect_out();
   test_redirect_append();
+  test_process_subst_in();
+  test_process_subst_out();
   test_here_string();
   test_heredoc();
   test_heredoc_strip();

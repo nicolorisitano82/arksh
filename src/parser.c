@@ -392,7 +392,10 @@ static int position_is_inside_nested_structure(const char *text, size_t position
 }
 
 static int is_value_token(ArkshTokenKind kind) {
-  return kind == ARKSH_TOKEN_WORD || kind == ARKSH_TOKEN_STRING;
+  return kind == ARKSH_TOKEN_WORD ||
+         kind == ARKSH_TOKEN_STRING ||
+         kind == ARKSH_TOKEN_PROC_SUBST_IN ||
+         kind == ARKSH_TOKEN_PROC_SUBST_OUT;
 }
 
 static int token_is_quoted_string(const ArkshToken *token) {

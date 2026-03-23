@@ -268,9 +268,15 @@ cat < README.md | wc -l
 ls missing 2>&1 | wc -l
 ./arksh_test_echo_stdin <<< "hello"
 read line <<< "$HOME"
+wc -l <(printf "a\nb\n")
+printf hi > >(wc -c)
 ```
 
 `<<<` is a here-string: it expands the argument, appends a trailing newline, and feeds the result to the target command's `stdin`. It works with both external commands and built-ins that read from input, such as `read`.
+
+On POSIX runtimes you can also use process substitution:
+- `<(cmd)` exposes the output of `cmd` as a readable path
+- `>(cmd)` exposes a writable path that feeds `cmd` through `stdin`
 
 For extended shell conditionals you can also use `[[ ... ]]`:
 

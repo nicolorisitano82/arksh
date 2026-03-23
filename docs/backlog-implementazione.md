@@ -984,12 +984,12 @@ Stato story: `[x]`
 
 ### E11-S9. Sostituzione di processo `<( )` e `>( )`
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E11-S9-T1` **Lexer** — token `PROC_SUBST_IN` (`<(`) e `PROC_SUBST_OUT` (`>(`); il contenuto fino alla `)` bilanciata è il comando del sotto-processo.
-- `[ ]` `E11-S9-T2` **Parser** — nodo AST `PROC_SUBST` con campo `direction` (`read`/`write`) e `cmd_list` interno; valido come argomento di un comando semplice o come sorgente di redirection.
-- `[ ]` `E11-S9-T3` **Executor POSIX** — creare una pipe o usare `/dev/fd/N` (Linux) / named FIFO su macOS; eseguire `cmd` in background con stdout/stdin collegato al descriptor; sostituire il token `<(...)` con il path del descriptor nella riga di comando espansa; chiudere i descriptor non necessari nel processo padre.
-- `[ ]` `E11-S9-T4` **Test** — golden script: `diff <(echo a) <(echo b)`; `wc -l <(ls)`; verifica che il processo figlio venga atteso correttamente.
+- `[x]` `E11-S9-T1` **Lexer** — token `PROC_SUBST_IN` (`<(`) e `PROC_SUBST_OUT` (`>(`); il contenuto fino alla `)` bilanciata viene conservato come raw token.
+- `[x]` `E11-S9-T2` **Parser** — processo di sostituzione accettato come token value-aware valido sia come argomento di comando sia come target di redirection; il bridge a runtime avviene in expansion, senza introdurre un nodo AST separato.
+- `[x]` `E11-S9-T3` **Executor POSIX** — implementazione con named FIFO e worker child: `<(...)` espone un path leggibile, `>(...)` un path scrivibile; cleanup e wait eseguiti dal parent a fine comando.
+- `[x]` `E11-S9-T4` **Test** — unit test lexer/parser e smoke test POSIX su `diff <(...)`, `wc -l <(...)`, `read ... < <(...)` e `printf > >(wc -c)`.
 
 ---
 

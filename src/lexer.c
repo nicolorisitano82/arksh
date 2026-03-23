@@ -97,6 +97,9 @@ static int is_special_token_start(const char *line, size_t index, size_t len) {
     return 1;
   }
 
+  if ((line[index] == '<' || line[index] == '>') && index + 1 < len && line[index + 1] == '(') {
+    return 1;
+  }
   if (line[index] == '|' && index + 1 < len && line[index + 1] == '>') {
     return 1;
   }
@@ -338,6 +341,111 @@ static int scan_word_token(
   return 0;
 }
 
+static int scan_process_substitution_token(
+  const char *line,
+  size_t *index,
+  size_t len,
+  ArkshToken *out_token,
+  ArkshTokenKind kind,
+  char *error,
+  size_t error_size
+) {
+  char cooked[ARKSH_MAX_TOKEN];
+  char raw[ARKSH_MAX_TOKEN];
+  size_t cooked_len = 0;
+  size_t raw_len = 0;
+  size_t start;
+  int depth = 1;
+  char quote = '\0';
+
+  if (line == NULL || index == NULL || out_token == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+  if (*index + 1 >= len || line[*index + 1] != '(') {
+    snprintf(error, error_size, "invalid process substitution start");
+    return 1;
+  }
+
+  cooked[0] = '\0';
+  raw[0] = '\0';
+  start = *index;
+
+  if (append_char(raw, sizeof(raw), &raw_len, line[*index], error, error_size, "raw token") != 0 ||
+      append_char(raw, sizeof(raw), &raw_len, '(', error, error_size, "raw token") != 0) {
+    return 1;
+  }
+  *index += 2;
+
+  while (*index < len) {
+    char c = line[*index];
+    int final_close = 0;
+
+    if (quote == '\0') {
+      if (c == '\'' || c == '"') {
+        quote = c;
+      } else if (c == '\\') {
+        if (append_char(raw, sizeof(raw), &raw_len, c, error, error_size, "raw token") != 0 ||
+            append_char(cooked, sizeof(cooked), &cooked_len, c, error, error_size, "word token") != 0) {
+          return 1;
+        }
+        (*index)++;
+        if (*index >= len) {
+          snprintf(error, error_size, "dangling escape in process substitution");
+          return 1;
+        }
+        c = line[*index];
+      } else if (c == '(') {
+        depth++;
+      } else if (c == ')') {
+        depth--;
+        if (depth == 0) {
+          final_close = 1;
+        }
+      }
+    } else if (quote == '\'') {
+      if (c == '\'') {
+        quote = '\0';
+      }
+    } else if (quote == '"') {
+      if (c == '\\') {
+        if (append_char(raw, sizeof(raw), &raw_len, c, error, error_size, "raw token") != 0 ||
+            append_char(cooked, sizeof(cooked), &cooked_len, c, error, error_size, "word token") != 0) {
+          return 1;
+        }
+        (*index)++;
+        if (*index >= len) {
+          snprintf(error, error_size, "dangling escape in process substitution");
+          return 1;
+        }
+        c = line[*index];
+      } else if (c == '"') {
+        quote = '\0';
+      }
+    }
+
+    if (append_char(raw, sizeof(raw), &raw_len, c, error, error_size, "raw token") != 0) {
+      return 1;
+    }
+    if (!final_close &&
+        append_char(cooked, sizeof(cooked), &cooked_len, c, error, error_size, "word token") != 0) {
+      return 1;
+    }
+
+    (*index)++;
+    if (final_close) {
+      memset(out_token, 0, sizeof(*out_token));
+      out_token->kind = kind;
+      copy_string(out_token->text, sizeof(out_token->text), raw);
+      copy_string(out_token->raw, sizeof(out_token->raw), raw);
+      out_token->position = start;
+      return 0;
+    }
+  }
+
+  snprintf(error, error_size, "unterminated process substitution");
+  return 1;
+}
+
 const char *arksh_token_kind_name(ArkshTokenKind kind) {
   switch (kind) {
     case ARKSH_TOKEN_EOF:
@@ -358,6 +466,10 @@ const char *arksh_token_kind_name(ArkshTokenKind kind) {
       return "redirect-out";
     case ARKSH_TOKEN_REDIRECT_APPEND:
       return "redirect-append";
+    case ARKSH_TOKEN_PROC_SUBST_IN:
+      return "proc-subst-in";
+    case ARKSH_TOKEN_PROC_SUBST_OUT:
+      return "proc-subst-out";
     case ARKSH_TOKEN_HERE_STRING:
       return "here-string";
     case ARKSH_TOKEN_HEREDOC:
@@ -427,6 +539,21 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
     }
 
     if (in_double_bracket) {
+      if ((c == '<' || c == '>') && i + 1 < len && line[i + 1] == '(') {
+        if (out_stream->count >= ARKSH_MAX_LEXER_TOKENS) {
+          snprintf(error, error_size, "too many tokens");
+          return 1;
+        }
+        if (scan_process_substitution_token(
+              line, &i, len, &out_stream->tokens[out_stream->count],
+              c == '<' ? ARKSH_TOKEN_PROC_SUBST_IN : ARKSH_TOKEN_PROC_SUBST_OUT,
+              error, error_size) != 0) {
+          return 1;
+        }
+        out_stream->count++;
+        continue;
+      }
+
       if (c == ']' && i + 1 < len && line[i + 1] == ']') {
         if (push_token(out_stream, ARKSH_TOKEN_WORD, "]]", "]]", i) != 0) {
           snprintf(error, error_size, "too many tokens");
@@ -508,6 +635,23 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
       }
       i += fd_length;
       pending_redirect_target = 1;
+      continue;
+    }
+
+    if ((c == '<' || c == '>') && i + 1 < len && line[i + 1] == '(') {
+      if (out_stream->count >= ARKSH_MAX_LEXER_TOKENS) {
+        snprintf(error, error_size, "too many tokens");
+        return 1;
+      }
+      if (scan_process_substitution_token(
+            line, &i, len, &out_stream->tokens[out_stream->count],
+            c == '<' ? ARKSH_TOKEN_PROC_SUBST_IN : ARKSH_TOKEN_PROC_SUBST_OUT,
+            error, error_size) != 0) {
+        return 1;
+      }
+      out_stream->count++;
+      pending_redirect_target = 0;
+      command_word_allowed = 0;
       continue;
     }
 

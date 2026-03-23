@@ -35,6 +35,7 @@ extern "C" {
 #define ARKSH_MAX_CLASS_PROPERTIES 256
 #define ARKSH_MAX_CLASS_METHODS 256
 #define ARKSH_MAX_INSTANCES 128
+#define ARKSH_MAX_PROCESS_SUBSTITUTIONS 32
 
 /* Execution semantics classification for built-in commands.
  *
@@ -183,6 +184,17 @@ typedef struct {
 } ArkshJob;
 
 typedef enum {
+  ARKSH_PROC_SUBST_INPUT = 0,  /* <(cmd): command writes to a readable path */
+  ARKSH_PROC_SUBST_OUTPUT       /* >(cmd): command reads from a writable path */
+} ArkshProcessSubstitutionKind;
+
+typedef struct {
+  ArkshProcessSubstitutionKind kind;
+  char path[ARKSH_MAX_PATH];
+  ArkshPlatformAsyncProcess process;
+} ArkshProcessSubstitution;
+
+typedef enum {
   ARKSH_CONTROL_SIGNAL_NONE = 0,
   ARKSH_CONTROL_SIGNAL_BREAK,
   ARKSH_CONTROL_SIGNAL_CONTINUE,
@@ -319,6 +331,10 @@ typedef struct ArkshShell {
   size_t job_count;
   size_t job_capacity;
   int next_job_id;
+  ArkshProcessSubstitution *process_substitutions;
+  size_t process_substitution_count;
+  size_t process_substitution_capacity;
+  unsigned long long next_process_substitution_id;
   int loading_plugin_index;
   ArkshControlSignalKind control_signal;
   int control_levels;
@@ -407,6 +423,15 @@ int arksh_shell_unset_alias(ArkshShell *shell, const char *name);
 int arksh_shell_source_file(ArkshShell *shell, const char *path, int positional_count, char **positional_args, char *out, size_t out_size);
 void arksh_shell_refresh_jobs(ArkshShell *shell);
 int arksh_shell_start_background_job(ArkshShell *shell, const char *command_text, char *out, size_t out_size);
+int arksh_shell_prepare_process_substitution(
+  ArkshShell *shell,
+  ArkshProcessSubstitutionKind kind,
+  const char *command_text,
+  char *out_path,
+  size_t out_path_size,
+  char *out,
+  size_t out_size
+);
 void arksh_shell_clear_control_signal(ArkshShell *shell);
 int arksh_shell_raise_control_signal(ArkshShell *shell, ArkshControlSignalKind kind, int levels);
 int arksh_shell_run_exit_trap(ArkshShell *shell, char *out, size_t out_size);

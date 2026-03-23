@@ -340,6 +340,24 @@ if(BUILD_TESTING)
   add_test(NAME arksh_here_string_echo_stdin COMMAND arksh -c "\"${ARKSH_TEST_ECHO}\" <<< \"hello\"")
   add_test(NAME arksh_here_string_read_builtin COMMAND arksh -c "read line <<< \"word\" ; text(\"line=%s\") -> print(\"$line\")")
   add_test(NAME arksh_here_string_expand_variable COMMAND arksh -c "set HOME /tmp/arksh-home ; read line <<< \"$HOME\" ; text(\"%s\") -> print(\"$line\")")
+  if(NOT WIN32)
+    add_test(NAME arksh_proc_subst_diff_same
+      COMMAND arksh -c "diff <(printf \"a\\n\") <(printf \"a\\n\") ; text(\"same\") -> print()"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+    add_test(NAME arksh_proc_subst_wc_lines
+      COMMAND arksh -c "wc -l <(printf \"a\\nb\\n\")"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+    add_test(NAME arksh_proc_subst_read_redirect
+      COMMAND arksh -c "read line < <(printf \"word\\n\") ; text(\"%s\") -> print(\"$line\")"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+    add_test(NAME arksh_proc_subst_output_redirect
+      COMMAND arksh -c "printf hi > >(wc -c)"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+  endif()
   add_test(NAME arksh_fd_redirect_output_dup COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" hello 3> fd3.out 1>&3 ; fd3.out -> read_text(64)")
   add_test(NAME arksh_fd_redirect_input_dup COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" left right > fdin.txt ; \"${ARKSH_TEST_COUNT}\" 3< fdin.txt 0<&3")
   add_test(NAME arksh_group_binding_scope COMMAND arksh -c "{ let flavor = text(\"mint\") ; } ; flavor -> value")
@@ -1275,6 +1293,12 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_here_string_echo_stdin      PROPERTIES PASS_REGULAR_EXPRESSION "hello")
   set_tests_properties(arksh_here_string_read_builtin    PROPERTIES PASS_REGULAR_EXPRESSION "line=word")
   set_tests_properties(arksh_here_string_expand_variable PROPERTIES PASS_REGULAR_EXPRESSION "/tmp/arksh-home")
+  if(NOT WIN32)
+    set_tests_properties(arksh_proc_subst_diff_same      PROPERTIES PASS_REGULAR_EXPRESSION "same")
+    set_tests_properties(arksh_proc_subst_wc_lines       PROPERTIES PASS_REGULAR_EXPRESSION "(^|[ \t])2([ \t]|$)")
+    set_tests_properties(arksh_proc_subst_read_redirect  PROPERTIES PASS_REGULAR_EXPRESSION "word")
+    set_tests_properties(arksh_proc_subst_output_redirect PROPERTIES PASS_REGULAR_EXPRESSION "2")
+  endif()
   if(NOT WIN32)
     set_tests_properties(arksh_ulimit_nofile        PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+|unlimited")
     set_tests_properties(arksh_umask_read           PROPERTIES PASS_REGULAR_EXPRESSION "[0-7][0-7][0-7]")

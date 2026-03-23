@@ -22,7 +22,7 @@ Nested member chains are first-class syntax, so direct forms like `data.json -> 
 - Typed runtime values: strings, numbers, booleans, lists, maps, dictionaries, blocks, classes, instances, and matrices
 - First-class block literals in Smalltalk-style syntax: `[:param | body]`
 - Object pipelines with `|>`: `where`, `sort`, `take`, `first`, `count`, `sum`, `min`, `max`, `render`, `lines`, `trim`, `split`, `join`, `grep`, `each`, `map`, `flat_map`, `group_by`, `reduce`, `to_json`, `from_json`, `base64_encode`, `base64_decode`, `transpose`, `fill_na`
-- Native execution of external commands with shell pipes, redirections, heredoc, and here-string (`<<<`) support
+- Native execution of external commands with shell pipes, redirections, heredoc, here-string (`<<<`), and POSIX process substitution (`<(...)`, `>(...)`) support
 - Shell/object bridge: external command output can become typed pipeline input
 - Control flow: `if`, `elif`, `else`, `while`, `until`, `for`, `break`, `continue`, `return`, ternary `?:`, `switch`, and `case`
 - Extended conditionals with `[[ ... ]]`, glob matching on `==`, and POSIX ERE regex matching via `=~`
@@ -89,6 +89,8 @@ On Linux, replace `-dynamiclib -undefined dynamic_lookup` with `-shared -fPIC`. 
 ./build/arksh -c 'true && text("ok") -> print()'
 ./build/arksh -c 'set s demo.txt ; [[ "$s" == *.txt ]] && echo yes'
 ./build/arksh -c 'read line <<< "hello" ; text("line=%s") -> print("$line")'
+./build/arksh -c 'wc -l <(printf "a\nb\n")'
+./build/arksh -c 'printf hi > >(wc -c)'
 ./build/arksh -c 'sleep 1 & jobs'
 ./build/arksh -c 'perf on ; perf reset ; . -> children() |> count() ; perf show'
 ```
@@ -166,6 +168,8 @@ let files = . -> children()
 # Shell redirections
 ./build/arksh_test_echo_stdin <<< "hello"
 read line <<< "$HOME"
+wc -l <(printf "a\nb\n")
+printf hi > >(wc -c)
 
 # Functions and classes
 function greet(name) do

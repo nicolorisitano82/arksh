@@ -132,6 +132,9 @@ printf hello >> out.txt
 ls missing 2> err.txt
 ls missing 2>&1 | wc -l
 ./arksh_test_echo_stdin <<< "hello"
+diff <(printf "a\n") <(printf "a\n")
+read line < <(printf "word\n")
+printf hi > >(wc -c)
 ./arksh_test_count_lines <<EOF
 one
 two
@@ -143,6 +146,8 @@ EOF
 ./arksh_test_emit_args hello 3> fd3.out 1>&3
 ./arksh_test_count_lines 3< fdin.txt 0<&3
 ```
+
+Nota: la sostituzione di processo `<(...)` e `>(...)` è disponibile sul runtime POSIX. In `arksh` viene materializzata come FIFO temporanea e ripulita automaticamente a fine comando.
 
 ### 1.4.1 Liste di comandi e background supportati
 

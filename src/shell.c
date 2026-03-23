@@ -8,6 +8,7 @@
 #include <time.h>
 
 #ifndef _WIN32
+#include <fcntl.h>
 #include <fnmatch.h>
 #include <regex.h>
 #include <signal.h>
@@ -411,6 +412,210 @@ static void write_buffer(const char *text) {
   fputs(text, stdout);
   if (len == 0 || text[len - 1] != '\n') {
     fputc('\n', stdout);
+  }
+  fflush(stdout);
+}
+
+#ifndef _WIN32
+static int write_all_fd(int fd, const char *text) {
+  size_t remaining;
+  const char *cursor;
+
+  if (fd < 0 || text == NULL) {
+    return 1;
+  }
+
+  cursor = text;
+  remaining = strlen(text);
+  while (remaining > 0) {
+    ssize_t written = write(fd, cursor, remaining);
+    if (written < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      return 1;
+    }
+    cursor += (size_t) written;
+    remaining -= (size_t) written;
+  }
+
+  return 0;
+}
+
+static const char *process_substitution_temp_root(const ArkshShell *shell) {
+  const char *tmpdir;
+
+  tmpdir = arksh_shell_get_var(shell, "TMPDIR");
+  if (tmpdir != NULL && tmpdir[0] != '\0') {
+    return tmpdir;
+  }
+  tmpdir = getenv("TMPDIR");
+  if (tmpdir != NULL && tmpdir[0] != '\0') {
+    return tmpdir;
+  }
+  return "/tmp";
+}
+
+static int create_process_substitution_fifo(
+  ArkshShell *shell,
+  char *out_path,
+  size_t out_path_size,
+  char *out,
+  size_t out_size
+) {
+  const char *root;
+  int attempts;
+
+  if (shell == NULL || out_path == NULL || out_path_size == 0 || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  root = process_substitution_temp_root(shell);
+  if (root == NULL || root[0] == '\0') {
+    snprintf(out, out_size, "unable to resolve process substitution temp dir");
+    return 1;
+  }
+
+  for (attempts = 0; attempts < 64; ++attempts) {
+    unsigned long long id = shell->next_process_substitution_id++;
+    if (shell->next_process_substitution_id == 0) {
+      shell->next_process_substitution_id = 1;
+    }
+    snprintf(out_path, out_path_size, "%s/arksh-procsubst-%lld-%llu.fifo", root, shell->shell_pid, id);
+    if (mkfifo(out_path, 0600) == 0) {
+      return 0;
+    }
+    if (errno != EEXIST) {
+      snprintf(out, out_size, "unable to create process substitution fifo: %s", out_path);
+      return 1;
+    }
+  }
+
+  snprintf(out, out_size, "unable to allocate unique process substitution path");
+  return 1;
+}
+
+static int spawn_process_substitution_worker(
+  ArkshShell *shell,
+  ArkshProcessSubstitutionKind kind,
+  const char *command_text,
+  const char *fifo_path,
+  ArkshPlatformAsyncProcess *out_process,
+  char *out,
+  size_t out_size
+) {
+  pid_t pid;
+
+  if (shell == NULL || command_text == NULL || fifo_path == NULL || out_process == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  memset(out_process, 0, sizeof(*out_process));
+  pid = fork();
+  if (pid < 0) {
+    snprintf(out, out_size, "unable to fork process substitution worker");
+    return 1;
+  }
+
+  if (pid == 0) {
+    int target_fd = (kind == ARKSH_PROC_SUBST_INPUT) ? STDOUT_FILENO : STDIN_FILENO;
+    int open_flags = (kind == ARKSH_PROC_SUBST_INPUT) ? O_WRONLY : O_RDONLY;
+    int stream_fd;
+    char worker_out[ARKSH_MAX_OUTPUT];
+
+    signal(SIGINT, SIG_DFL);
+    signal(SIGQUIT, SIG_DFL);
+    signal(SIGTSTP, SIG_DFL);
+    signal(SIGPIPE, SIG_DFL);
+
+    if (shell->cwd[0] != '\0' && chdir(shell->cwd) != 0) {
+      _exit(127);
+    }
+
+    stream_fd = open(fifo_path, open_flags);
+    if (stream_fd < 0) {
+      _exit(127);
+    }
+    if (dup2(stream_fd, target_fd) < 0) {
+      close(stream_fd);
+      _exit(127);
+    }
+    if (stream_fd != target_fd) {
+      close(stream_fd);
+    }
+
+    worker_out[0] = '\0';
+    if (arksh_shell_execute_line(shell, command_text, worker_out, sizeof(worker_out)) != 0) {
+      if (worker_out[0] != '\0') {
+        if (kind == ARKSH_PROC_SUBST_INPUT) {
+          write_all_fd(STDOUT_FILENO, worker_out);
+        } else {
+          write_buffer(worker_out);
+        }
+      }
+      _exit(1);
+    }
+    if (worker_out[0] != '\0') {
+      if (kind == ARKSH_PROC_SUBST_INPUT) {
+        if (write_all_fd(STDOUT_FILENO, worker_out) != 0) {
+          _exit(1);
+        }
+      } else {
+        write_buffer(worker_out);
+      }
+    }
+    _exit(0);
+  }
+
+  out_process->pid = (long long) pid;
+  out_process->pgid = (long long) pid;
+  out[0] = '\0';
+  return 0;
+}
+#endif
+
+static void cleanup_process_substitutions_from(ArkshShell *shell, size_t mark) {
+  if (shell == NULL || shell->process_substitutions == NULL) {
+    return;
+  }
+
+  while (shell->process_substitution_count > mark) {
+    ArkshProcessSubstitution *entry = &shell->process_substitutions[shell->process_substitution_count - 1];
+
+#ifdef _WIN32
+    arksh_platform_close_background_process(&entry->process);
+    remove(entry->path);
+#else
+    if (entry->process.pid > 0) {
+      ArkshPlatformProcessState state = ARKSH_PLATFORM_PROCESS_UNCHANGED;
+      int exit_code = 0;
+      int settled = 0;
+      int attempt;
+
+      for (attempt = 0; attempt < 100 && entry->process.pid > 0; ++attempt) {
+        if (arksh_platform_poll_background_process(&entry->process, &state, &exit_code) != 0) {
+          break;
+        }
+        if (state == ARKSH_PLATFORM_PROCESS_EXITED) {
+          settled = 1;
+          break;
+        }
+        usleep(10000);
+      }
+      if (!settled && entry->process.pid > 0) {
+        kill((pid_t) entry->process.pid, SIGTERM);
+      }
+      if (entry->process.pid > 0) {
+        arksh_platform_wait_background_process(&entry->process, 0, &state, &exit_code);
+      }
+      arksh_platform_close_background_process(&entry->process);
+    }
+    if (entry->path[0] != '\0') {
+      unlink(entry->path);
+    }
+#endif
+    memset(entry, 0, sizeof(*entry));
+    shell->process_substitution_count--;
   }
 }
 
@@ -3143,6 +3348,9 @@ int arksh_shell_clone_subshell(const ArkshShell *source, ArkshShell **out_shell,
   clone->jobs = NULL;
   clone->job_count = 0;
   clone->job_capacity = 0;
+  clone->process_substitutions = NULL;
+  clone->process_substitution_count = 0;
+  clone->process_substitution_capacity = 0;
   clone->traps = NULL;
   clone->type_descriptors = NULL;
   clone->type_descriptor_count = 0;
@@ -3342,6 +3550,7 @@ void arksh_shell_destroy_subshell(ArkshShell *shell) {
     shell->plugins[i].handle = NULL;
   }
 
+  cleanup_process_substitutions_from(shell, 0);
   arksh_scratch_arena_destroy(&shell->scratch);
   free(shell->commands);
   free(shell->command_name_index);
@@ -3358,6 +3567,7 @@ void arksh_shell_destroy_subshell(ArkshShell *shell) {
   free(shell->pipeline_stage_name_index);
   free(shell->aliases);
   free(shell->jobs);
+  free(shell->process_substitutions);
   free(shell->traps);
   free(shell->type_descriptors);
   free(shell);
@@ -7359,6 +7569,64 @@ int arksh_shell_start_background_job(ArkshShell *shell, const char *command_text
   return 0;
 }
 
+int arksh_shell_prepare_process_substitution(
+  ArkshShell *shell,
+  ArkshProcessSubstitutionKind kind,
+  const char *command_text,
+  char *out_path,
+  size_t out_path_size,
+  char *out,
+  size_t out_size
+) {
+#ifdef _WIN32
+  (void) shell;
+  (void) kind;
+  (void) command_text;
+  (void) out_path;
+  (void) out_path_size;
+  if (out != NULL && out_size > 0) {
+    snprintf(out, out_size, "process substitution is not supported on Windows");
+  }
+  return 1;
+#else
+  ArkshProcessSubstitution *entry;
+
+  if (shell == NULL || command_text == NULL || out_path == NULL || out_path_size == 0 || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (shell->process_substitution_count >= ARKSH_MAX_PROCESS_SUBSTITUTIONS) {
+    snprintf(out, out_size, "too many active process substitutions");
+    return 1;
+  }
+  if (grow_heap_array((void **) &shell->process_substitutions, &shell->process_substitution_capacity,
+                      shell->process_substitution_count + 1, sizeof(shell->process_substitutions[0]),
+                      ARKSH_MAX_PROCESS_SUBSTITUTIONS) != 0) {
+    snprintf(out, out_size, "too many active process substitutions");
+    return 1;
+  }
+
+  entry = &shell->process_substitutions[shell->process_substitution_count];
+  memset(entry, 0, sizeof(*entry));
+  entry->kind = kind;
+
+  if (create_process_substitution_fifo(shell, entry->path, sizeof(entry->path), out, out_size) != 0) {
+    memset(entry, 0, sizeof(*entry));
+    return 1;
+  }
+  if (spawn_process_substitution_worker(shell, kind, command_text, entry->path, &entry->process, out, out_size) != 0) {
+    unlink(entry->path);
+    memset(entry, 0, sizeof(*entry));
+    return 1;
+  }
+
+  shell->process_substitution_count++;
+  copy_string(out_path, out_path_size, entry->path);
+  out[0] = '\0';
+  return 0;
+#endif
+}
+
 void arksh_shell_clear_control_signal(ArkshShell *shell) {
   if (shell == NULL) {
     return;
@@ -10081,12 +10349,8 @@ static int command_printf(ArkshShell *shell, int argc, char **argv, char *out, s
   }
   result[res_pos] = '\0';
 
-  /* Write to stdout directly (printf outputs to stdout, not via `out`). */
-  fputs(result, stdout);
-  fflush(stdout);
-
   if (out != NULL && out_size > 0) {
-    out[0] = '\0';
+    copy_string(out, out_size, result);
   }
   return 0;
 }
@@ -12410,6 +12674,7 @@ int arksh_shell_init(ArkshShell *shell) {
   shell->last_status = 0;
   shell->next_instance_id = 1;
   shell->next_job_id = 1;
+  shell->next_process_substitution_id = 1;
   shell->loading_plugin_index = -1;
   shell->last_bg_pid = -1;
   shell->completion_generation = s_next_shell_generation++;
@@ -12497,6 +12762,7 @@ void arksh_shell_destroy(ArkshShell *shell) {
   for (i = 0; i < shell->job_count; ++i) {
     arksh_platform_close_background_process(&shell->jobs[i].process);
   }
+  cleanup_process_substitutions_from(shell, 0);
 
   for (i = 0; i < shell->plugin_count; ++i) {
     ArkshPluginShutdownFn shutdown_fn;
@@ -12528,6 +12794,7 @@ void arksh_shell_destroy(ArkshShell *shell) {
   free(shell->aliases);
   free(shell->history);
   free(shell->jobs);
+  free(shell->process_substitutions);
   free(shell->traps);
   free(shell->positional_params);
   free(shell->type_descriptors);
@@ -12817,6 +13084,7 @@ int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, siz
   ArkshAst *ast;
   char expanded_line[ARKSH_MAX_LINE];
   char parse_error[ARKSH_MAX_OUTPUT];
+  size_t proc_subst_mark;
   int status;
 
   if (shell == NULL || line == NULL || out == NULL || out_size == 0) {
@@ -12825,6 +13093,7 @@ int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, siz
 
   out[0] = '\0';
   ast = NULL;
+  proc_subst_mark = shell->process_substitution_count;
 
   if (is_blank_or_comment_line(line)) {
     shell->last_status = 0;
@@ -12893,6 +13162,7 @@ int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, siz
   }
 
   status = arksh_execute_ast(shell, ast, out, out_size);
+  cleanup_process_substitutions_from(shell, proc_subst_mark);
   free(ast);
   shell->last_status = status;
 

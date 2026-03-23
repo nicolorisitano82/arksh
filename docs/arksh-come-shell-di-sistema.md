@@ -16,7 +16,7 @@ Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostitu
 | `set -o pipefail` | Implementato |
 | `set -x` (xtrace) | Implementato |
 | Aritmetica `$(( ))` | Non implementata |
-| Sostituzione di processo `<(cmd)` / `>(cmd)` | Non implementata |
+| Sostituzione di processo `<(cmd)` / `>(cmd)` | Implementata su POSIX |
 | `getopts` | Implementato (flusso POSIX base, `OPTIND`/`OPTARG`, cluster opzioni) |
 | `ulimit` | Implementato su POSIX, stub su Windows |
 | `umask` | Implementato su POSIX, stub su Windows |

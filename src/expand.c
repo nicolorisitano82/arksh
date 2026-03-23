@@ -214,6 +214,41 @@ static int parse_command_substitution(const char *raw, size_t *index, char *out,
   return 1;
 }
 
+static int parse_process_substitution_raw(
+  const char *raw,
+  ArkshProcessSubstitutionKind *out_kind,
+  char *out_command,
+  size_t out_command_size,
+  char *error,
+  size_t error_size
+) {
+  size_t raw_len;
+  size_t command_len;
+
+  if (raw == NULL || out_kind == NULL || out_command == NULL || out_command_size == 0 ||
+      error == NULL || error_size == 0) {
+    return 1;
+  }
+
+  raw_len = strlen(raw);
+  if (raw_len < 4 || raw[1] != '(' || raw[raw_len - 1] != ')' ||
+      (raw[0] != '<' && raw[0] != '>')) {
+    snprintf(error, error_size, "invalid process substitution syntax");
+    return 1;
+  }
+
+  command_len = raw_len - 3;
+  if (command_len + 1 > out_command_size) {
+    snprintf(error, error_size, "process substitution command too long");
+    return 1;
+  }
+
+  *out_kind = raw[0] == '<' ? ARKSH_PROC_SUBST_INPUT : ARKSH_PROC_SUBST_OUTPUT;
+  memcpy(out_command, raw + 2, command_len);
+  out_command[command_len] = '\0';
+  return 0;
+}
+
 static int execute_command_substitution(ArkshShell *shell, const char *command, char *out, size_t out_size, char *error, size_t error_size) {
   char command_output[ARKSH_MAX_OUTPUT];
   ArkshShell *subshell = NULL;
@@ -1805,6 +1840,8 @@ int arksh_expand_word(
   char expanded[ARKSH_MAX_TOKEN];
   unsigned char split_flags[ARKSH_MAX_TOKEN];
   char pattern[ARKSH_MAX_TOKEN * 2];
+  ArkshProcessSubstitutionKind proc_subst_kind;
+  char proc_subst_command[ARKSH_MAX_LINE];
   int has_glob = 0;
   int saw_quote_open = 0;
   ArkshScratchFrame scratch_frame;
@@ -1817,6 +1854,30 @@ int arksh_expand_word(
   arksh_scratch_frame_begin(shell, &scratch_frame);
   *out_count = 0;
   memset(split_flags, 0, sizeof(split_flags));
+
+  if (raw != NULL && ((raw[0] == '<' && raw[1] == '(') || (raw[0] == '>' && raw[1] == '('))) {
+    if (mode == ARKSH_EXPAND_MODE_COMMAND_NAME) {
+      snprintf(error, error_size, "process substitution is not valid as a command name");
+      status = 1;
+      goto cleanup;
+    }
+    if (mode == ARKSH_EXPAND_MODE_OBJECT_SELECTOR || mode == ARKSH_EXPAND_MODE_OBJECT_ARGUMENT) {
+      snprintf(error, error_size, "process substitution is not valid in object expressions");
+      status = 1;
+      goto cleanup;
+    }
+    if (parse_process_substitution_raw(raw, &proc_subst_kind, proc_subst_command, sizeof(proc_subst_command), error, error_size) != 0 ||
+        arksh_shell_prepare_process_substitution(
+          shell, proc_subst_kind, proc_subst_command,
+          out_values[0], sizeof(out_values[0]),
+          error, error_size) != 0) {
+      status = 1;
+      goto cleanup;
+    }
+    *out_count = 1;
+    status = 0;
+    goto cleanup;
+  }
 
   if (expand_raw_token(shell, raw, mode, expanded, sizeof(expanded), split_flags, &saw_quote_open, pattern, sizeof(pattern), &has_glob, error, error_size) != 0) {
     status = 1;

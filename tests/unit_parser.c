@@ -113,6 +113,37 @@ static void test_command_here_string_redirection(void) {
          "here-string cmd: raw target preserved");
 }
 
+static void test_command_process_subst_arguments(void) {
+  ArkshAst ast = parse_ok("diff <(printf \"a\\n\") <(printf \"b\\n\")");
+  EXPECT(ast.kind == ARKSH_AST_SIMPLE_COMMAND || ast.kind == ARKSH_AST_COMMAND_PIPELINE,
+         "proc subst args: kind");
+  if (ast.kind == ARKSH_AST_SIMPLE_COMMAND) {
+    EXPECT(ast.as.command.argc == 3, "proc subst args: simple argc == 3");
+    EXPECT(strcmp(ast.as.command.raw_argv[1], "<(printf \"a\\n\")") == 0,
+           "proc subst args: simple raw_argv[1]");
+    EXPECT(strcmp(ast.as.command.raw_argv[2], "<(printf \"b\\n\")") == 0,
+           "proc subst args: simple raw_argv[2]");
+  } else {
+    EXPECT(ast.as.command_pipeline.stage_count == 1, "proc subst args: stage_count == 1");
+    EXPECT(ast.as.command_pipeline.stages[0].argc == 3, "proc subst args: argc == 3");
+    EXPECT(strcmp(ast.as.command_pipeline.stages[0].raw_argv[1], "<(printf \"a\\n\")") == 0,
+           "proc subst args: raw_argv[1]");
+    EXPECT(strcmp(ast.as.command_pipeline.stages[0].raw_argv[2], "<(printf \"b\\n\")") == 0,
+           "proc subst args: raw_argv[2]");
+  }
+}
+
+static void test_command_process_subst_redirection(void) {
+  ArkshAst ast = parse_ok("read line < <(printf \"word\\n\")");
+  EXPECT(ast.kind == ARKSH_AST_COMMAND_PIPELINE, "proc subst redirect: kind");
+  EXPECT(ast.as.command_pipeline.stage_count == 1, "proc subst redirect: stage_count == 1");
+  EXPECT(ast.as.command_pipeline.stages[0].redirection_count == 1, "proc subst redirect: one redirection");
+  EXPECT(ast.as.command_pipeline.stages[0].redirections[0].kind == ARKSH_REDIRECT_INPUT,
+         "proc subst redirect: REDIRECT_IN");
+  EXPECT(strcmp(ast.as.command_pipeline.stages[0].redirections[0].raw_target, "<(printf \"word\\n\")") == 0,
+         "proc subst redirect: raw target preserved");
+}
+
 /* ------------------------------------------------------------------ COMMAND_LIST */
 
 static void test_command_list_sequence(void) {
@@ -364,6 +395,8 @@ int main(void) {
   test_command_pipeline_two_stages();
   test_command_pipeline_three_stages();
   test_command_here_string_redirection();
+  test_command_process_subst_arguments();
+  test_command_process_subst_redirection();
 
   /* COMMAND_LIST */
   test_command_list_sequence();
