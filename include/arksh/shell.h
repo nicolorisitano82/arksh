@@ -1,6 +1,7 @@
 #ifndef ARKSH_SHELL_H
 #define ARKSH_SHELL_H
 
+#include <signal.h>
 #include <stddef.h>
 
 #include "arksh/arena.h"
@@ -366,6 +367,8 @@ typedef struct ArkshShell {
   long long shell_pgid;
   long long shell_sid;
   long long shell_tty_pgid;
+  long long shell_tty_rows;
+  long long shell_tty_cols;
   int shell_has_tty;
   int shell_is_session_leader;
   int shell_is_process_group_leader;
@@ -380,11 +383,14 @@ typedef struct ArkshShell {
   unsigned long completion_generation;
 } ArkshShell;
 
+extern volatile sig_atomic_t arksh_terminal_resize_pending;
+
 int arksh_shell_init(ArkshShell *shell);
 int arksh_shell_init_with_options(ArkshShell *shell, const char *program_path, int login_mode);
 void arksh_shell_destroy(ArkshShell *shell);
 int arksh_shell_run_repl(ArkshShell *shell);
 int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, size_t out_size);
+void arksh_shell_refresh_terminal_state(ArkshShell *shell);
 int arksh_shell_register_command(ArkshShell *shell, const char *name, const char *description, ArkshCommandFn fn, int is_plugin_command);
 void arksh_shell_write_output(const char *text);
 void arksh_shell_print_help(const ArkshShell *shell, char *out, size_t out_size);

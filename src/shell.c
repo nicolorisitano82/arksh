@@ -29,6 +29,7 @@
 
 /* E1-S6-T1: per-signal pending flags set by the async signal handler. */
 static volatile sig_atomic_t s_pending_traps[ARKSH_TRAP_COUNT];
+volatile sig_atomic_t arksh_terminal_resize_pending = 0;
 static unsigned long s_next_shell_generation = 1u;
 
 /* Mapping from ArkshTrapKind to POSIX signal number (0 for pseudo-signals). */
@@ -121,6 +122,18 @@ static void install_signal_disposition(int signum, ArkshSignalPolicy policy) {
 
   sigaction(signum, &action, NULL);
 }
+
+#ifdef SIGWINCH
+static void install_resize_signal_disposition(void) {
+  struct sigaction action;
+
+  memset(&action, 0, sizeof(action));
+  sigemptyset(&action.sa_mask);
+  action.sa_handler = arksh_generic_signal_handler;
+  action.sa_flags = 0;
+  sigaction(SIGWINCH, &action, NULL);
+}
+#endif
 #endif
 
 static int grow_heap_array(
@@ -2105,10 +2118,10 @@ static void collect_builtin_member_completions(
   size_t *count
 ) {
   static const char *object_properties[] = {
-    "type", "value_type", "value", "path", "name", "exists", "size", "hidden", "readable", "writable"
+    "type", "value_type", "value", "path", "name", "exists", "size", "permissions", "permissions_rwx", "permissions_octal", "mode", "mode_octal", "hidden", "readable", "writable"
   };
   static const char *object_methods[] = {
-    "children", "read_text", "parent", "describe"
+    "children", "read_text", "parent", "chmod", "set_permissions", "describe"
   };
   static const char *string_properties[] = {
     "type", "value_type", "value", "text", "length"
@@ -4314,6 +4327,13 @@ int arksh_shell_instantiate_class(
     return 1;
   }
 
+  if (rebuild_instance_id_index(shell) != 0) {
+    rollback_last_instance(shell);
+    snprintf(out, out_size, "unable to rebuild instance lookup index");
+    free(instance_value);
+    return 1;
+  }
+
   arksh_value_set_instance(instance_value, name, instance->id);
   if (lookup_method_recursive(shell, name, "init", 0) != NULL) {
     ArkshValue *ignored_result = allocate_runtime_value(out, out_size, "constructor result");
@@ -4340,12 +4360,6 @@ int arksh_shell_instantiate_class(
   }
 
   arksh_value_set_instance(out_value, name, instance->id);
-  if (rebuild_instance_id_index(shell) != 0) {
-    rollback_last_instance(shell);
-    snprintf(out, out_size, "unable to rebuild instance lookup index");
-    free(instance_value);
-    return 1;
-  }
   free(instance_value);
   mark_completion_cache_dirty(shell);
   out[0] = '\0';
@@ -4880,6 +4894,8 @@ static int resolver_proc(
       map_add_number_entry(out_value, "pgid", (double) info.pgid) != 0 ||
       map_add_number_entry(out_value, "sid", (double) info.sid) != 0 ||
       map_add_number_entry(out_value, "tty_pgid", (double) info.tty_pgid) != 0 ||
+      map_add_number_entry(out_value, "tty_rows", (double) info.tty_rows) != 0 ||
+      map_add_number_entry(out_value, "tty_cols", (double) info.tty_cols) != 0 ||
       map_add_bool_entry(out_value, "has_tty", info.has_tty) != 0 ||
       map_add_bool_entry(out_value, "session_leader", info.is_session_leader) != 0 ||
       map_add_bool_entry(out_value, "process_group_leader", info.is_process_group_leader) != 0 ||
@@ -4920,6 +4936,8 @@ static int resolver_shell_namespace(
     info.pgid = (unsigned long) shell->shell_pgid;
     info.sid = (unsigned long) shell->shell_sid;
     info.tty_pgid = (unsigned long) shell->shell_tty_pgid;
+    info.tty_rows = (unsigned long) shell->shell_tty_rows;
+    info.tty_cols = (unsigned long) shell->shell_tty_cols;
     info.has_tty = shell->shell_has_tty;
     info.is_session_leader = shell->shell_is_session_leader;
     info.is_process_group_leader = shell->shell_is_process_group_leader;
@@ -4928,6 +4946,8 @@ static int resolver_shell_namespace(
     shell->shell_pgid = (long long) info.pgid;
     shell->shell_sid = (long long) info.sid;
     shell->shell_tty_pgid = (long long) info.tty_pgid;
+    shell->shell_tty_rows = (long long) info.tty_rows;
+    shell->shell_tty_cols = (long long) info.tty_cols;
     shell->shell_has_tty = info.has_tty;
     shell->shell_is_session_leader = info.is_session_leader;
     shell->shell_is_process_group_leader = info.is_process_group_leader;
@@ -4956,6 +4976,8 @@ static int resolver_shell_namespace(
       map_add_number_entry(out_value, "pgid", (double) info.pgid) != 0 ||
       map_add_number_entry(out_value, "sid", (double) info.sid) != 0 ||
       map_add_number_entry(out_value, "tty_pgid", (double) info.tty_pgid) != 0 ||
+      map_add_number_entry(out_value, "tty_rows", (double) info.tty_rows) != 0 ||
+      map_add_number_entry(out_value, "tty_cols", (double) info.tty_cols) != 0 ||
       map_add_bool_entry(out_value, "has_tty", info.has_tty) != 0 ||
       map_add_bool_entry(out_value, "session_leader", info.is_session_leader) != 0 ||
       map_add_bool_entry(out_value, "process_group_leader", info.is_process_group_leader) != 0 ||
@@ -7879,6 +7901,12 @@ int arksh_shell_run_exit_trap(ArkshShell *shell, char *out, size_t out_size) {
 #ifndef _WIN32
 static void arksh_generic_signal_handler(int signum) {
   int k;
+#ifdef SIGWINCH
+  if (signum == SIGWINCH) {
+    arksh_terminal_resize_pending = 1;
+    return;
+  }
+#endif
   for (k = 0; s_trap_map[k].name != NULL; k++) {
     if (s_trap_map[k].signum == signum) {
       s_pending_traps[s_trap_map[k].kind] = 1;
@@ -7991,6 +8019,9 @@ static void configure_shell_signals(ArkshShell *shell) {
       install_trap_signal(shell, s_trap_map[k].kind);
     }
   }
+#ifdef SIGWINCH
+  install_resize_signal_disposition();
+#endif
 #endif
 }
 
@@ -13076,9 +13107,34 @@ static void refresh_shell_process_metadata(ArkshShell *shell, const ArkshPlatfor
   shell->shell_pgid = (long long) info->pgid;
   shell->shell_sid = (long long) info->sid;
   shell->shell_tty_pgid = (long long) info->tty_pgid;
+  shell->shell_tty_rows = (long long) info->tty_rows;
+  shell->shell_tty_cols = (long long) info->tty_cols;
   shell->shell_has_tty = info->has_tty;
   shell->shell_is_session_leader = info->is_session_leader;
   shell->shell_is_process_group_leader = info->is_process_group_leader;
+}
+
+void arksh_shell_refresh_terminal_state(ArkshShell *shell) {
+  ArkshPlatformProcessInfo info;
+  unsigned long cols = 0;
+  unsigned long rows = 0;
+
+  if (shell == NULL) {
+    return;
+  }
+
+  memset(&info, 0, sizeof(info));
+  if (arksh_platform_get_process_info(&info) == 0) {
+    refresh_shell_process_metadata(shell, &info);
+  } else if (arksh_platform_get_terminal_size(&cols, &rows) == 0) {
+    shell->shell_tty_cols = (long long) cols;
+    shell->shell_tty_rows = (long long) rows;
+  } else {
+    shell->shell_tty_cols = 0;
+    shell->shell_tty_rows = 0;
+  }
+
+  mark_completion_cache_dirty(shell);
 }
 
 static int source_optional_startup_file(ArkshShell *shell, const char *path, int *out_loaded) {
@@ -13531,6 +13587,9 @@ void arksh_shell_print_help(const ArkshShell *shell, char *out, size_t out_size)
     "  . -> type\n"
     "  . -> children()\n"
     "  README.md -> read_text(256)\n"
+    "  README.md -> permissions\n"
+    "  README.md -> permissions_octal\n"
+    "  README.md -> chmod(\"644\") -> permissions_octal\n"
     "  data.json -> read_json()\n"
     "  text(\"hello\")\n"
     "  bool(true) ? \"yes\" : \"no\"\n"
@@ -13772,6 +13831,10 @@ int arksh_shell_run_repl(ArkshShell *shell) {
     command[0] = '\0';
     if (interactive) {
       output[0] = '\0';
+      if (arksh_terminal_resize_pending) {
+        arksh_terminal_resize_pending = 0;
+        arksh_shell_refresh_terminal_state(shell);
+      }
       fire_pending_traps(shell, output, sizeof(output));
       ArkshLineReadStatus read_status;
 

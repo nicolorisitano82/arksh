@@ -385,6 +385,7 @@ if(BUILD_TESTING)
   )
   add_test(NAME arksh_class_basic COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/basic.arksh")
   add_test(NAME arksh_class_init_inheritance COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/init-and-inheritance.arksh")
+  add_test(NAME arksh_class_init_inline_isa COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/init-inline-isa.arksh")
   add_test(NAME arksh_class_multiple_inheritance COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/multiple-inheritance.arksh")
   add_test(NAME arksh_class_introspection COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/classes/introspection.arksh")
   add_test(NAME arksh_print_method COMMAND arksh -c "text(\"hello\") -> print()")
@@ -756,6 +757,11 @@ if(BUILD_TESTING)
     arksh_class_init_inheritance
     PROPERTIES
       PASS_REGULAR_EXPRESSION "readme"
+  )
+  set_tests_properties(
+    arksh_class_init_inline_isa
+    PROPERTIES
+      PASS_REGULAR_EXPRESSION "true[\r\n]+readme"
   )
   set_tests_properties(
     arksh_class_multiple_inheritance
@@ -1455,6 +1461,14 @@ if(BUILD_TESTING)
       COMMAND arksh -c "umask 077 ; umask \"u=rwx,g=rx,o=\" ; umask"
       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     )
+    add_test(NAME arksh_object_permissions_octal
+      COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" hi > chmod_target.txt ; chmod_target.txt -> chmod(\"600\") -> permissions_octal"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+    add_test(NAME arksh_object_permissions_rwx
+      COMMAND arksh -c "\"${ARKSH_TEST_EMIT}\" hi > chmod_target.txt ; chmod_target.txt -> chmod(\"rw-r-----\") -> permissions"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
   endif()
   set_tests_properties(
     arksh_posix_assign_single arksh_posix_assign_multi arksh_posix_assign_expand
@@ -1474,6 +1488,10 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_here_string_read_builtin    PROPERTIES PASS_REGULAR_EXPRESSION "line=word")
   set_tests_properties(arksh_here_string_expand_variable PROPERTIES PASS_REGULAR_EXPRESSION "/tmp/arksh-home")
   set_tests_properties(arksh_exec_redirect_stdin_persistent PROPERTIES PASS_REGULAR_EXPRESSION "word")
+  if(NOT WIN32)
+    set_tests_properties(arksh_object_permissions_octal PROPERTIES PASS_REGULAR_EXPRESSION "600")
+    set_tests_properties(arksh_object_permissions_rwx   PROPERTIES PASS_REGULAR_EXPRESSION "rw-r-----")
+  endif()
   set_tests_properties(arksh_golden_assoc_arrays PROPERTIES PASS_REGULAR_EXPRESSION "assoc_arrays_done")
   set_tests_properties(arksh_assoc_array_value PROPERTIES PASS_REGULAR_EXPRESSION "blue")
   set_tests_properties(arksh_assoc_array_keys PROPERTIES PASS_REGULAR_EXPRESSION "2\\|sky forest")

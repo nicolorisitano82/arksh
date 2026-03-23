@@ -1,0 +1,10 @@
+class Named do
+  property name = text("unnamed")
+endclass
+
+class Document extends Named do
+  method init = [:self :name | self -> set("name", name)]
+endclass
+
+Document(text("readme")) -> isa("Named")
+Document(text("readme")) -> name

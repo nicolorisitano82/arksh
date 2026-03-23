@@ -1089,9 +1089,9 @@ Stato story: `[x]`
 Con il POSIX core chiuso, il prossimo gap tecnico più importante per usare `arksh`
 come vera shell di sistema è rendere solidi segnali, sessione e terminale:
 
-1. `E13-S3` — `SIGWINCH` e resize del terminale
-2. `E13-S4` — restore TTY, raw mode e `stty`
-3. `E9-S2` — packaging target e installazione distribuita
+1. `E13-S4` — restore TTY, raw mode e `stty`
+2. `E9-S2` — packaging target e installazione distribuita
+3. `E9-S3` — ABI plugin e versioning
 
 ### Priorità 2 — portare il progetto a livello distribuzione (E9)
 
@@ -1111,13 +1111,12 @@ Una volta chiuso `E13`, il valore più alto torna su packaging e release:
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E13-S3`
-2. `E13-S4`
-3. `E9-S2`
-4. `E9-S3`
-5. `E9-S4`
-6. `E9-S5`
-7. `E10-S1`
+1. `E13-S4`
+2. `E9-S2`
+3. `E9-S3`
+4. `E9-S4`
+5. `E9-S5`
+6. `E10-S1`
 
 ---
 
@@ -1148,11 +1147,11 @@ Stato story: `[x]`
 
 ### E13-S3. Resize terminale e line editor
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E13-S3-T1` aggiungere handler `SIGWINCH` con refresh delle dimensioni del terminale
-- `[ ]` `E13-S3-T2` notificare line editor e prompt del resize con redraw coerente del buffer corrente
-- `[ ]` `E13-S3-T3` aggiungere smoke test PTY per resize e regressioni sul rendering interattivo
+- `[x]` `E13-S3-T1` aggiungere handler `SIGWINCH` con refresh delle dimensioni del terminale
+- `[x]` `E13-S3-T2` notificare line editor e prompt del resize con redraw coerente del buffer corrente
+- `[x]` `E13-S3-T3` aggiungere smoke test PTY per resize e regressioni sul rendering interattivo
 
 ### E13-S4. Ripristino TTY e raw mode affidabili
 

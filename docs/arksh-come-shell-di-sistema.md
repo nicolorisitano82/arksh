@@ -41,7 +41,7 @@ Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostitu
 | `trap` su tutti i segnali POSIX (SIGTERM, SIGHUP, SIGQUIT, SIGPIPE, …) | Implementato sui target POSIX supportati |
 | Propagazione corretta dei segnali ai child process | Implementata sui path principali (`fork/exec`, pipeline, background job, subshell child) |
 | Gestione SIGCHLD per job control robusto | Implementata nel runtime corrente |
-| `SIGWINCH` e resize del terminale | Non gestito |
+| `SIGWINCH` e resize del terminale | Implementato sui target POSIX supportati |
 | `setsid` / gestione corretta del process group come login shell | Implementato sui target POSIX supportati |
 | Mode `--login` | Implementato |
 | `stty` e raw mode ripristino affidabile al crash | Non garantito |
@@ -112,7 +112,7 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 1. `trap` su tutti i segnali POSIX — completato; restano da rifinire i casi da login shell dentro la fase TTY/sessione.
 2. Modalità `--login` — completata con profili arksh dedicati: `ARKSH_GLOBAL_PROFILE`, `${config_dir}/profile`, `~/.arksh_profile` e override `ARKSH_LOGIN_PROFILE`.
 3. `setsid` e process group — completato sui target POSIX supportati: i login shell senza TTY fanno `setsid()` quando serve, le shell interattive si portano nel proprio process group e reclamano il controlling TTY con `tcsetpgrp()`.
-4. `SIGWINCH` handler — aggiorna dimensioni del terminale, notifica il line editor.
+4. `SIGWINCH` handler — completato: aggiorna dimensioni del terminale, notifica il line editor e ridisegna il buffer corrente senza perderlo.
 5. Ripristino del terminale al crash — installare un handler di ultimo resort che chiama `tcsetattr` con i settings originali.
 6. `stty` built-in o passthrough — necessario per script di configurazione terminale.
 
@@ -168,6 +168,6 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 | Shell interattiva personale | Si (con limitazioni) | Mancano alcune feature avanzate, ma l'uso quotidiano base funziona |
 | Shell di sviluppo in progetti arksh | Si | E il caso d'uso primario del repository |
 | Scripting su sistemi POSIX | Si, con limiti | Il core POSIX del progetto e chiuso; restano fuori soprattutto modalita `sh`, segnali completi, `exec` con redirection e alcune variabili/feature stile bash |
-| Shell di sistema (`/bin/sh` replacement) | No | Mancano ancora `SIGWINCH`, restore TTY/raw mode, modalità `sh` e packaging/release |
+| Shell di sistema (`/bin/sh` replacement) | No | Mancano ancora restore TTY/raw mode, modalità `sh` e packaging/release |
 | Shell in container / initrd | No | Mancano robustezza finale, startup audit dedicato e un passaggio conclusivo su TTY/crash recovery |
 | Default shell utente (`chsh`) | Parziale | Possibile su macOS/Linux per chi conosce le limitazioni; sconsigliato per uso generale |

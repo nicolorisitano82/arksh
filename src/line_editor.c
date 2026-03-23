@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,7 +41,8 @@ enum {
   ARKSH_KEY_CTRL_U,           /* kill to start of line (^U, 0x15) */
   ARKSH_KEY_CTRL_W,           /* kill word backward    (^W, 0x17) */
   ARKSH_KEY_CTRL_Y,           /* yank from kill buffer (^Y, 0x19) */
-  ARKSH_KEY_CTRL_UNDERSCORE   /* undo                  (^_, 0x1f) */
+  ARKSH_KEY_CTRL_UNDERSCORE,  /* undo                  (^_, 0x1f) */
+  ARKSH_KEY_RESIZE
 };
 
 typedef enum {
@@ -1651,6 +1653,9 @@ static int read_key(void) {
   unsigned char ch = 0;
 
   if (read(STDIN_FILENO, &ch, 1) != 1) {
+    if (errno == EINTR && arksh_terminal_resize_pending) {
+      return ARKSH_KEY_RESIZE;
+    }
     return -1;
   }
 
@@ -1712,6 +1717,9 @@ static int read_key(void) {
     tcsetattr(STDIN_FILENO, TCSANOW, &save);
 
     if (n <= 0) {
+      if (n < 0 && errno == EINTR && arksh_terminal_resize_pending) {
+        return ARKSH_KEY_RESIZE;
+      }
       return ARKSH_KEY_ESC;
     }
 
@@ -1726,6 +1734,9 @@ static int read_key(void) {
       unsigned char b1;
 
       if (read(STDIN_FILENO, &b1, 1) != 1) {
+        if (errno == EINTR && arksh_terminal_resize_pending) {
+          return ARKSH_KEY_RESIZE;
+        }
         return -1;
       }
 
@@ -1733,6 +1744,9 @@ static int read_key(void) {
         unsigned char b2;
 
         if (read(STDIN_FILENO, &b2, 1) != 1) {
+          if (errno == EINTR && arksh_terminal_resize_pending) {
+            return ARKSH_KEY_RESIZE;
+          }
           return -1;
         }
         if (b1 == '3' && b2 == '~') {
@@ -1744,9 +1758,15 @@ static int read_key(void) {
           unsigned char b4;
 
           if (read(STDIN_FILENO, &b3, 1) != 1) {
+            if (errno == EINTR && arksh_terminal_resize_pending) {
+              return ARKSH_KEY_RESIZE;
+            }
             return -1;
           }
           if (read(STDIN_FILENO, &b4, 1) != 1) {
+            if (errno == EINTR && arksh_terminal_resize_pending) {
+              return ARKSH_KEY_RESIZE;
+            }
             return -1;
           }
           if (b3 == '5') {
@@ -1798,6 +1818,17 @@ static void redraw_search(const char *query, const char *match) {
   fflush(stdout);
 }
 
+static void handle_resize_redraw(
+  ArkshShell *shell,
+  const char *prompt,
+  const char *buffer,
+  size_t length,
+  size_t cursor
+) {
+  (void) shell;
+  redraw_line(prompt, buffer, length, cursor, shell);
+}
+
 static int find_history_match(ArkshShell *shell, const char *query, size_t from, size_t *found_index) {
   size_t i = from;
 
@@ -1840,6 +1871,15 @@ static int do_reverse_search(
 
   for (;;) {
     key = read_key();
+
+    if (key == ARKSH_KEY_RESIZE) {
+      arksh_terminal_resize_pending = 0;
+      if (shell != NULL) {
+        arksh_shell_refresh_terminal_state(shell);
+      }
+      redraw_search(query, match_str != NULL ? match_str : buffer);
+      continue;
+    }
 
     if (key == -1 || key == ARKSH_KEY_CTRL_G || key == ARKSH_KEY_ESC || key == ARKSH_KEY_CTRL_C) {
       return -1;
@@ -1935,6 +1975,7 @@ ArkshLineReadStatus arksh_line_editor_read_line(
   ArkshTerminalState terminal_state;
   /* Single-line editing buffer — reused for each continuation line. */
   char line[ARKSH_MAX_LINE];
+  char active_prompt_buf[ARKSH_MAX_OUTPUT];
   size_t length = 0;
   size_t cursor = 0;
   size_t history_index;
@@ -1960,7 +2001,8 @@ ArkshLineReadStatus arksh_line_editor_read_line(
   multi[0] = '\0';
   history_scratch[0] = '\0';
   history_index = shell->history_count;
-  active_prompt = prompt;
+  copy_string(active_prompt_buf, sizeof(active_prompt_buf), prompt);
+  active_prompt = active_prompt_buf;
 
   if (terminal_enter_raw(&terminal_state) != 0) {
     return ARKSH_LINE_READ_ERROR;
@@ -1973,6 +2015,19 @@ ArkshLineReadStatus arksh_line_editor_read_line(
     int key = read_key();
     int prev_tab = last_tab;
     last_tab = (key == ARKSH_KEY_TAB) ? 1 : 0;
+
+    if (key == ARKSH_KEY_RESIZE) {
+      arksh_terminal_resize_pending = 0;
+      if (shell != NULL) {
+        arksh_shell_refresh_terminal_state(shell);
+      }
+      if (!in_continuation) {
+        arksh_prompt_render(&shell->prompt, shell, active_prompt_buf, sizeof(active_prompt_buf));
+        active_prompt = active_prompt_buf;
+      }
+      handle_resize_redraw(shell, active_prompt, line, length, cursor);
+      continue;
+    }
 
     if (key == -1) {
       terminal_leave_raw(&terminal_state);
@@ -1997,8 +2052,10 @@ ArkshLineReadStatus arksh_line_editor_read_line(
       if (needs_more != NULL && multi_len > 0 && needs_more(multi) > 0) {
         /* Enter continuation mode: print newline, show secondary prompt. */
         fputc('\n', stdout);
-        active_prompt = (prompt_continue != NULL && prompt_continue[0] != '\0')
-                        ? prompt_continue : "... ";
+        copy_string(active_prompt_buf, sizeof(active_prompt_buf),
+                    (prompt_continue != NULL && prompt_continue[0] != '\0')
+                    ? prompt_continue : "... ");
+        active_prompt = active_prompt_buf;
         fputs(active_prompt, stdout);
         fflush(stdout);
         in_continuation = 1;
@@ -2118,8 +2175,10 @@ ArkshLineReadStatus arksh_line_editor_read_line(
 
           if (needs_more != NULL && multi_len > 0 && needs_more(multi) > 0) {
             fputc('\n', stdout);
-            active_prompt = (prompt_continue != NULL && prompt_continue[0] != '\0')
-                            ? prompt_continue : "... ";
+            copy_string(active_prompt_buf, sizeof(active_prompt_buf),
+                        (prompt_continue != NULL && prompt_continue[0] != '\0')
+                        ? prompt_continue : "... ");
+            active_prompt = active_prompt_buf;
             fputs(active_prompt, stdout);
             fflush(stdout);
             in_continuation = 1;

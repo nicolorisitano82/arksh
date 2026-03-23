@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -110,6 +111,15 @@ static void cleanup(pid_t pid, int master) {
   close(master);
   kill(pid, SIGTERM);
   waitpid(pid, NULL, 0);
+}
+
+static int set_pty_size(int fd, unsigned short cols, unsigned short rows) {
+  struct winsize ws;
+
+  memset(&ws, 0, sizeof(ws));
+  ws.ws_col = cols;
+  ws.ws_row = rows;
+  return ioctl(fd, TIOCSWINSZ, &ws);
 }
 
 /* ------------------------------------------------------------------ tests */
@@ -287,6 +297,50 @@ static void test_trap_tstp_prompt(void) {
   cleanup(pid, master);
 }
 
+/* Test 8: terminal resize redraws cleanly and updates shell tty metadata. */
+static void test_terminal_resize_redraw(void) {
+  pid_t pid;
+  int master;
+  char buf[4096];
+
+  master = spawn_arksh(&pid);
+  if (master < 0) {
+    EXPECT(0, "terminal_resize_redraw: forkpty failed");
+    return;
+  }
+
+  drain(master, buf, sizeof(buf), 1200);
+
+  {
+    const char *partial = "echo resize_buffer_";
+    write(master, partial, strlen(partial));
+  }
+  if (set_pty_size(master, 100, 40) != 0) {
+    EXPECT(0, "terminal_resize_redraw: TIOCSWINSZ failed");
+    cleanup(pid, master);
+    return;
+  }
+  usleep(150000);
+  drain(master, buf, sizeof(buf), 500);
+
+  write(master, "ok\n", 3);
+  drain(master, buf, sizeof(buf), 1000);
+  EXPECT(strstr(buf, "resize_buffer_ok") != NULL,
+         "terminal_resize_redraw: current buffer survives resize");
+
+  write(master, "shell() -> tty_cols\n", 20);
+  drain(master, buf, sizeof(buf), 1000);
+  EXPECT(strstr(buf, "100") != NULL,
+         "terminal_resize_redraw: shell tty_cols updates after resize");
+
+  write(master, "shell() -> tty_rows\n", 20);
+  drain(master, buf, sizeof(buf), 1000);
+  EXPECT(strstr(buf, "40") != NULL,
+         "terminal_resize_redraw: shell tty_rows updates after resize");
+
+  cleanup(pid, master);
+}
+
 /* ------------------------------------------------------------------ main */
 
 int main(void) {
@@ -297,6 +351,7 @@ int main(void) {
   test_ctrl_d_exits();
   test_trap_int_prompt();
   test_trap_tstp_prompt();
+  test_terminal_resize_redraw();
 
   if (g_failures > 0) {
     fprintf(stderr, "%d PTY test(s) FAILED\n", g_failures);
