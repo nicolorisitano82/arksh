@@ -49,7 +49,10 @@ call . children
 call README.md read_text 128
 prompt show
 prompt load examples/arksh.conf
+prompt load examples/arksh-git.conf
+prompt render
 plugin load build/arksh_sample_plugin.so
+plugin load git-prompt-plugin
 plugin list
 plugin info arksh_sample_plugin
 plugin enable arksh_sample_plugin
@@ -68,6 +71,7 @@ README.md -> read_text(128)
 README.md -> parent()
 . -> describe()
 data.json -> read_json() -> get_path("a[2].b")
+git_info() -> branch
 obj(".").type
 ```
 

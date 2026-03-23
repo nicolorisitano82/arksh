@@ -8008,6 +8008,11 @@ static int command_prompt(ArkshShell *shell, int argc, char **argv, char *out, s
     return arksh_shell_load_config(shell, path, out, out_size);
   }
 
+  if (strcmp(argv[1], "render") == 0) {
+    arksh_prompt_render(&shell->prompt, shell, out, out_size);
+    return 0;
+  }
+
   snprintf(out, out_size, "unknown prompt command: %s", argv[1]);
   return 1;
 }

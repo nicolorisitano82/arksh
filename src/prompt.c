@@ -264,6 +264,27 @@ static void resolve_segment_value(const struct ArkshShell *shell, const char *se
     return;
   }
 
+  {
+    const ArkshValueResolverDef *resolver = arksh_shell_find_value_resolver(shell, segment);
+
+    if (resolver != NULL && resolver->fn != NULL) {
+      ArkshValue value;
+      char error[ARKSH_MAX_OUTPUT];
+
+      arksh_value_init(&value);
+      error[0] = '\0';
+      if (resolver->fn((ArkshShell *) shell, 0, NULL, &value, error, sizeof(error)) == 0) {
+        if (arksh_value_render(&value, out, out_size) != 0) {
+          copy_string(out, out_size, "");
+        }
+      } else {
+        copy_string(out, out_size, "");
+      }
+      arksh_value_free(&value);
+      return;
+    }
+  }
+
   copy_string(out, out_size, "");
 }
 
@@ -276,14 +297,11 @@ void arksh_prompt_config_init(ArkshPromptConfig *config) {
   config->generation = 1u;
   copy_string(config->theme, sizeof(config->theme), "default");
   copy_string(config->separator, sizeof(config->separator), " | ");
-  config->use_color = 1;
+  config->use_color = 0;
   copy_string(config->left[0], sizeof(config->left[0]), "userhost");
   copy_string(config->left[1], sizeof(config->left[1]), "cwd");
   config->left_count = 2;
-  copy_string(config->right[0], sizeof(config->right[0]), "status");
-  copy_string(config->right[1], sizeof(config->right[1]), "os");
-  copy_string(config->right[2], sizeof(config->right[2]), "datetime");
-  config->right_count = 3;
+  config->right_count = 0;
   copy_string(config->continuation, sizeof(config->continuation), "... ");
 }
 
@@ -393,10 +411,14 @@ void arksh_prompt_render(const ArkshPromptConfig *config, const struct ArkshShel
     append_segment(right, sizeof(right), config->separator, config->right[i], value, config->use_color, lookup_color(config, config->right[i]));
   }
 
-  if (right[0] != '\0') {
-    snprintf(out, out_size, "[%s] %s || %s > ", config->theme, left, right);
+  if (right[0] != '\0' && left[0] != '\0') {
+    snprintf(out, out_size, "%s || %s > ", left, right);
+  } else if (left[0] != '\0') {
+    snprintf(out, out_size, "%s > ", left);
+  } else if (right[0] != '\0') {
+    snprintf(out, out_size, "%s > ", right);
   } else {
-    snprintf(out, out_size, "[%s] %s > ", config->theme, left);
+    snprintf(out, out_size, "> ");
   }
 
   s_prompt_cache.valid = 1;

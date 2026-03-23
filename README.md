@@ -255,6 +255,13 @@ The sample plugin registers:
 - the `sample_tag` property on directory-like receivers
 - the `sample_label(...)` method on filesystem objects
 
+The Git prompt plugin registers:
+
+- `git()` -> branch + one-character state mark, for prompt segments
+- `git_branch()` -> current branch name
+- `git_state()` -> current state mark
+- `git_info()` -> repository info map
+
 Plugin management commands:
 
 ```text
@@ -266,6 +273,13 @@ plugin autoload list
 ```
 
 The plugin template is available in [plugins/skeleton](plugins/skeleton).
+The Git prompt plugin docs are in [plugins/git/README.md](plugins/git/README.md).
+
+Default prompt:
+
+```text
+user@host | /current/path >
+```
 
 ## Prompt Example
 
@@ -285,3 +299,28 @@ color.time=yellow
 ```bash
 ./build/arksh -c 'prompt load examples/arksh.conf'
 ```
+
+Git-aware prompt example:
+
+```ini
+theme=default
+left=userhost,cwd,git,plugins
+right=status,os,date,time
+plugin=git-prompt-plugin
+color.git=yellow
+```
+
+```bash
+./build/arksh -c 'prompt load examples/arksh-git.conf ; prompt render'
+./build/arksh -c 'plugin load git-prompt-plugin ; git_info() -> branch'
+```
+
+Git state marks:
+
+- `=` clean branch
+- `*` dirty or untracked changes
+- `^` ahead of upstream
+- `v` behind upstream
+- `~` ahead and behind
+- `!` conflicts
+- `:` detached HEAD

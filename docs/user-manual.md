@@ -476,6 +476,12 @@ Prompt config lookup:
 3. `${ARKSH_CONFIG_HOME}/prompt.conf` or the resolved standard config dir
 4. legacy fallback: `~/.arksh/prompt.conf`
 
+Default prompt:
+
+```text
+user@host | /current/path >
+```
+
 Example prompt configuration:
 
 ```ini
@@ -485,6 +491,46 @@ right=status,os,date,time
 separator= ::
 use_color=1
 ```
+
+Available `left` and `right` segments:
+
+- `user` — current user
+- `host` — machine hostname
+- `userhost` — combined `user@host`
+- `cwd` — current working directory
+- `status` — last command status, `ok` or `err:N`
+- `os` — operating system name
+- `plugins` — number of loaded plugins
+- `date` — current date in `YYYY-MM-DD`
+- `time` — current time in `HH:MM:SS`
+- `datetime` — current date and time in `YYYY-MM-DD HH:MM:SS`
+- `theme` — active prompt theme name
+
+Practical notes:
+
+- `left` and `right` accept the same comma-separated segment names
+- you can also use zero-argument resolvers that render to text, such as `git` from the Git prompt plugin
+- if a segment resolves to an empty string, it is simply omitted from the prompt
+
+Git-aware prompt configuration:
+
+```ini
+theme=default
+left=userhost,cwd,git,plugins
+right=status,os,date,time
+plugin=git-prompt-plugin
+color.git=yellow
+```
+
+Git state marks:
+
+- `=` clean branch
+- `*` dirty or untracked changes
+- `^` ahead of upstream
+- `v` behind upstream
+- `~` ahead and behind
+- `!` conflicts
+- `:` detached HEAD
 
 Local installation:
 
@@ -496,6 +542,8 @@ Load it:
 
 ```text
 prompt load examples/arksh.conf
+prompt load examples/arksh-git.conf
+prompt render
 ```
 
 ## 11. Interactive Features

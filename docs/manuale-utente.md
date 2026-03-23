@@ -476,6 +476,12 @@ Ricerca config prompt:
 3. `${ARKSH_CONFIG_HOME}/prompt.conf` o la config dir standard risolta
 4. fallback legacy: `~/.arksh/prompt.conf`
 
+Prompt di default:
+
+```text
+user@host | /percorso/corrente >
+```
+
 Esempio di config prompt:
 
 ```ini
@@ -485,6 +491,46 @@ right=status,os,date,time
 separator= ::
 use_color=1
 ```
+
+Opzioni disponibili per `left` e `right`:
+
+- `user` — utente corrente
+- `host` — hostname della macchina
+- `userhost` — combinazione `user@host`
+- `cwd` — directory corrente
+- `status` — stato dell'ultimo comando, `ok` oppure `err:N`
+- `os` — nome del sistema operativo
+- `plugins` — numero di plugin caricati
+- `date` — data corrente in formato `YYYY-MM-DD`
+- `time` — ora corrente in formato `HH:MM:SS`
+- `datetime` — data e ora in formato `YYYY-MM-DD HH:MM:SS`
+- `theme` — nome del tema prompt attivo
+
+Nota pratica:
+
+- `left` e `right` accettano gli stessi segmenti, separati da virgole
+- puoi usare anche resolver senza argomenti che restituiscono testo, per esempio `git` dal plugin Git prompt
+- se un segmento restituisce stringa vuota, viene semplicemente omesso dal prompt
+
+Config prompt con Git:
+
+```ini
+theme=default
+left=userhost,cwd,git,plugins
+right=status,os,date,time
+plugin=git-prompt-plugin
+color.git=yellow
+```
+
+Segnalini stato Git:
+
+- `=` branch pulito
+- `*` modifiche o file non tracciati
+- `^` branch avanti rispetto all'upstream
+- `v` branch indietro rispetto all'upstream
+- `~` avanti e indietro insieme
+- `!` conflitti
+- `:` detached HEAD
 
 Installazione locale:
 
@@ -496,6 +542,8 @@ Caricamento:
 
 ```text
 prompt load examples/arksh.conf
+prompt load examples/arksh-git.conf
+prompt render
 ```
 
 ## 11. Funzionalità interattive

@@ -143,6 +143,7 @@ endfunction()
 
 arksh_add_plugin(arksh_sample_plugin plugins/sample/sample_plugin.c)
 arksh_add_plugin(arksh_skeleton_plugin plugins/skeleton/skeleton_plugin.c)
+arksh_add_plugin(arksh_git_prompt_plugin plugins/git/git_prompt_plugin.c)
 # E6-S2-T3: typed-map example plugin (links against libm for sqrt)
 arksh_add_plugin(arksh_point_plugin plugins/point/point_plugin.c)
 if(NOT WIN32)
@@ -164,6 +165,7 @@ install(TARGETS arksh
 install(TARGETS
   arksh_sample_plugin
   arksh_skeleton_plugin
+  arksh_git_prompt_plugin
   arksh_point_plugin
   arksh_trash_plugin
   LIBRARY DESTINATION ${ARKSH_PLUGIN_INSTALL_DIR}
@@ -181,6 +183,12 @@ install(FILES
   examples/arksh.conf
   DESTINATION ${CMAKE_INSTALL_DATADIR}/arksh/examples
   RENAME prompt.conf.example
+)
+
+install(FILES
+  examples/arksh-git.conf
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/arksh/examples
+  RENAME prompt-git.conf.example
 )
 
 install(DIRECTORY
@@ -382,6 +390,35 @@ if(BUILD_TESTING)
     ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;USERPROFILE=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;ARKSH_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home;ARKSH_PLUGIN_HOME=${CMAKE_CURRENT_BINARY_DIR}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     PASS_REGULAR_EXPRESSION "arksh_sample_plugin"
+  )
+  add_test(NAME arksh_default_prompt_render COMMAND arksh -c "prompt render")
+  set_tests_properties(arksh_default_prompt_render PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    PASS_REGULAR_EXPRESSION ".+@.+ \\| .+ >"
+  )
+  add_test(NAME arksh_git_prompt_branch COMMAND arksh -c "plugin load git-prompt-plugin ; git_branch()")
+  set_tests_properties(arksh_git_prompt_branch PROPERTIES
+    ENVIRONMENT "ARKSH_PLUGIN_HOME=${CMAKE_CURRENT_BINARY_DIR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/git/repo-clean"
+    PASS_REGULAR_EXPRESSION "main"
+  )
+  add_test(NAME arksh_git_prompt_state_clean COMMAND arksh -c "plugin load git-prompt-plugin ; git_state()")
+  set_tests_properties(arksh_git_prompt_state_clean PROPERTIES
+    ENVIRONMENT "ARKSH_PLUGIN_HOME=${CMAKE_CURRENT_BINARY_DIR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/git/repo-clean"
+    PASS_REGULAR_EXPRESSION "="
+  )
+  add_test(NAME arksh_git_prompt_detached COMMAND arksh -c "plugin load git-prompt-plugin ; git()")
+  set_tests_properties(arksh_git_prompt_detached PROPERTIES
+    ENVIRONMENT "ARKSH_PLUGIN_HOME=${CMAKE_CURRENT_BINARY_DIR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/git/repo-detached"
+    PASS_REGULAR_EXPRESSION "0123456:"
+  )
+  add_test(NAME arksh_git_prompt_render COMMAND arksh -c "prompt load ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/prompt/git.conf ; prompt render")
+  set_tests_properties(arksh_git_prompt_render PROPERTIES
+    ENVIRONMENT "ARKSH_PLUGIN_HOME=${CMAKE_CURRENT_BINARY_DIR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/git/repo-clean"
+    PASS_REGULAR_EXPRESSION "main= \\|\\| ok >"
   )
   add_test(NAME arksh_perf_builtin_show COMMAND arksh -c "perf on ; perf reset ; . -> type ; perf show")
   set_tests_properties(arksh_perf_builtin_show PROPERTIES
