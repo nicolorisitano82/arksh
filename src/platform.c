@@ -49,6 +49,27 @@ static void copy_string(char *dest, size_t dest_size, const char *src) {
   snprintf(dest, dest_size, "%s", src == NULL ? "" : src);
 }
 
+#ifndef _WIN32
+static void reset_child_signal_handlers(void) {
+  signal(SIGHUP,  SIG_DFL);
+  signal(SIGINT,  SIG_DFL);
+  signal(SIGQUIT, SIG_DFL);
+  signal(SIGILL,  SIG_DFL);
+  signal(SIGABRT, SIG_DFL);
+  signal(SIGFPE,  SIG_DFL);
+  signal(SIGSEGV, SIG_DFL);
+  signal(SIGPIPE, SIG_DFL);
+  signal(SIGALRM, SIG_DFL);
+  signal(SIGTERM, SIG_DFL);
+  signal(SIGUSR1, SIG_DFL);
+  signal(SIGUSR2, SIG_DFL);
+  signal(SIGCHLD, SIG_DFL);
+  signal(SIGTSTP, SIG_DFL);
+  signal(SIGTTIN, SIG_DFL);
+  signal(SIGTTOU, SIG_DFL);
+}
+#endif
+
 static int is_separator(char c) {
   return c == '/' || c == '\\';
 }
@@ -1509,10 +1530,7 @@ windows_stage_cleanup:
         if (interactive) {
           setpgid(0, target_pgid);
         }
-        signal(SIGINT,  SIG_DFL);
-        signal(SIGQUIT, SIG_DFL);
-        signal(SIGTSTP, SIG_DFL);
-        signal(SIGPIPE, SIG_DFL); /* E4-S3: ensure SIGPIPE is not ignored */
+        reset_child_signal_handlers();
 #endif
         if (cwd != NULL && cwd[0] != '\0' && chdir(cwd) != 0) {
           _exit(127);
@@ -1819,9 +1837,7 @@ int arksh_platform_spawn_background_process(
     if (pid == 0) {
       int null_input;
 
-      signal(SIGINT, SIG_DFL);
-      signal(SIGQUIT, SIG_DFL);
-      signal(SIGTSTP, SIG_DFL);
+      reset_child_signal_handlers();
       setpgid(0, 0);
 
       if (cwd != NULL && cwd[0] != '\0' && chdir(cwd) != 0) {

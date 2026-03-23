@@ -6257,6 +6257,19 @@ static int execute_subshell_command(
   if (pid == 0) {
     int child_status;
 
+#ifndef _WIN32
+    signal(SIGHUP,  SIG_DFL);
+    signal(SIGINT,  SIG_DFL);
+    signal(SIGQUIT, SIG_DFL);
+    signal(SIGPIPE, SIG_DFL);
+    signal(SIGTERM, SIG_DFL);
+    signal(SIGUSR1, SIG_DFL);
+    signal(SIGUSR2, SIG_DFL);
+    signal(SIGCHLD, SIG_DFL);
+    signal(SIGTSTP, SIG_DFL);
+    signal(SIGTTIN, SIG_DFL);
+    signal(SIGTTOU, SIG_DFL);
+#endif
     close(pipefd[0]);
     command_output[0] = '\0';
     child_status = execute_compound_body(subshell, compound, command_output, sizeof(command_output));

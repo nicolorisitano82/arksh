@@ -38,9 +38,9 @@ Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostitu
 
 | Requisito | Stato |
 |-----------|-------|
-| `trap` su tutti i segnali POSIX (SIGTERM, SIGHUP, SIGQUIT, SIGPIPE, …) | Parziale — solo `EXIT` garantito, altri parziali |
-| Propagazione corretta dei segnali ai child process | Non verificata in tutti i casi edge |
-| Gestione SIGCHLD per job control robusto | Parziale |
+| `trap` su tutti i segnali POSIX (SIGTERM, SIGHUP, SIGQUIT, SIGPIPE, …) | Implementato sui target POSIX supportati |
+| Propagazione corretta dei segnali ai child process | Implementata sui path principali (`fork/exec`, pipeline, background job, subshell child) |
+| Gestione SIGCHLD per job control robusto | Implementata nel runtime corrente |
 | `SIGWINCH` e resize del terminale | Non gestito |
 | `setsid` / gestione corretta del process group come login shell | Non implementato |
 | Mode `--login` | Non implementato |
@@ -109,7 +109,7 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 
 **Obiettivo:** arksh si comporta correttamente come shell di login e gestisce segnali in tutti i casi.
 
-1. `trap` su tutti i segnali POSIX — tabella segnali completa in `ArkshTrap`; dispatch in signal handler.
+1. `trap` su tutti i segnali POSIX — completato; restano da rifinire i casi da login shell dentro la fase TTY/sessione.
 2. Modalità `--login` — comportamento identico a `bash --login`: legge `/etc/profile`, `~/.bash_profile` o equivalente arksh.
 3. `setsid` e process group — la shell di login diventa session leader; i job in foreground ricevono il TTY.
 4. `SIGWINCH` handler — aggiorna dimensioni del terminale, notifica il line editor.

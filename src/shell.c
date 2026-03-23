@@ -57,6 +57,14 @@ s_trap_map[] = {
   { NULL,    ARKSH_TRAP_COUNT, 0        }
 };
 
+#ifndef _WIN32
+typedef enum {
+  ARKSH_SIGNAL_POLICY_DEFAULT = 0,
+  ARKSH_SIGNAL_POLICY_IGNORE,
+  ARKSH_SIGNAL_POLICY_HANDLE
+} ArkshSignalPolicy;
+#endif
+
 static ArkshValue *allocate_shell_value(char *out, size_t out_size) {
   ArkshValue *value = (ArkshValue *) calloc(1, sizeof(*value));
 
@@ -69,6 +77,9 @@ static ArkshValue *allocate_shell_value(char *out, size_t out_size) {
 static ArkshValue *allocate_runtime_value(char *error, size_t error_size, const char *label);
 static int build_class_property_list(const ArkshShell *shell, const char *class_name, ArkshValue *out_value, char *out, size_t out_size);
 static int build_class_method_list(const ArkshShell *shell, const char *class_name, ArkshValue *out_value, char *out, size_t out_size);
+#ifndef _WIN32
+static void arksh_generic_signal_handler(int signum);
+#endif
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {
   if (dest_size == 0) {
@@ -91,6 +102,26 @@ static ArkshShellMetadata *allocate_shell_metadata_copy(const ArkshShellMetadata
   }
   return metadata;
 }
+
+#ifndef _WIN32
+static void install_signal_disposition(int signum, ArkshSignalPolicy policy) {
+  struct sigaction action;
+
+  memset(&action, 0, sizeof(action));
+  sigemptyset(&action.sa_mask);
+  action.sa_flags = SA_RESTART;
+
+  if (policy == ARKSH_SIGNAL_POLICY_IGNORE) {
+    action.sa_handler = SIG_IGN;
+  } else if (policy == ARKSH_SIGNAL_POLICY_HANDLE) {
+    action.sa_handler = arksh_generic_signal_handler;
+  } else {
+    action.sa_handler = SIG_DFL;
+  }
+
+  sigaction(signum, &action, NULL);
+}
+#endif
 
 static int grow_heap_array(
   void **items,
@@ -7841,22 +7872,53 @@ static ArkshTrapKind trap_name_to_kind(const char *name) {
   return ARKSH_TRAP_COUNT;
 }
 
-/* Install or remove the signal handler for the given trap kind. */
-static void install_trap_signal(ArkshTrapKind kind, int install) {
+static int trap_kind_is_interactive_ignored(ArkshTrapKind kind) {
+  return kind == ARKSH_TRAP_INT ||
+         kind == ARKSH_TRAP_QUIT ||
+         kind == ARKSH_TRAP_TSTP ||
+         kind == ARKSH_TRAP_TTIN ||
+         kind == ARKSH_TRAP_TTOU;
+}
+
+#ifndef _WIN32
+static ArkshSignalPolicy signal_policy_for_trap(const ArkshShell *shell, ArkshTrapKind kind) {
+  int interactive = arksh_line_editor_is_interactive();
+
+  if (shell != NULL && shell->traps != NULL && kind >= 0 && kind < ARKSH_TRAP_COUNT &&
+      shell->traps[kind].active) {
+    return shell->traps[kind].ignored ? ARKSH_SIGNAL_POLICY_IGNORE
+                                      : ARKSH_SIGNAL_POLICY_HANDLE;
+  }
+
+  if (interactive) {
+    if (trap_kind_is_interactive_ignored(kind)) {
+      return ARKSH_SIGNAL_POLICY_IGNORE;
+    }
+    if (kind == ARKSH_TRAP_CHLD) {
+      return ARKSH_SIGNAL_POLICY_HANDLE;
+    }
+  }
+
+  return ARKSH_SIGNAL_POLICY_DEFAULT;
+}
+#endif
+
+/* Apply the correct signal disposition for the given trap kind. */
+static void install_trap_signal(const ArkshShell *shell, ArkshTrapKind kind) {
 #ifndef _WIN32
   int k;
   for (k = 0; s_trap_map[k].name != NULL; k++) {
     if (s_trap_map[k].kind == kind) {
       int signum = s_trap_map[k].signum;
       if (signum != 0) {
-        signal(signum, install ? arksh_generic_signal_handler : SIG_DFL);
+        install_signal_disposition(signum, signal_policy_for_trap(shell, kind));
       }
       return;
     }
   }
 #else
+  (void) shell;
   (void) kind;
-  (void) install;
 #endif
 }
 
@@ -7868,7 +7930,12 @@ static void fire_pending_traps(ArkshShell *shell, char *out, size_t out_size) {
   for (k = 0; k < ARKSH_TRAP_COUNT; k++) {
     if (s_pending_traps[k]) {
       s_pending_traps[k] = 0;
-      if (shell->traps[k].active && shell->traps[k].command[0] != '\0') {
+      if (k == ARKSH_TRAP_CHLD) {
+        arksh_shell_refresh_jobs(shell);
+      }
+      if (shell->traps[k].active &&
+          !shell->traps[k].ignored &&
+          shell->traps[k].command[0] != '\0') {
         char trap_out[ARKSH_MAX_OUTPUT];
         trap_out[0] = '\0';
         arksh_shell_execute_line(shell, shell->traps[k].command, trap_out, sizeof(trap_out));
@@ -7880,13 +7947,15 @@ static void fire_pending_traps(ArkshShell *shell, char *out, size_t out_size) {
   }
 }
 
-static void configure_shell_signals(void) {
+static void configure_shell_signals(ArkshShell *shell) {
 #ifndef _WIN32
-  signal(SIGINT, SIG_IGN);
-  signal(SIGQUIT, SIG_IGN);
-  signal(SIGTSTP, SIG_IGN);
-  signal(SIGTTIN, SIG_IGN);
-  signal(SIGTTOU, SIG_IGN);
+  int k;
+
+  for (k = 0; s_trap_map[k].name != NULL; ++k) {
+    if (s_trap_map[k].signum != 0) {
+      install_trap_signal(shell, s_trap_map[k].kind);
+    }
+  }
 #endif
 }
 
@@ -9820,10 +9889,11 @@ static int command_trap(ArkshShell *shell, int argc, char **argv, char *out, siz
       if (kind == ARKSH_TRAP_COUNT) {
         continue;
       }
-      if (shell->traps[kind].active && shell->traps[kind].command[0] != '\0') {
+      if (shell->traps[kind].active) {
         char line[ARKSH_MAX_LINE + 64];
         snprintf(line, sizeof(line), "trap -- '%s' %s\n",
-                 shell->traps[kind].command, s_trap_map[k].name);
+                 shell->traps[kind].ignored ? "" : shell->traps[kind].command,
+                 s_trap_map[k].name);
         if (strlen(buf) + strlen(line) < sizeof(buf) - 1) {
           strcat(buf, line);
         }
@@ -9852,10 +9922,11 @@ static int command_trap(ArkshShell *shell, int argc, char **argv, char *out, siz
         snprintf(out, out_size, "trap: invalid signal: %s", argv[i]);
         return 1;
       }
-      if (shell->traps[kind].active && shell->traps[kind].command[0] != '\0') {
+      if (shell->traps[kind].active) {
         char line[ARKSH_MAX_LINE + 64];
         snprintf(line, sizeof(line), "trap -- '%s' %s\n",
-                 shell->traps[kind].command, argv[i]);
+                 shell->traps[kind].ignored ? "" : shell->traps[kind].command,
+                 argv[i]);
         if (strlen(buf) + strlen(line) < sizeof(buf) - 1) {
           strcat(buf, line);
         }
@@ -9878,8 +9949,9 @@ static int command_trap(ArkshShell *shell, int argc, char **argv, char *out, siz
         return 1;
       }
       shell->traps[kind].active = 0;
+      shell->traps[kind].ignored = 0;
       shell->traps[kind].command[0] = '\0';
-      install_trap_signal(kind, 0);
+      install_trap_signal(shell, kind);
     }
     return 0;
   }
@@ -9897,9 +9969,14 @@ static int command_trap(ArkshShell *shell, int argc, char **argv, char *out, siz
       snprintf(out, out_size, "trap: invalid signal: %s", argv[i]);
       return 1;
     }
-    copy_string(shell->traps[kind].command, sizeof(shell->traps[kind].command), argv[1]);
     shell->traps[kind].active = 1;
-    install_trap_signal(kind, 1);
+    shell->traps[kind].ignored = (argv[1][0] == '\0');
+    if (shell->traps[kind].ignored) {
+      shell->traps[kind].command[0] = '\0';
+    } else {
+      copy_string(shell->traps[kind].command, sizeof(shell->traps[kind].command), argv[1]);
+    }
+    install_trap_signal(shell, kind);
   }
   return 0;
 }
@@ -12017,7 +12094,7 @@ static int register_builtin_commands(ArkshShell *shell) {
       register_builtin(shell, ".",        "execute commands from a file",                   command_source,   ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "eval",     "evaluate a command string in the current shell", command_eval,     ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "exec",     "run an external command and terminate the current shell", command_exec, ARKSH_BUILTIN_MUTANT) != 0 ||
-      register_builtin(shell, "trap",     "list or define shell exit traps",                command_trap,     ARKSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "trap",     "list or define shell signal traps",              command_trap,     ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "break",    "exit the current loop or an outer loop",         command_break,    ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "continue", "skip to the next loop iteration",                command_continue, ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "return",   "exit the current shell function",                command_return,   ARKSH_BUILTIN_MUTANT) != 0 ||
@@ -13545,12 +13622,14 @@ int arksh_shell_run_repl(ArkshShell *shell) {
 
   interactive = arksh_line_editor_is_interactive();
   if (interactive) {
-    configure_shell_signals();
+    configure_shell_signals(shell);
   }
 
   while (shell->running) {
     command[0] = '\0';
     if (interactive) {
+      output[0] = '\0';
+      fire_pending_traps(shell, output, sizeof(output));
       ArkshLineReadStatus read_status;
 
       arksh_prompt_render(&shell->prompt, shell, prompt, sizeof(prompt));

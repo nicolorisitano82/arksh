@@ -225,6 +225,56 @@ static void test_ctrl_d_exits(void) {
   EXPECT(WEXITSTATUS(status) == 0, "ctrl_d_exits: exit code is 0");
 }
 
+/* Test 6: SIGINT trap fires from an interactive session. */
+static void test_trap_int_prompt(void) {
+  pid_t pid;
+  int master;
+  char buf[4096];
+
+  master = spawn_arksh(&pid);
+  if (master < 0) {
+    EXPECT(0, "trap_int_prompt: forkpty failed");
+    return;
+  }
+
+  drain(master, buf, sizeof(buf), 1200);
+  write(master, "trap 'echo int_caught' INT\n", 27);
+  drain(master, buf, sizeof(buf), 800);
+
+  write(master, "/bin/kill -INT $$\n", 18);
+  drain(master, buf, sizeof(buf), 1000);
+
+  EXPECT(strstr(buf, "int_caught") != NULL,
+         "trap_int_prompt: SIGINT trap output appears");
+
+  cleanup(pid, master);
+}
+
+/* Test 7: TSTP trap can be triggered from an interactive session. */
+static void test_trap_tstp_prompt(void) {
+  pid_t pid;
+  int master;
+  char buf[4096];
+
+  master = spawn_arksh(&pid);
+  if (master < 0) {
+    EXPECT(0, "trap_tstp_prompt: forkpty failed");
+    return;
+  }
+
+  drain(master, buf, sizeof(buf), 1200);
+  write(master, "trap 'echo tstp_caught' TSTP\n", 29);
+  drain(master, buf, sizeof(buf), 800);
+
+  write(master, "/bin/kill -TSTP $$\n", 19);
+  drain(master, buf, sizeof(buf), 1000);
+
+  EXPECT(strstr(buf, "tstp_caught") != NULL,
+         "trap_tstp_prompt: TSTP trap output appears");
+
+  cleanup(pid, master);
+}
+
 /* ------------------------------------------------------------------ main */
 
 int main(void) {
@@ -233,6 +283,8 @@ int main(void) {
   test_continuation_prompt();
   test_tab_completion();
   test_ctrl_d_exits();
+  test_trap_int_prompt();
+  test_trap_tstp_prompt();
 
   if (g_failures > 0) {
     fprintf(stderr, "%d PTY test(s) FAILED\n", g_failures);

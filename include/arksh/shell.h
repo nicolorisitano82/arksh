@@ -227,6 +227,7 @@ typedef struct {
   char name[ARKSH_MAX_NAME];
   char command[ARKSH_MAX_LINE];
   int active;
+  int ignored;
 } ArkshTrapEntry;
 
 typedef enum {

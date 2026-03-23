@@ -1208,8 +1208,36 @@ if(BUILD_TESTING)
     COMMAND arksh -c "trap 'echo caught' TERM; trap -p"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_trap_print_ignore
+    COMMAND arksh -c "trap '' INT; trap -p INT"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   add_test(NAME arksh_trap_err
     COMMAND arksh -c "trap 'echo err' ERR; /usr/bin/false; echo after"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_trap_term_async
+    COMMAND arksh -c "trap 'echo term_caught' TERM; /bin/kill -TERM $$; echo after_term"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_trap_hup_async
+    COMMAND arksh -c "trap 'echo hup_caught' HUP; /bin/kill -HUP $$; echo after_hup"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_trap_quit_async
+    COMMAND arksh -c "trap 'echo quit_caught' QUIT; /bin/kill -QUIT $$; echo after_quit"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_trap_pipe_async
+    COMMAND arksh -c "trap 'echo pipe_caught' PIPE; /bin/kill -PIPE $$; echo after_pipe"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_trap_chld_async
+    COMMAND arksh -c "trap 'echo chld_caught' CHLD; \"${ARKSH_TEST_PAUSE}\" 0 & wait"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_signal_background_term
+    COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 5 & /bin/kill -TERM $!; if wait %1; then echo bad; else echo term_wait; fi"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
   add_test(NAME arksh_set_errexit
@@ -1320,7 +1348,14 @@ if(BUILD_TESTING)
     PROPERTIES TIMEOUT 10
   )
   set_tests_properties(arksh_trap_posix_all    PROPERTIES PASS_REGULAR_EXPRESSION "TERM")
+  set_tests_properties(arksh_trap_print_ignore PROPERTIES PASS_REGULAR_EXPRESSION "trap -- '' INT")
   set_tests_properties(arksh_trap_err          PROPERTIES PASS_REGULAR_EXPRESSION "err")
+  set_tests_properties(arksh_trap_term_async   PROPERTIES PASS_REGULAR_EXPRESSION "term_caught")
+  set_tests_properties(arksh_trap_hup_async    PROPERTIES PASS_REGULAR_EXPRESSION "hup_caught")
+  set_tests_properties(arksh_trap_quit_async   PROPERTIES PASS_REGULAR_EXPRESSION "quit_caught")
+  set_tests_properties(arksh_trap_pipe_async   PROPERTIES PASS_REGULAR_EXPRESSION "pipe_caught")
+  set_tests_properties(arksh_trap_chld_async   PROPERTIES PASS_REGULAR_EXPRESSION "chld_caught")
+  set_tests_properties(arksh_signal_background_term PROPERTIES PASS_REGULAR_EXPRESSION "term_wait")
   set_tests_properties(arksh_set_errexit       PROPERTIES WILL_FAIL TRUE)
   set_tests_properties(arksh_set_errexit_or_lhs PROPERTIES PASS_REGULAR_EXPRESSION "ok")
   set_tests_properties(arksh_set_errexit_and_or_chain PROPERTIES PASS_REGULAR_EXPRESSION "recovered[\r\n]+after")

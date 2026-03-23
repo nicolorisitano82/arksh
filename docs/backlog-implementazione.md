@@ -1089,10 +1089,9 @@ Stato story: `[x]`
 Con il POSIX core chiuso, il prossimo gap tecnico più importante per usare `arksh`
 come vera shell di sistema è rendere solidi segnali, sessione e terminale:
 
-1. `E13-S1` — trap e propagazione segnali POSIX completi
-2. `E13-S2` — `--login`, `setsid` e process group corretti
-3. `E13-S3` — `SIGWINCH` e resize del terminale
-4. `E13-S4` — restore TTY, raw mode e `stty`
+1. `E13-S2` — `--login`, `setsid` e process group corretti
+2. `E13-S3` — `SIGWINCH` e resize del terminale
+3. `E13-S4` — restore TTY, raw mode e `stty`
 
 ### Priorità 2 — portare il progetto a livello distribuzione (E9)
 
@@ -1112,15 +1111,14 @@ Una volta chiuso `E13`, il valore più alto torna su packaging e release:
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E13-S1`
-2. `E13-S2`
-3. `E13-S3`
-4. `E13-S4`
-5. `E9-S2`
-6. `E9-S3`
-7. `E9-S4`
-8. `E9-S5`
-9. `E10-S1`
+1. `E13-S2`
+2. `E13-S3`
+3. `E13-S4`
+4. `E9-S2`
+5. `E9-S3`
+6. `E9-S4`
+7. `E9-S5`
+8. `E10-S1`
 
 ---
 
@@ -1133,12 +1131,12 @@ Questa epoca traduce il blocco `1.2 Segnali e gestione TTY` del documento
 
 ### E13-S1. Trap e propagazione segnali POSIX
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E13-S1-T1` completare `trap` per tutti i segnali POSIX supportati dal target e allineare `trap -p`, reset e dispatch asincrono
-- `[ ]` `E13-S1-T2` garantire la propagazione corretta dei segnali ai child process e ai job foreground/background nei casi edge
-- `[ ]` `E13-S1-T3` consolidare la gestione di `SIGCHLD` per job control robusto, senza race tra reap, `jobs`, `fg` e `wait`
-- `[ ]` `E13-S1-T4` aggiungere test PTY e smoke test dedicati per `INT`, `TERM`, `HUP`, `PIPE`, `QUIT`, `TSTP`
+- `[x]` `E13-S1-T1` completare `trap` per tutti i segnali POSIX supportati dal target e allineare `trap -p`, reset, ignore (`trap '' SIG`) e dispatch asincrono
+- `[x]` `E13-S1-T2` garantire la propagazione corretta dei segnali ai child process e ai job foreground/background nei path principali (`fork/exec`, pipeline, background job, subshell child)
+- `[x]` `E13-S1-T3` consolidare la gestione di `SIGCHLD` per job control robusto, con refresh dei job al boundary dei comandi e prima del prompt interattivo
+- `[x]` `E13-S1-T4` aggiungere test PTY e smoke test dedicati per `INT`, `TERM`, `HUP`, `PIPE`, `QUIT`, `TSTP`, `CHLD`
 
 ### E13-S2. Login shell, sessione e process group
 
