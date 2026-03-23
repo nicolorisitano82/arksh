@@ -68,6 +68,24 @@ static void reset_child_signal_handlers(void) {
   signal(SIGTTIN, SIG_DFL);
   signal(SIGTTOU, SIG_DFL);
 }
+
+static int set_foreground_pgrp_safely(pid_t pgid) {
+  struct sigaction ignore_action;
+  struct sigaction old_ttou;
+
+  memset(&ignore_action, 0, sizeof(ignore_action));
+  sigemptyset(&ignore_action.sa_mask);
+  ignore_action.sa_handler = SIG_IGN;
+  if (sigaction(SIGTTOU, &ignore_action, &old_ttou) != 0) {
+    return 1;
+  }
+  if (tcsetpgrp(STDIN_FILENO, pgid) != 0) {
+    sigaction(SIGTTOU, &old_ttou, NULL);
+    return 1;
+  }
+  sigaction(SIGTTOU, &old_ttou, NULL);
+  return 0;
+}
 #endif
 
 static int is_separator(char c) {
@@ -757,6 +775,12 @@ int arksh_platform_get_process_info(ArkshPlatformProcessInfo *out_info) {
 #ifdef _WIN32
   out_info->pid = GetCurrentProcessId();
   out_info->ppid = 0;
+  out_info->pgid = out_info->pid;
+  out_info->sid = out_info->pid;
+  out_info->tty_pgid = 0;
+  out_info->has_tty = _isatty(0);
+  out_info->is_session_leader = 1;
+  out_info->is_process_group_leader = 1;
   {
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     PROCESSENTRY32 entry;
@@ -778,9 +802,89 @@ int arksh_platform_get_process_info(ArkshPlatformProcessInfo *out_info) {
 #else
   out_info->pid = (unsigned long) getpid();
   out_info->ppid = (unsigned long) getppid();
+  out_info->pgid = (unsigned long) getpgrp();
+  out_info->sid = (unsigned long) getsid(0);
+  out_info->has_tty = isatty(STDIN_FILENO);
+  if (out_info->has_tty) {
+    pid_t tty_pgid = tcgetpgrp(STDIN_FILENO);
+
+    if (tty_pgid >= 0) {
+      out_info->tty_pgid = (unsigned long) tty_pgid;
+    }
+  }
+  out_info->is_session_leader = (out_info->sid == out_info->pid);
+  out_info->is_process_group_leader = (out_info->pgid == out_info->pid);
 #endif
 
   return 0;
+}
+
+int arksh_platform_prepare_shell_session(
+  int login_mode,
+  int interactive_mode,
+  ArkshPlatformProcessInfo *out_info,
+  char *error,
+  size_t error_size
+) {
+  if (error == NULL || error_size == 0) {
+    return 1;
+  }
+
+  error[0] = '\0';
+
+#ifdef _WIN32
+  (void) login_mode;
+  (void) interactive_mode;
+  return arksh_platform_get_process_info(out_info);
+#else
+  {
+    int interactive = interactive_mode && isatty(STDIN_FILENO);
+    pid_t pid = getpid();
+
+    if (interactive) {
+      pid_t shell_pgid = getpgrp();
+      pid_t tty_pgid;
+
+      tty_pgid = tcgetpgrp(STDIN_FILENO);
+      while (tty_pgid >= 0 && tty_pgid != shell_pgid) {
+        if (kill(-shell_pgid, SIGTTIN) != 0 && errno != ESRCH) {
+          snprintf(error, error_size, "unable to suspend background shell for foreground handoff");
+          return 1;
+        }
+        shell_pgid = getpgrp();
+        tty_pgid = tcgetpgrp(STDIN_FILENO);
+      }
+
+      if (shell_pgid != pid) {
+        if (setpgid(0, 0) != 0 && errno != EACCES && errno != EPERM) {
+          snprintf(error, error_size, "unable to make shell process-group leader");
+          return 1;
+        }
+      }
+
+      shell_pgid = getpgrp();
+      if (tty_pgid >= 0 && tty_pgid != shell_pgid) {
+        if (set_foreground_pgrp_safely(shell_pgid) != 0) {
+          snprintf(error, error_size, "unable to claim controlling terminal for shell");
+          return 1;
+        }
+      }
+    } else if (login_mode) {
+      pid_t sid = getsid(0);
+
+      if (sid != pid && getpgrp() != pid) {
+        if (setsid() != (pid_t) -1) {
+          pid = getpid();
+        } else if (errno != EPERM) {
+          snprintf(error, error_size, "unable to create login-shell session");
+          return 1;
+        }
+      }
+    }
+
+    return arksh_platform_get_process_info(out_info);
+  }
+#endif
 }
 
 static void build_process_argv(const ArkshPlatformProcessSpec *spec, char *argv[ARKSH_MAX_ARGS + 1]) {
@@ -1676,7 +1780,7 @@ windows_stage_cleanup:
 
     /* E4-S1: hand terminal control to the foreground pipeline */
     if (interactive && pgid_leader > 0) {
-      tcsetpgrp(STDIN_FILENO, pgid_leader);
+      set_foreground_pgrp_safely(pgid_leader);
     }
 
     if (capture_read != -1) {
@@ -1745,9 +1849,7 @@ windows_stage_cleanup:
      * TTY to the child above), so tcsetpgrp would normally raise SIGTTOU.
      * Temporarily ignore it — same idiom used by bash/zsh. */
     if (interactive) {
-      signal(SIGTTOU, SIG_IGN);
-      tcsetpgrp(STDIN_FILENO, getpgrp());
-      signal(SIGTTOU, SIG_DFL);
+      set_foreground_pgrp_safely(getpgrp());
     }
 
     return 0;
@@ -2002,7 +2104,7 @@ int arksh_platform_wait_background_process(
 
   shell_pgid = getpgrp();
   if (foreground && process->pgid > 0 && isatty(STDIN_FILENO)) {
-    tcsetpgrp(STDIN_FILENO, (pid_t) process->pgid);
+    set_foreground_pgrp_safely((pid_t) process->pgid);
   }
 
   {
@@ -2014,7 +2116,7 @@ int arksh_platform_wait_background_process(
     } while (result < 0 && errno == EINTR);
 
     if (foreground && isatty(STDIN_FILENO)) {
-      tcsetpgrp(STDIN_FILENO, shell_pgid);
+      set_foreground_pgrp_safely(shell_pgid);
     }
 
     if (result < 0) {
@@ -2063,14 +2165,14 @@ int arksh_platform_resume_background_process(
     return 1;
   }
 
-  if (foreground && isatty(STDIN_FILENO) && tcsetpgrp(STDIN_FILENO, (pid_t) process->pgid) != 0) {
+  if (foreground && isatty(STDIN_FILENO) && set_foreground_pgrp_safely((pid_t) process->pgid) != 0) {
     snprintf(error, error_size, "unable to hand terminal to job");
     return 1;
   }
 
   if (kill(-(pid_t) process->pgid, SIGCONT) != 0 && errno != ESRCH) {
     if (foreground && isatty(STDIN_FILENO)) {
-      tcsetpgrp(STDIN_FILENO, getpgrp());
+      set_foreground_pgrp_safely(getpgrp());
     }
     snprintf(error, error_size, "unable to continue job");
     return 1;

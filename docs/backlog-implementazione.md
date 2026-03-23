@@ -1089,9 +1089,9 @@ Stato story: `[x]`
 Con il POSIX core chiuso, il prossimo gap tecnico più importante per usare `arksh`
 come vera shell di sistema è rendere solidi segnali, sessione e terminale:
 
-1. `E13-S2` — `--login`, `setsid` e process group corretti
-2. `E13-S3` — `SIGWINCH` e resize del terminale
-3. `E13-S4` — restore TTY, raw mode e `stty`
+1. `E13-S3` — `SIGWINCH` e resize del terminale
+2. `E13-S4` — restore TTY, raw mode e `stty`
+3. `E9-S2` — packaging target e installazione distribuita
 
 ### Priorità 2 — portare il progetto a livello distribuzione (E9)
 
@@ -1111,20 +1111,19 @@ Una volta chiuso `E13`, il valore più alto torna su packaging e release:
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E13-S2`
-2. `E13-S3`
-3. `E13-S4`
-4. `E9-S2`
-5. `E9-S3`
-6. `E9-S4`
-7. `E9-S5`
-8. `E10-S1`
+1. `E13-S3`
+2. `E13-S4`
+3. `E9-S2`
+4. `E9-S3`
+5. `E9-S4`
+6. `E9-S5`
+7. `E10-S1`
 
 ---
 
 ## E13. Segnali e gestione TTY come shell di sistema
 
-Stato epoca: `[ ]`
+Stato epoca: `[~]`
 
 Questa epoca traduce il blocco `1.2 Segnali e gestione TTY` del documento
 `docs/arksh-come-shell-di-sistema.md` in story implementabili una alla volta.
@@ -1140,12 +1139,12 @@ Stato story: `[x]`
 
 ### E13-S2. Login shell, sessione e process group
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E13-S2-T1` introdurre `--login` con lettura dei file di startup coerente per shell di login
-- `[ ]` `E13-S2-T2` implementare `setsid` e il ruolo di session leader sui target POSIX supportati
-- `[ ]` `E13-S2-T3` rifinire handoff e restore del controlling TTY con `tcsetpgrp` per shell e job foreground
-- `[ ]` `E13-S2-T4` aggiungere test end-to-end su login mode, sessione e process group
+- `[x]` `E13-S2-T1` introdurre `--login` con lettura dei file di startup coerente per shell di login
+- `[x]` `E13-S2-T2` implementare `setsid` e il ruolo di session leader sui target POSIX supportati
+- `[x]` `E13-S2-T3` rifinire handoff e restore del controlling TTY con `tcsetpgrp` per shell e job foreground
+- `[x]` `E13-S2-T4` aggiungere test end-to-end su login mode, sessione e process group
 
 ### E13-S3. Resize terminale e line editor
 

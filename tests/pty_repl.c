@@ -77,21 +77,33 @@ static size_t drain(int fd, char *buf, size_t buf_size, int initial_ms) {
 
 /* Spawn ./arksh in a PTY.  Returns master fd; *pid is the child pid.
    Returns -1 on error. */
-static int spawn_arksh(pid_t *pid) {
+static int spawn_arksh_with_args(pid_t *pid, char *const argv[]) {
   int master;
   pid_t child;
-  char *argv[] = { "./arksh", NULL };
 
   child = forkpty(&master, NULL, NULL, NULL);
   if (child < 0) {
     return -1;
   }
   if (child == 0) {
+    setenv("HOME", ".", 1);
+    setenv("USERPROFILE", ".", 1);
+    setenv("ARKSH_CONFIG_HOME", "./pty-config-home", 1);
+    setenv("ARKSH_STATE_HOME", "./pty-state-home", 1);
+    setenv("ARKSH_DATA_HOME", "./pty-data-home", 1);
+    setenv("ARKSH_GLOBAL_PROFILE", "/nonexistent", 1);
+    setenv("ARKSH_LOGIN_PROFILE", "/nonexistent", 1);
     execv("./arksh", argv);
     _exit(127);
   }
   *pid = child;
   return master;
+}
+
+static int spawn_arksh(pid_t *pid) {
+  char *argv[] = { "./arksh", NULL };
+
+  return spawn_arksh_with_args(pid, argv);
 }
 
 static void cleanup(pid_t pid, int master) {

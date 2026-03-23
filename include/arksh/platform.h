@@ -47,6 +47,12 @@ typedef struct {
 typedef struct {
   unsigned long pid;
   unsigned long ppid;
+  unsigned long pgid;
+  unsigned long sid;
+  unsigned long tty_pgid;
+  int has_tty;
+  int is_session_leader;
+  int is_process_group_leader;
 } ArkshPlatformProcessInfo;
 
 typedef struct {
@@ -81,6 +87,13 @@ int arksh_platform_read_text_file(const char *path, size_t limit, char *out, siz
 int arksh_platform_write_text_file(const char *path, const char *text, int append, char *out, size_t out_size);
 int arksh_platform_list_environment(ArkshPlatformEnvEntry entries[], size_t max_entries, size_t *out_count);
 int arksh_platform_get_process_info(ArkshPlatformProcessInfo *out_info);
+int arksh_platform_prepare_shell_session(
+  int login_mode,
+  int interactive_mode,
+  ArkshPlatformProcessInfo *out_info,
+  char *error,
+  size_t error_size
+);
 int arksh_platform_run_process_pipeline(
   const char *cwd,
   const ArkshPlatformProcessSpec *specs,

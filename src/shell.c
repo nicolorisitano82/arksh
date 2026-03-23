@@ -4877,6 +4877,12 @@ static int resolver_proc(
   arksh_platform_gethostname(hostname, sizeof(hostname));
   if (map_add_number_entry(out_value, "pid", (double) info.pid) != 0 ||
       map_add_number_entry(out_value, "ppid", (double) info.ppid) != 0 ||
+      map_add_number_entry(out_value, "pgid", (double) info.pgid) != 0 ||
+      map_add_number_entry(out_value, "sid", (double) info.sid) != 0 ||
+      map_add_number_entry(out_value, "tty_pgid", (double) info.tty_pgid) != 0 ||
+      map_add_bool_entry(out_value, "has_tty", info.has_tty) != 0 ||
+      map_add_bool_entry(out_value, "session_leader", info.is_session_leader) != 0 ||
+      map_add_bool_entry(out_value, "process_group_leader", info.is_process_group_leader) != 0 ||
       map_add_string_entry(out_value, "cwd", shell->cwd) != 0 ||
       map_add_string_entry(out_value, "host", hostname) != 0 ||
       map_add_string_entry(out_value, "os", arksh_platform_os_name()) != 0) {
@@ -4895,6 +4901,7 @@ static int resolver_shell_namespace(
   char *error,
   size_t error_size
 ) {
+  ArkshPlatformProcessInfo info;
   size_t i;
 
   (void) args;
@@ -4905,6 +4912,25 @@ static int resolver_shell_namespace(
   if (argc != 0) {
     snprintf(error, error_size, "shell() does not accept arguments");
     return 1;
+  }
+
+  memset(&info, 0, sizeof(info));
+  if (arksh_platform_get_process_info(&info) != 0) {
+    info.pid = (unsigned long) shell->shell_pid;
+    info.pgid = (unsigned long) shell->shell_pgid;
+    info.sid = (unsigned long) shell->shell_sid;
+    info.tty_pgid = (unsigned long) shell->shell_tty_pgid;
+    info.has_tty = shell->shell_has_tty;
+    info.is_session_leader = shell->shell_is_session_leader;
+    info.is_process_group_leader = shell->shell_is_process_group_leader;
+  } else {
+    shell->shell_pid = (long long) info.pid;
+    shell->shell_pgid = (long long) info.pgid;
+    shell->shell_sid = (long long) info.sid;
+    shell->shell_tty_pgid = (long long) info.tty_pgid;
+    shell->shell_has_tty = info.has_tty;
+    shell->shell_is_session_leader = info.is_session_leader;
+    shell->shell_is_process_group_leader = info.is_process_group_leader;
   }
 
   arksh_value_set_map(out_value);
@@ -4926,6 +4952,15 @@ static int resolver_shell_namespace(
       map_add_number_entry(out_value, "alias_count", (double) shell->alias_count) != 0 ||
       map_add_number_entry(out_value, "plugin_count", (double) shell->plugin_count) != 0 ||
       map_add_number_entry(out_value, "job_count", (double) shell->job_count) != 0 ||
+      map_add_number_entry(out_value, "pid", (double) info.pid) != 0 ||
+      map_add_number_entry(out_value, "pgid", (double) info.pgid) != 0 ||
+      map_add_number_entry(out_value, "sid", (double) info.sid) != 0 ||
+      map_add_number_entry(out_value, "tty_pgid", (double) info.tty_pgid) != 0 ||
+      map_add_bool_entry(out_value, "has_tty", info.has_tty) != 0 ||
+      map_add_bool_entry(out_value, "session_leader", info.is_session_leader) != 0 ||
+      map_add_bool_entry(out_value, "process_group_leader", info.is_process_group_leader) != 0 ||
+      map_add_bool_entry(out_value, "interactive", shell->interactive_shell) != 0 ||
+      map_add_bool_entry(out_value, "login_mode", shell->login_mode) != 0 ||
       map_add_string_entry(out_value, "os", arksh_platform_os_name()) != 0) {
     snprintf(error, error_size, "shell namespace is too large");
     return 1;
@@ -13032,6 +13067,87 @@ static int try_load_default_config(ArkshShell *shell) {
   return 0;
 }
 
+static void refresh_shell_process_metadata(ArkshShell *shell, const ArkshPlatformProcessInfo *info) {
+  if (shell == NULL || info == NULL) {
+    return;
+  }
+
+  shell->shell_pid = (long long) info->pid;
+  shell->shell_pgid = (long long) info->pgid;
+  shell->shell_sid = (long long) info->sid;
+  shell->shell_tty_pgid = (long long) info->tty_pgid;
+  shell->shell_has_tty = info->has_tty;
+  shell->shell_is_session_leader = info->is_session_leader;
+  shell->shell_is_process_group_leader = info->is_process_group_leader;
+}
+
+static int source_optional_startup_file(ArkshShell *shell, const char *path, int *out_loaded) {
+  char output[ARKSH_MAX_OUTPUT];
+
+  if (out_loaded != NULL) {
+    *out_loaded = 0;
+  }
+  if (shell == NULL || path == NULL || path[0] == '\0') {
+    return 0;
+  }
+
+  output[0] = '\0';
+  if (arksh_shell_source_file(shell, path, 0, NULL, output, sizeof(output)) == 0) {
+    if (out_loaded != NULL) {
+      *out_loaded = 1;
+    }
+    return 0;
+  }
+
+  if (strstr(output, "unable to open source file") == NULL) {
+    fprintf(stderr, "arksh: %s\n", output);
+  }
+  return 0;
+}
+
+static int try_load_login_profiles(ArkshShell *shell) {
+  const char *global_profile = getenv("ARKSH_GLOBAL_PROFILE");
+  const char *login_profile = getenv("ARKSH_LOGIN_PROFILE");
+  const char *home = arksh_shell_get_var(shell, "HOME");
+  char path[ARKSH_MAX_PATH];
+  int loaded = 0;
+
+  if (shell == NULL || !shell->login_mode) {
+    return 0;
+  }
+
+  if (global_profile != NULL && global_profile[0] != '\0') {
+    source_optional_startup_file(shell, global_profile, NULL);
+  } else {
+#ifndef _WIN32
+    source_optional_startup_file(shell, "/etc/arksh/profile", NULL);
+#endif
+  }
+
+  if (login_profile != NULL && login_profile[0] != '\0') {
+    source_optional_startup_file(shell, login_profile, NULL);
+    return 0;
+  }
+
+  if (shell->config_dir[0] != '\0' &&
+      join_runtime_path(shell->config_dir, "profile", path, sizeof(path)) == 0) {
+    source_optional_startup_file(shell, path, &loaded);
+    if (loaded) {
+      return 0;
+    }
+  }
+
+  if (home != NULL && home[0] != '\0' &&
+      join_runtime_path(home, ".arksh_profile", path, sizeof(path)) == 0) {
+    source_optional_startup_file(shell, path, &loaded);
+    if (loaded) {
+      return 0;
+    }
+  }
+
+  return 0;
+}
+
 static int try_load_default_rc(ArkshShell *shell) {
   const char *env_path = getenv("ARKSH_RC");
   const char *home = arksh_shell_get_var(shell, "HOME");
@@ -13070,7 +13186,7 @@ static int try_load_default_rc(ArkshShell *shell) {
   return 0;
 }
 
-int arksh_shell_init(ArkshShell *shell) {
+int arksh_shell_init_with_options(ArkshShell *shell, const char *program_path, int login_mode) {
   const char *perf_env;
 
   if (shell == NULL) {
@@ -13085,6 +13201,7 @@ int arksh_shell_init(ArkshShell *shell) {
   shell->next_process_substitution_id = 1;
   shell->loading_plugin_index = -1;
   shell->last_bg_pid = -1;
+  shell->login_mode = login_mode ? 1 : 0;
   shell->completion_generation = s_next_shell_generation++;
   if (shell->completion_generation == 0) {
     shell->completion_generation = s_next_shell_generation++;
@@ -13106,15 +13223,32 @@ int arksh_shell_init(ArkshShell *shell) {
   arksh_perf_enable(perf_env != NULL && perf_env[0] != '\0' && strcmp(perf_env, "0") != 0);
   {
     ArkshPlatformProcessInfo proc_info;
+    char session_error[ARKSH_MAX_OUTPUT];
+
     memset(&proc_info, 0, sizeof(proc_info));
-    if (arksh_platform_get_process_info(&proc_info) == 0) {
-      shell->shell_pid = (long long) proc_info.pid;
+    shell->interactive_shell = arksh_line_editor_is_interactive();
+    session_error[0] = '\0';
+    if (arksh_platform_prepare_shell_session(shell->login_mode, shell->interactive_shell, &proc_info,
+                                            session_error, sizeof(session_error)) != 0) {
+      fprintf(stderr, "arksh: %s\n",
+              session_error[0] == '\0' ? "unable to prepare shell session" : session_error);
+      free(shell->traps);
+      shell->traps = NULL;
+      free(shell->metadata);
+      shell->metadata = NULL;
+      arksh_scratch_arena_destroy(&shell->scratch);
+      return 1;
     }
+    refresh_shell_process_metadata(shell, &proc_info);
   }
   copy_string(shell->traps[ARKSH_TRAP_EXIT].name, sizeof(shell->traps[ARKSH_TRAP_EXIT].name), "EXIT");
 
   if (arksh_platform_getcwd(shell->cwd, sizeof(shell->cwd)) != 0) {
     copy_string(shell->cwd, sizeof(shell->cwd), ".");
+  }
+
+  if (program_path != NULL && program_path[0] != '\0') {
+    arksh_shell_set_program_path(shell, program_path);
   }
 
   arksh_prompt_config_init(&shell->prompt);
@@ -13148,7 +13282,15 @@ int arksh_shell_init(ArkshShell *shell) {
     return 1;
   }
 
+  if (try_load_login_profiles(shell) != 0) {
+    return 1;
+  }
+
   return try_load_default_rc(shell);
+}
+
+int arksh_shell_init(ArkshShell *shell) {
+  return arksh_shell_init_with_options(shell, NULL, 0);
 }
 
 void arksh_shell_destroy(ArkshShell *shell) {
@@ -13621,6 +13763,7 @@ int arksh_shell_run_repl(ArkshShell *shell) {
   }
 
   interactive = arksh_line_editor_is_interactive();
+  shell->interactive_shell = interactive;
   if (interactive) {
     configure_shell_signals(shell);
   }

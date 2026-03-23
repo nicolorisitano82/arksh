@@ -383,8 +383,12 @@ proc()
 /tmp -> exists
 /tmp -> name
 proc() -> pid
+proc() -> pgid
+proc() -> sid
 env("PATH")
 shell() -> cwd
+shell() -> login_mode
+shell() -> has_tty
 ```
 
 ### 2.4 Metodi

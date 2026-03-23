@@ -32,6 +32,7 @@ Nested member chains are first-class syntax, so direct forms like `data.json -> 
 - Custom classes with instantiation, properties, methods, `init`, and left-to-right multiple inheritance
 - Runtime extensions via `extend` and native plugins
 - Job control with `jobs`, `fg`, `bg`, `wait`, foreground process groups, and `Ctrl-Z` handling on POSIX systems
+- Login shell bootstrap on POSIX with `--login`, arksh-specific login profiles, `setsid()` for non-interactive login sessions, and controlling-TTY handoff
 - Startup files, aliases, shell variables, exported variables, and persistent history
 - Prompt configuration with theme segments
 - Interactive line editor with highlighting, autosuggestion, and contextual completion
@@ -88,6 +89,7 @@ On Linux, replace `-dynamiclib -undefined dynamic_lookup` with `-shared -fPIC`. 
 ./build/arksh -c 'text("{\"a\":[1,2,{\"b\":true}]}") |> from_json() |> to_json()'
 ./build/arksh -c 'env() -> HOME'
 ./build/arksh -c 'shell() -> plugins |> count()'
+./build/arksh --login -c 'text("%v|%v|%v") -> print(proc() -> pid, proc() -> pgid, shell() -> login_mode)'
 ./build/arksh -c 'true && text("ok") -> print()'
 ./build/arksh -c 'set s demo.txt ; [[ "$s" == *.txt ]] && echo yes'
 ./build/arksh -c 'read line <<< "hello" ; text("line=%s") -> print("$line")'

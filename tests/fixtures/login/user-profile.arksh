@@ -1,0 +1,1 @@
+set LOGIN_CHAIN "$LOGIN_CHAIN,user"

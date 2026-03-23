@@ -228,6 +228,7 @@ if(BUILD_TESTING)
 
   file(COPY tests/fixtures DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tests")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home")
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home-empty")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/runtime/state-home")
   configure_file(
@@ -1240,6 +1241,22 @@ if(BUILD_TESTING)
     COMMAND arksh -c "\"${ARKSH_TEST_PAUSE}\" 5 & /bin/kill -TERM $!; if wait %1; then echo bad; else echo term_wait; fi"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_login_profile_chain
+    COMMAND arksh --login -c "text(\"%s|%v\") -> print(\"$LOGIN_CHAIN\", shell() -> login_mode)"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  set_tests_properties(arksh_login_profile_chain PROPERTIES
+    PASS_REGULAR_EXPRESSION "global,user\\|true"
+    ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;USERPROFILE=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;ARKSH_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home-empty;ARKSH_GLOBAL_PROFILE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/login/global-profile.arksh;ARKSH_LOGIN_PROFILE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/login/user-profile.arksh"
+  )
+  add_test(NAME arksh_login_profiles_opt_in
+    COMMAND arksh -c "if [ -n \"\${LOGIN_CHAIN:-}\" ]; then echo loaded; else echo none; fi"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  set_tests_properties(arksh_login_profiles_opt_in PROPERTIES
+    PASS_REGULAR_EXPRESSION "none"
+    ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;USERPROFILE=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;ARKSH_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home-empty;ARKSH_GLOBAL_PROFILE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/login/global-profile.arksh;ARKSH_LOGIN_PROFILE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/login/user-profile.arksh"
+  )
   add_test(NAME arksh_set_errexit
     COMMAND arksh -c "set -e; /usr/bin/false; echo after"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -1649,10 +1666,13 @@ if(BUILD_TESTING)
 
   if(NOT WIN32)
     add_executable(arksh_pty_repl tests/pty_repl.c)
+    add_executable(arksh_login_session tests/login_session.c)
+    add_executable(arksh_login_pty_session tests/login_pty_session.c)
     if(APPLE)
       # forkpty is in libSystem on macOS; no extra library needed.
     else()
       target_link_libraries(arksh_pty_repl PRIVATE util)
+      target_link_libraries(arksh_login_pty_session PRIVATE util)
     endif()
 
     add_test(NAME arksh_pty_repl COMMAND arksh_pty_repl)
@@ -1660,6 +1680,25 @@ if(BUILD_TESTING)
       PASS_REGULAR_EXPRESSION "all tests passed"
       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
       TIMEOUT 20
+    )
+
+    add_test(NAME arksh_login_noninteractive_session
+      COMMAND arksh_login_session $<TARGET_FILE:arksh>
+    )
+    set_tests_properties(arksh_login_noninteractive_session PROPERTIES
+      PASS_REGULAR_EXPRESSION "all tests passed"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+      TIMEOUT 10
+      ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;USERPROFILE=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;ARKSH_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home-empty;ARKSH_GLOBAL_PROFILE=/nonexistent;ARKSH_LOGIN_PROFILE=/nonexistent"
+    )
+
+    add_test(NAME arksh_login_pty_session
+      COMMAND arksh_login_pty_session $<TARGET_FILE:arksh>
+    )
+    set_tests_properties(arksh_login_pty_session PROPERTIES
+      PASS_REGULAR_EXPRESSION "all tests passed"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+      TIMEOUT 10
     )
   endif()
 

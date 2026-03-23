@@ -21,10 +21,13 @@ static void print_output_if_any(const char *text) {
 
 int main(int argc, char **argv) {
   const char *perf_env;
+  const char *program_path;
   ArkshShell *shell;
   char output[ARKSH_MAX_OUTPUT];
   char trap_output[ARKSH_MAX_OUTPUT];
   int trap_status = 0;
+  int arg_index = 1;
+  int login_mode = 0;
   int status;
 
   perf_env = getenv("ARKSH_PERF");
@@ -36,15 +39,27 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  if (arksh_shell_init(shell) != 0) {
+  program_path = (argc > 0 && argv[0] != NULL && argv[0][0] == '-') ? argv[0] + 1 : argv[0];
+  if (argc > 0 && argv[0] != NULL && argv[0][0] == '-') {
+    login_mode = 1;
+  }
+
+  while (arg_index < argc) {
+    if (strcmp(argv[arg_index], "--login") == 0 || strcmp(argv[arg_index], "-l") == 0) {
+      login_mode = 1;
+      arg_index++;
+      continue;
+    }
+    break;
+  }
+
+  if (arksh_shell_init_with_options(shell, program_path, login_mode) != 0) {
     fputs("failed to initialize shell\n", stderr);
     free(shell);
     return 1;
   }
 
-  arksh_shell_set_program_path(shell, argv[0]);
-
-  if (argc > 1 && strcmp(argv[1], "--help") == 0) {
+  if (arg_index < argc && strcmp(argv[arg_index], "--help") == 0) {
     arksh_shell_print_help(shell, output, sizeof(output));
     print_output_if_any(output);
     arksh_shell_destroy(shell);
@@ -52,8 +67,8 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  if (argc > 1 && strcmp(argv[1], "-c") == 0) {
-    if (argc < 3) {
+  if (arg_index < argc && strcmp(argv[arg_index], "-c") == 0) {
+    if (arg_index + 1 >= argc) {
       fputs("usage: arksh -c '<command>'\n", stderr);
       arksh_shell_destroy(shell);
       free(shell);
@@ -61,7 +76,7 @@ int main(int argc, char **argv) {
     }
 
     output[0] = '\0';
-    status = arksh_shell_execute_line(shell, argv[2], output, sizeof(output));
+    status = arksh_shell_execute_line(shell, argv[arg_index + 1], output, sizeof(output));
     print_output_if_any(output);
     trap_output[0] = '\0';
     trap_status = arksh_shell_run_exit_trap(shell, trap_output, sizeof(trap_output));
@@ -75,15 +90,15 @@ int main(int argc, char **argv) {
   }
 
   /* File argument: arksh script.arksh [args...] */
-  if (argc > 1 && argv[1][0] != '-') {
+  if (arg_index < argc && argv[arg_index][0] != '-') {
     char source_cmd[ARKSH_MAX_PATH + 16];
     int i;
 
-    snprintf(source_cmd, sizeof(source_cmd), "source \"%s\"", argv[1]);
+    snprintf(source_cmd, sizeof(source_cmd), "source \"%s\"", argv[arg_index]);
     /* Expose positional parameters $1 $2 ... from remaining argv */
-    for (i = 2; i < argc && i - 1 < ARKSH_MAX_ARGS; ++i) {
+    for (i = arg_index + 1; i < argc && i - arg_index < ARKSH_MAX_ARGS; ++i) {
       char var[8];
-      snprintf(var, sizeof(var), "%d", i - 1);
+      snprintf(var, sizeof(var), "%d", i - arg_index);
       arksh_shell_set_var(shell, var, argv[i], 0);
     }
     output[0] = '\0';

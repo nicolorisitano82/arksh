@@ -363,6 +363,14 @@ typedef struct ArkshShell {
   size_t positional_capacity;
   long long last_bg_pid;
   long long shell_pid;
+  long long shell_pgid;
+  long long shell_sid;
+  long long shell_tty_pgid;
+  int shell_has_tty;
+  int shell_is_session_leader;
+  int shell_is_process_group_leader;
+  int interactive_shell;
+  int login_mode;
   int force_capture; /* 1 inside capture()/capture_lines()/bridge — always capture stdout */
   ArkshScratchArena scratch;
   ArkshTypeDescriptor *type_descriptors;
@@ -373,6 +381,7 @@ typedef struct ArkshShell {
 } ArkshShell;
 
 int arksh_shell_init(ArkshShell *shell);
+int arksh_shell_init_with_options(ArkshShell *shell, const char *program_path, int login_mode);
 void arksh_shell_destroy(ArkshShell *shell);
 int arksh_shell_run_repl(ArkshShell *shell);
 int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, size_t out_size);

@@ -179,7 +179,7 @@ Asse 2: Scripting puro                    ←———————————�
 | fish    | UX out-of-the-box eccellente, highlighting nativo  | Rompe POSIX, nessun tipo strutturato           |
 | nushell | Dati strutturati, pipeline tipizzate               | Rottura totale con shell classica, no classi   |
 | dash    | Velocità, POSIX stretto, shell di sistema          | Nessuna funzione interattiva                   |
-| arksh   | Object model + pipeline tipizzate + namespace di sistema + tipi numerici espliciti + JSON nativo + Matrix/Dict + plugin ABI in C + UX interattiva + core POSIX chiuso | Ecosistema piccolo, mancano ancora login shell robusta, segnali completi e packaging/release |
+| arksh   | Object model + pipeline tipizzate + namespace di sistema + tipi numerici espliciti + JSON nativo + Matrix/Dict + plugin ABI in C + UX interattiva + core POSIX chiuso | Ecosistema piccolo; restano da chiudere resize/restore TTY, modalità `sh` e packaging/release |
 
 ---
 
