@@ -16,6 +16,7 @@ typedef struct {
   int is_device;
   int is_mount_point;
   unsigned long long size;
+  unsigned int permissions;
   int hidden;
   int readable;
   int writable;
@@ -50,6 +51,8 @@ typedef struct {
   unsigned long pgid;
   unsigned long sid;
   unsigned long tty_pgid;
+  unsigned long tty_rows;
+  unsigned long tty_cols;
   int has_tty;
   int is_session_leader;
   int is_process_group_leader;
@@ -81,12 +84,14 @@ int arksh_platform_ensure_directory(const char *path);
 void arksh_platform_basename(const char *path, char *out, size_t out_size);
 void arksh_platform_dirname(const char *path, char *out, size_t out_size);
 int arksh_platform_stat(const char *path, ArkshPlatformFileInfo *info);
+int arksh_platform_set_permissions(const char *path, unsigned int permissions, char *error, size_t error_size);
 int arksh_platform_list_children(const char *path, char *out, size_t out_size);
 int arksh_platform_list_children_names(const char *path, char names[][ARKSH_MAX_PATH], size_t max_names, size_t *out_count);
 int arksh_platform_read_text_file(const char *path, size_t limit, char *out, size_t out_size);
 int arksh_platform_write_text_file(const char *path, const char *text, int append, char *out, size_t out_size);
 int arksh_platform_list_environment(ArkshPlatformEnvEntry entries[], size_t max_entries, size_t *out_count);
 int arksh_platform_get_process_info(ArkshPlatformProcessInfo *out_info);
+int arksh_platform_get_terminal_size(unsigned long *out_cols, unsigned long *out_rows);
 int arksh_platform_prepare_shell_session(
   int login_mode,
   int interactive_mode,

@@ -503,6 +503,8 @@ static int is_builtin_object_method_name(const char *name) {
          (strcmp(name, "children") == 0 ||
           strcmp(name, "read_text") == 0 ||
           strcmp(name, "parent") == 0 ||
+          strcmp(name, "chmod") == 0 ||
+          strcmp(name, "set_permissions") == 0 ||
           strcmp(name, "describe") == 0);
 }
 

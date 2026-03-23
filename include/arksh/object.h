@@ -32,6 +32,7 @@ typedef struct {
   char name[ARKSH_MAX_NAME];
   int exists;
   unsigned long long size;
+  unsigned int permissions;
   int hidden;
   int readable;
   int writable;

@@ -313,6 +313,108 @@ static int parse_limit(const char *text, size_t *out_limit) {
   return 0;
 }
 
+static void format_permission_octal(unsigned int permissions, char *out, size_t out_size) {
+  unsigned int masked = permissions & 07777u;
+
+  if (out == NULL || out_size == 0) {
+    return;
+  }
+
+  if ((masked & 07000u) != 0u) {
+    snprintf(out, out_size, "%04o", masked);
+  } else {
+    snprintf(out, out_size, "%03o", masked & 0777u);
+  }
+}
+
+static void format_permission_rwx(unsigned int permissions, char *out, size_t out_size) {
+  unsigned int masked = permissions & 07777u;
+
+  if (out == NULL || out_size == 0) {
+    return;
+  }
+
+  snprintf(
+    out,
+    out_size,
+    "%c%c%c%c%c%c%c%c%c",
+    (masked & 0400u) ? 'r' : '-',
+    (masked & 0200u) ? 'w' : '-',
+    (masked & 04000u) ? ((masked & 0100u) ? 's' : 'S') : ((masked & 0100u) ? 'x' : '-'),
+    (masked & 0040u) ? 'r' : '-',
+    (masked & 0020u) ? 'w' : '-',
+    (masked & 02000u) ? ((masked & 0010u) ? 's' : 'S') : ((masked & 0010u) ? 'x' : '-'),
+    (masked & 0004u) ? 'r' : '-',
+    (masked & 0002u) ? 'w' : '-',
+    (masked & 01000u) ? ((masked & 0001u) ? 't' : 'T') : ((masked & 0001u) ? 'x' : '-')
+  );
+}
+
+static int parse_octal_permissions(const char *text, unsigned int *out_permissions) {
+  unsigned int value = 0u;
+  size_t i;
+
+  if (text == NULL || out_permissions == NULL || text[0] == '\0') {
+    return 1;
+  }
+
+  for (i = 0; text[i] != '\0'; ++i) {
+    if (text[i] < '0' || text[i] > '7') {
+      return 1;
+    }
+    value = (value * 8u) + (unsigned int) (text[i] - '0');
+    if (value > 07777u) {
+      return 1;
+    }
+  }
+
+  if (i < 3u || i > 4u) {
+    return 1;
+  }
+
+  *out_permissions = value;
+  return 0;
+}
+
+static int parse_rwx_permissions(const char *text, unsigned int *out_permissions) {
+  unsigned int value = 0u;
+
+  if (text == NULL || out_permissions == NULL || strlen(text) != 9u) {
+    return 1;
+  }
+
+  if (text[0] == 'r') { value |= 0400u; } else if (text[0] != '-') { return 1; }
+  if (text[1] == 'w') { value |= 0200u; } else if (text[1] != '-') { return 1; }
+  if (text[2] == 'x') { value |= 0100u; }
+  else if (text[2] == 's') { value |= 0100u | 04000u; }
+  else if (text[2] == 'S') { value |= 04000u; }
+  else if (text[2] != '-') { return 1; }
+
+  if (text[3] == 'r') { value |= 0040u; } else if (text[3] != '-') { return 1; }
+  if (text[4] == 'w') { value |= 0020u; } else if (text[4] != '-') { return 1; }
+  if (text[5] == 'x') { value |= 0010u; }
+  else if (text[5] == 's') { value |= 0010u | 02000u; }
+  else if (text[5] == 'S') { value |= 02000u; }
+  else if (text[5] != '-') { return 1; }
+
+  if (text[6] == 'r') { value |= 0004u; } else if (text[6] != '-') { return 1; }
+  if (text[7] == 'w') { value |= 0002u; } else if (text[7] != '-') { return 1; }
+  if (text[8] == 'x') { value |= 0001u; }
+  else if (text[8] == 't') { value |= 0001u | 01000u; }
+  else if (text[8] == 'T') { value |= 01000u; }
+  else if (text[8] != '-') { return 1; }
+
+  *out_permissions = value;
+  return 0;
+}
+
+static int parse_permissions_spec(const char *text, unsigned int *out_permissions) {
+  if (parse_octal_permissions(text, out_permissions) == 0) {
+    return 0;
+  }
+  return parse_rwx_permissions(text, out_permissions);
+}
+
 static void format_number(double number, char *out, size_t out_size) {
   if (out == NULL || out_size == 0) {
     return;
@@ -2986,6 +3088,7 @@ int arksh_object_resolve(const char *cwd, const char *selector, ArkshObject *out
 
   out_object->exists = info.exists;
   out_object->size = info.size;
+  out_object->permissions = info.permissions;
   out_object->hidden = info.hidden;
   out_object->readable = info.readable;
   out_object->writable = info.writable;
@@ -3034,6 +3137,16 @@ int arksh_object_get_property(const ArkshObject *object, const char *property, c
 
   if (strcmp(property, "size") == 0) {
     snprintf(out, out_size, "%llu", object->size);
+    return 0;
+  }
+
+  if (strcmp(property, "permissions") == 0 || strcmp(property, "permissions_rwx") == 0 || strcmp(property, "mode") == 0) {
+    format_permission_rwx(object->permissions, out, out_size);
+    return 0;
+  }
+
+  if (strcmp(property, "permissions_octal") == 0 || strcmp(property, "mode_octal") == 0) {
+    format_permission_octal(object->permissions, out, out_size);
     return 0;
   }
 
@@ -3124,6 +3237,9 @@ int arksh_value_item_get_property(const ArkshValueItem *item, const char *proper
 int arksh_object_call_method(const ArkshObject *object, const char *method, int argc, char **argv, char *out, size_t out_size) {
   size_t limit = 4096;
   char parent[ARKSH_MAX_PATH];
+  unsigned int permissions = 0u;
+  char platform_error[ARKSH_MAX_OUTPUT];
+  ArkshObject updated_object;
 
   if (object == NULL || method == NULL || out == NULL || out_size == 0) {
     return 1;
@@ -3155,16 +3271,44 @@ int arksh_object_call_method(const ArkshObject *object, const char *method, int 
     return 0;
   }
 
+  if (strcmp(method, "chmod") == 0 || strcmp(method, "set_permissions") == 0) {
+    if (!object->exists) {
+      snprintf(out, out_size, "%s() is only valid on existing filesystem objects", method);
+      return 1;
+    }
+    if (argc != 1 || argv[0] == NULL || parse_permissions_spec(argv[0], &permissions) != 0) {
+      snprintf(out, out_size, "%s() expects one permission spec like 755 or rwxr-xr-x", method);
+      return 1;
+    }
+    if (arksh_platform_set_permissions(object->path, permissions, platform_error, sizeof(platform_error)) != 0) {
+      copy_string(out, out_size, platform_error);
+      return 1;
+    }
+    if (arksh_object_resolve(".", object->path, &updated_object) != 0) {
+      snprintf(out, out_size, "%s", object->path);
+      return 0;
+    }
+    snprintf(out, out_size, "%s", updated_object.path);
+    return 0;
+  }
+
   if (strcmp(method, "describe") == 0) {
+    char permissions_rwx[16];
+    char permissions_octal[16];
+
+    format_permission_rwx(object->permissions, permissions_rwx, sizeof(permissions_rwx));
+    format_permission_octal(object->permissions, permissions_octal, sizeof(permissions_octal));
     snprintf(
       out,
       out_size,
-      "type=%s\npath=%s\nname=%s\nexists=%s\nsize=%llu\nhidden=%s\nreadable=%s\nwritable=%s",
+      "type=%s\npath=%s\nname=%s\nexists=%s\nsize=%llu\npermissions=%s\npermissions_octal=%s\nhidden=%s\nreadable=%s\nwritable=%s",
       arksh_object_kind_name(object->kind),
       object->path,
       object->name,
       object->exists ? "true" : "false",
       object->size,
+      permissions_rwx,
+      permissions_octal,
       object->hidden ? "true" : "false",
       object->readable ? "true" : "false",
       object->writable ? "true" : "false"
@@ -3180,6 +3324,8 @@ int arksh_object_call_method_value(const ArkshObject *object, const char *method
   char child_names[ARKSH_MAX_COLLECTION_ITEMS][ARKSH_MAX_PATH];
   size_t child_count = 0;
   size_t i;
+  unsigned int permissions = 0u;
+  ArkshObject updated_object;
 
   if (object == NULL || method == NULL || out_value == NULL || error == NULL || error_size == 0) {
     return 1;
@@ -3242,6 +3388,26 @@ int arksh_object_call_method_value(const ArkshObject *object, const char *method
     }
 
     arksh_value_set_object(out_value, &parent_object);
+    return 0;
+  }
+
+  if (strcmp(method, "chmod") == 0 || strcmp(method, "set_permissions") == 0) {
+    if (!object->exists) {
+      snprintf(error, error_size, "%s() is only valid on existing filesystem objects", method);
+      return 1;
+    }
+    if (argc != 1 || argv[0] == NULL || parse_permissions_spec(argv[0], &permissions) != 0) {
+      snprintf(error, error_size, "%s() expects one permission spec like 755 or rwxr-xr-x", method);
+      return 1;
+    }
+    if (arksh_platform_set_permissions(object->path, permissions, error, error_size) != 0) {
+      return 1;
+    }
+    if (arksh_object_resolve(".", object->path, &updated_object) != 0) {
+      snprintf(error, error_size, "unable to refresh object after chmod");
+      return 1;
+    }
+    arksh_value_set_object(out_value, &updated_object);
     return 0;
   }
 

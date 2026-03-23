@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <glob.h>
 #include <signal.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -67,6 +68,9 @@ static void reset_child_signal_handlers(void) {
   signal(SIGTSTP, SIG_DFL);
   signal(SIGTTIN, SIG_DFL);
   signal(SIGTTOU, SIG_DFL);
+#ifdef SIGWINCH
+  signal(SIGWINCH, SIG_DFL);
+#endif
 }
 
 static int set_foreground_pgrp_safely(pid_t pgid) {
@@ -486,6 +490,7 @@ int arksh_platform_stat(const char *path, ArkshPlatformFileInfo *info) {
       info->is_directory = (st.st_mode & _S_IFDIR) != 0;
       info->is_file = (st.st_mode & _S_IFREG) != 0;
       info->size = (unsigned long long) st.st_size;
+      info->permissions = (unsigned int) (st.st_mode & 0777);
     }
 
     attrs = GetFileAttributesA(path);
@@ -514,6 +519,7 @@ int arksh_platform_stat(const char *path, ArkshPlatformFileInfo *info) {
       info->is_file = S_ISREG(st.st_mode);
       info->is_device = S_ISCHR(st.st_mode) || S_ISBLK(st.st_mode);
       info->size = (unsigned long long) st.st_size;
+      info->permissions = (unsigned int) (st.st_mode & 07777);
       info->hidden = name[0] == '.';
       info->readable = access(path, R_OK) == 0;
       info->writable = access(path, W_OK) == 0;
@@ -532,6 +538,34 @@ int arksh_platform_stat(const char *path, ArkshPlatformFileInfo *info) {
   }
 #endif
 
+  return 0;
+}
+
+int arksh_platform_set_permissions(const char *path, unsigned int permissions, char *error, size_t error_size) {
+  if (path == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+
+#ifdef _WIN32
+  {
+    int mode = _S_IREAD;
+
+    if (permissions & 0222u) {
+      mode |= _S_IWRITE;
+    }
+    if (_chmod(path, mode) != 0) {
+      snprintf(error, error_size, "unable to set permissions for %s", path);
+      return 1;
+    }
+  }
+#else
+  if (chmod(path, (mode_t) (permissions & 07777u)) != 0) {
+    snprintf(error, error_size, "unable to set permissions for %s", path);
+    return 1;
+  }
+#endif
+
+  error[0] = '\0';
   return 0;
 }
 
@@ -781,6 +815,7 @@ int arksh_platform_get_process_info(ArkshPlatformProcessInfo *out_info) {
   out_info->has_tty = _isatty(0);
   out_info->is_session_leader = 1;
   out_info->is_process_group_leader = 1;
+  arksh_platform_get_terminal_size(&out_info->tty_cols, &out_info->tty_rows);
   {
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     PROCESSENTRY32 entry;
@@ -811,12 +846,49 @@ int arksh_platform_get_process_info(ArkshPlatformProcessInfo *out_info) {
     if (tty_pgid >= 0) {
       out_info->tty_pgid = (unsigned long) tty_pgid;
     }
+    arksh_platform_get_terminal_size(&out_info->tty_cols, &out_info->tty_rows);
   }
   out_info->is_session_leader = (out_info->sid == out_info->pid);
   out_info->is_process_group_leader = (out_info->pgid == out_info->pid);
 #endif
 
   return 0;
+}
+
+int arksh_platform_get_terminal_size(unsigned long *out_cols, unsigned long *out_rows) {
+  if (out_cols == NULL || out_rows == NULL) {
+    return 1;
+  }
+
+  *out_cols = 0;
+  *out_rows = 0;
+
+#ifdef _WIN32
+  {
+    HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_SCREEN_BUFFER_INFO info;
+
+    if (handle == INVALID_HANDLE_VALUE || !GetConsoleScreenBufferInfo(handle, &info)) {
+      return 1;
+    }
+    *out_cols = (unsigned long) (info.srWindow.Right - info.srWindow.Left + 1);
+    *out_rows = (unsigned long) (info.srWindow.Bottom - info.srWindow.Top + 1);
+    return 0;
+  }
+#else
+  {
+    struct winsize ws;
+
+    memset(&ws, 0, sizeof(ws));
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != 0 &&
+        ioctl(STDIN_FILENO, TIOCGWINSZ, &ws) != 0) {
+      return 1;
+    }
+    *out_cols = (unsigned long) ws.ws_col;
+    *out_rows = (unsigned long) ws.ws_row;
+    return (*out_cols > 0 && *out_rows > 0) ? 0 : 1;
+  }
+#endif
 }
 
 int arksh_platform_prepare_shell_session(

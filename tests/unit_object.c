@@ -11,6 +11,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <direct.h>
+#include <io.h>
+#include <sys/stat.h>
+#else
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 #include "arksh/object.h"
 
@@ -936,6 +944,95 @@ static void test_object_property_name(void) {
   EXPECT(strcmp(out, "foo.txt") == 0, "object property name: == 'foo.txt'");
 }
 
+static void test_object_permissions_file(void) {
+#ifdef _WIN32
+  EXPECT(1, "object permissions file: skipped on Windows");
+#else
+  char temp_dir[] = "/tmp/arksh_perm_fileXXXXXX";
+  char path[ARKSH_MAX_PATH];
+  ArkshObject obj;
+  ArkshValue result;
+  char out[256];
+  char error[256];
+  char *octal_argv[] = { "600" };
+  char *rwx_argv[] = { "rw-r-----" };
+  FILE *file;
+
+  EXPECT(mkdtemp(temp_dir) != NULL, "object permissions file: mkdtemp");
+  snprintf(path, sizeof(path), "%s/file.txt", temp_dir);
+  file = fopen(path, "w");
+  EXPECT(file != NULL, "object permissions file: fopen");
+  if (file != NULL) {
+    fputs("hello\n", file);
+    fclose(file);
+  }
+  EXPECT(chmod(path, 0644) == 0, "object permissions file: chmod 0644");
+  EXPECT(arksh_object_resolve(".", path, &obj) == 0, "object permissions file: resolve");
+  EXPECT(arksh_object_get_property(&obj, "permissions", out, sizeof(out)) == 0, "object permissions file: rwx property");
+  EXPECT(strcmp(out, "rw-r--r--") == 0, "object permissions file: rwx == rw-r--r--");
+  EXPECT(arksh_object_get_property(&obj, "permissions_octal", out, sizeof(out)) == 0, "object permissions file: octal property");
+  EXPECT(strcmp(out, "644") == 0, "object permissions file: octal == 644");
+
+  arksh_value_init(&result);
+  if (arksh_object_call_method_value(&obj, "chmod", 1, octal_argv, &result, error, sizeof(error)) == 0) {
+    EXPECT(result.kind == ARKSH_VALUE_OBJECT, "object permissions file: chmod returns object");
+    EXPECT(arksh_object_get_property(arksh_value_object_ref(&result), "permissions_octal", out, sizeof(out)) == 0,
+           "object permissions file: updated octal property");
+    EXPECT(strcmp(out, "600") == 0, "object permissions file: octal == 600");
+  } else {
+    EXPECT(0, "object permissions file: chmod octal");
+  }
+  arksh_value_free(&result);
+
+  arksh_value_init(&result);
+  if (arksh_object_call_method_value(&obj, "chmod", 1, rwx_argv, &result, error, sizeof(error)) == 0) {
+    EXPECT(arksh_object_get_property(arksh_value_object_ref(&result), "permissions", out, sizeof(out)) == 0,
+           "object permissions file: updated rwx property");
+    EXPECT(strcmp(out, "rw-r-----") == 0, "object permissions file: rwx == rw-r-----");
+  } else {
+    EXPECT(0, "object permissions file: chmod rwx");
+  }
+  arksh_value_free(&result);
+
+  unlink(path);
+  rmdir(temp_dir);
+#endif
+}
+
+static void test_object_permissions_directory(void) {
+#ifdef _WIN32
+  EXPECT(1, "object permissions directory: skipped on Windows");
+#else
+  char temp_dir[] = "/tmp/arksh_perm_dirXXXXXX";
+  ArkshObject obj;
+  ArkshValue result;
+  char out[256];
+  char error[256];
+  char *octal_argv[] = { "700" };
+
+  EXPECT(mkdtemp(temp_dir) != NULL, "object permissions dir: mkdtemp");
+  EXPECT(chmod(temp_dir, 0755) == 0, "object permissions dir: chmod 0755");
+  EXPECT(arksh_object_resolve(".", temp_dir, &obj) == 0, "object permissions dir: resolve");
+  EXPECT(arksh_object_get_property(&obj, "permissions", out, sizeof(out)) == 0, "object permissions dir: rwx property");
+  EXPECT(strcmp(out, "rwxr-xr-x") == 0, "object permissions dir: rwx == rwxr-xr-x");
+  EXPECT(arksh_object_get_property(&obj, "permissions_octal", out, sizeof(out)) == 0, "object permissions dir: octal property");
+  EXPECT(strcmp(out, "755") == 0, "object permissions dir: octal == 755");
+
+  arksh_value_init(&result);
+  if (arksh_object_call_method_value(&obj, "chmod", 1, octal_argv, &result, error, sizeof(error)) == 0) {
+    EXPECT(arksh_object_get_property(arksh_value_object_ref(&result), "permissions_octal", out, sizeof(out)) == 0,
+           "object permissions dir: updated octal property");
+    EXPECT(strcmp(out, "700") == 0, "object permissions dir: octal == 700");
+  } else {
+    EXPECT(0, "object permissions dir: chmod 700");
+  }
+  arksh_value_free(&result);
+
+  chmod(temp_dir, 0755);
+  rmdir(temp_dir);
+#endif
+}
+
 /* ------------------------------------------------------------------ main */
 
 int main(void) {
@@ -1007,6 +1104,8 @@ int main(void) {
   /* object properties */
   test_object_property_type();
   test_object_property_name();
+  test_object_permissions_file();
+  test_object_permissions_directory();
 
   if (g_failures > 0) {
     fprintf(stderr, "%d test(s) FAILED\n", g_failures);
