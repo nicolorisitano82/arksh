@@ -264,12 +264,20 @@ typedef struct {
   char description[ARKSH_MAX_DESCRIPTION];
 } ArkshTypeDescriptor;
 
+typedef struct {
+  char current_source_path[ARKSH_MAX_PATH];
+  size_t current_source_line;
+  char function_name_stack[ARKSH_MAX_FUNCTIONS][ARKSH_MAX_NAME];
+  int function_name_depth;
+} ArkshShellMetadata;
+
 typedef struct ArkshShell {
   int running;
   int last_status;
   char cwd[ARKSH_MAX_PATH];
   char program_path[ARKSH_MAX_PATH];
   char executable_path[ARKSH_MAX_PATH];
+  ArkshShellMetadata *metadata;
   char config_dir[ARKSH_MAX_PATH];
   char cache_dir[ARKSH_MAX_PATH];
   char state_dir[ARKSH_MAX_PATH];

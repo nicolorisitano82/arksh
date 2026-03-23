@@ -165,12 +165,16 @@ list(1, 2, 3) |> map([:it | it + number(1)])
 set PROJECT arksh
 export PROJECT_ROOT "$PWD"
 alias ll="ls -1"
+declare -A colors
+colors[sky]=blue
+echo "${colors[sky]}"
 set -e
 set -u
 set -o pipefail
 set PS4 "TRACE: "
 set -x
 let files = . -> children()
+echo "$LINENO $FUNCNAME $BASH_SOURCE"
 
 # Shell redirections
 ./build/arksh_test_echo_stdin <<< "hello"

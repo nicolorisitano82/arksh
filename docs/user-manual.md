@@ -209,6 +209,23 @@ Supported value-level operators:
 condition ? true_value : false_value
 ```
 
+### 4.6 Shell metadata and associative arrays
+
+These are also available:
+
+```text
+text("%s") -> print("$LINENO")
+text("%s") -> print("$FUNCNAME")
+text("%s") -> print("$BASH_SOURCE")
+
+declare -A colors
+colors[sky]=blue
+text("%s") -> print("${colors[sky]}")
+text("%s") -> print("${!colors[@]}")
+```
+
+`declare -A` and `typeset -A` are backed by `Dict`: `${name[key]}` reads one entry, `${name[@]}` expands values, and `${!name[@]}` expands keys.
+
 Examples:
 
 ```text

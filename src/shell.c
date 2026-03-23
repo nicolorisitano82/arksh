@@ -78,6 +78,20 @@ static void copy_string(char *dest, size_t dest_size, const char *src) {
   snprintf(dest, dest_size, "%s", src == NULL ? "" : src);
 }
 
+static ArkshShellMetadata *allocate_shell_metadata_copy(const ArkshShellMetadata *source) {
+  ArkshShellMetadata *metadata = (ArkshShellMetadata *) malloc(sizeof(*metadata));
+
+  if (metadata == NULL) {
+    return NULL;
+  }
+  if (source != NULL) {
+    *metadata = *source;
+  } else {
+    memset(metadata, 0, sizeof(*metadata));
+  }
+  return metadata;
+}
+
 static int grow_heap_array(
   void **items,
   size_t *capacity,
@@ -3307,6 +3321,12 @@ int arksh_shell_clone_subshell(const ArkshShell *source, ArkshShell **out_shell,
   *clone = *source;
   memset(&clone->scratch, 0, sizeof(clone->scratch));
   arksh_scratch_arena_init(&clone->scratch);
+  clone->metadata = allocate_shell_metadata_copy(source->metadata);
+  if (clone->metadata == NULL) {
+    snprintf(out, out_size, "unable to allocate subshell metadata");
+    arksh_shell_destroy_subshell(clone);
+    return 1;
+  }
 
   clone->commands = NULL;
   clone->command_count = 0;
@@ -3552,6 +3572,7 @@ void arksh_shell_destroy_subshell(ArkshShell *shell) {
 
   cleanup_process_substitutions_from(shell, 0);
   arksh_scratch_arena_destroy(&shell->scratch);
+  free(shell->metadata);
   free(shell->commands);
   free(shell->command_name_index);
   free(shell->plugins);
@@ -6352,6 +6373,126 @@ static int split_assignment(const char *text, char *name, size_t name_size, char
   return 0;
 }
 
+static int strip_assoc_key_quotes(const char *raw, char *out, size_t out_size) {
+  size_t len;
+
+  if (raw == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  len = strlen(raw);
+  if (len >= 2u &&
+      ((raw[0] == '"' && raw[len - 1] == '"') ||
+       (raw[0] == '\'' && raw[len - 1] == '\''))) {
+    size_t copy_len = len - 2u;
+    if (copy_len >= out_size) {
+      copy_len = out_size - 1u;
+    }
+    memmove(out, raw + 1, copy_len);
+    out[copy_len] = '\0';
+    return 0;
+  }
+
+  copy_string(out, out_size, raw);
+  return 0;
+}
+
+static int parse_assoc_reference(
+  const char *text,
+  char *name,
+  size_t name_size,
+  char *key,
+  size_t key_size
+) {
+  size_t i = 0;
+  size_t name_len = 0;
+  size_t key_len = 0;
+
+  if (text == NULL || name == NULL || key == NULL) {
+    return 1;
+  }
+  if (!isalpha((unsigned char) text[0]) && text[0] != '_') {
+    return 1;
+  }
+
+  while (isalnum((unsigned char) text[i]) || text[i] == '_') {
+    if (name_len + 1 >= name_size) {
+      return 1;
+    }
+    name[name_len++] = text[i++];
+  }
+  name[name_len] = '\0';
+  if (text[i] != '[') {
+    return 1;
+  }
+  i++;
+  while (text[i] != '\0' && text[i] != ']') {
+    if (key_len + 1 >= key_size) {
+      return 1;
+    }
+    key[key_len++] = text[i++];
+  }
+  key[key_len] = '\0';
+  if (text[i] != ']' || text[i + 1] != '\0') {
+    return 1;
+  }
+  if (strip_assoc_key_quotes(key, key, key_size) != 0) {
+    return 1;
+  }
+  return is_valid_identifier(name) && key[0] != '\0' ? 0 : 1;
+}
+
+static int remove_assoc_binding_key(
+  ArkshShell *shell,
+  const char *name,
+  const char *key,
+  char *out,
+  size_t out_size
+) {
+  const ArkshValue *binding;
+  ArkshValue next_value;
+  size_t i;
+
+  if (shell == NULL || name == NULL || key == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  binding = arksh_shell_get_binding(shell, name);
+  if (binding == NULL || binding->kind != ARKSH_VALUE_DICT) {
+    snprintf(out, out_size, "unable to unset variable: %s[%s]", name, key);
+    return 1;
+  }
+
+  arksh_value_init(&next_value);
+  arksh_value_set_dict(&next_value);
+  for (i = 0; i < binding->map.count; ++i) {
+    ArkshValue entry_value;
+
+    if (strcmp(binding->map.entries[i].key, key) == 0) {
+      continue;
+    }
+    arksh_value_init(&entry_value);
+    if (arksh_value_set_from_item(&entry_value, &binding->map.entries[i].value) != 0 ||
+        arksh_value_map_set(&next_value, binding->map.entries[i].key, &entry_value) != 0) {
+      arksh_value_free(&entry_value);
+      arksh_value_free(&next_value);
+      snprintf(out, out_size, "unable to update associative array: %s", name);
+      return 1;
+    }
+    arksh_value_free(&entry_value);
+  }
+
+  if (arksh_shell_set_binding(shell, name, &next_value) != 0) {
+    arksh_value_free(&next_value);
+    snprintf(out, out_size, "unable to update associative array: %s", name);
+    return 1;
+  }
+
+  arksh_value_free(&next_value);
+  out[0] = '\0';
+  return 0;
+}
+
 static int parse_let_assignment(const char *line, char *name, size_t name_size, char *expression, size_t expression_size) {
   char trimmed[ARKSH_MAX_LINE];
   const char *cursor;
@@ -8929,6 +9070,15 @@ static int command_unset(ArkshShell *shell, int argc, char **argv, char *out, si
   out[0] = '\0';
   for (i = 1; i < argc; ++i) {
     int removed = 0;
+    char assoc_name[ARKSH_MAX_VAR_NAME];
+    char assoc_key[ARKSH_MAX_NAME];
+
+    if (parse_assoc_reference(argv[i], assoc_name, sizeof(assoc_name), assoc_key, sizeof(assoc_key)) == 0) {
+      if (remove_assoc_binding_key(shell, assoc_name, assoc_key, out, out_size) != 0) {
+        return 1;
+      }
+      continue;
+    }
 
     if (!is_valid_identifier(argv[i])) {
       snprintf(out, out_size, "unable to unset variable: %s", argv[i]);
@@ -9026,6 +9176,8 @@ int arksh_shell_source_file(ArkshShell *shell, const char *path, int positional_
   size_t command_start_line = 0;
   int pending_heredoc = 0;
   char saved_program_path[ARKSH_MAX_PATH];
+  char saved_source_path[ARKSH_MAX_PATH];
+  size_t saved_source_line = 0;
   char saved_positional_params[ARKSH_MAX_POSITIONAL_PARAMS][ARKSH_MAX_VAR_VALUE];
   int saved_positional_count;
   int i;
@@ -9050,6 +9202,9 @@ int arksh_shell_source_file(ArkshShell *shell, const char *path, int positional_
 
   /* Snapshot current positional context and set new one for the sourced file. */
   copy_string(saved_program_path, sizeof(saved_program_path), shell->program_path);
+  copy_string(saved_source_path, sizeof(saved_source_path),
+              shell->metadata != NULL ? shell->metadata->current_source_path : "");
+  saved_source_line = shell->metadata != NULL ? shell->metadata->current_source_line : 0u;
   saved_positional_count = arksh_shell_get_positional_count(shell);
   for (i = 0; i < saved_positional_count && i < ARKSH_MAX_POSITIONAL_PARAMS; ++i) {
     const char *value = arksh_shell_get_positional(shell, i);
@@ -9058,6 +9213,12 @@ int arksh_shell_source_file(ArkshShell *shell, const char *path, int positional_
   }
 
   copy_string(shell->program_path, sizeof(shell->program_path), resolved);
+  if (shell->metadata != NULL) {
+    copy_string(shell->metadata->current_source_path,
+                sizeof(shell->metadata->current_source_path),
+                resolved);
+    shell->metadata->current_source_line = 0u;
+  }
   {
     int n = positional_count < ARKSH_MAX_POSITIONAL_PARAMS ? positional_count : ARKSH_MAX_POSITIONAL_PARAMS;
     const char *positional_values[ARKSH_MAX_POSITIONAL_PARAMS];
@@ -9068,6 +9229,12 @@ int arksh_shell_source_file(ArkshShell *shell, const char *path, int positional_
     if (arksh_shell_set_positional_argv(shell, n, positional_values) != 0) {
       fclose(fp);
       copy_string(shell->program_path, sizeof(shell->program_path), saved_program_path);
+      if (shell->metadata != NULL) {
+        copy_string(shell->metadata->current_source_path,
+                    sizeof(shell->metadata->current_source_path),
+                    saved_source_path);
+        shell->metadata->current_source_line = saved_source_line;
+      }
       snprintf(out, out_size, "unable to store source positional parameters");
       return 1;
     }
@@ -9120,6 +9287,9 @@ int arksh_shell_source_file(ArkshShell *shell, const char *path, int positional_
       }
 
       line_output[0] = '\0';
+      if (shell->metadata != NULL) {
+        shell->metadata->current_source_line = command_start_line;
+      }
       exec_status = arksh_shell_execute_line(shell, command_buffer, line_output, sizeof(line_output));
       if (exec_status != 0) {
         snprintf(out, out_size, "%s:%zu: %s", resolved, command_start_line, line_output[0] == '\0' ? "command failed" : line_output);
@@ -9149,6 +9319,12 @@ int arksh_shell_source_file(ArkshShell *shell, const char *path, int positional_
 
     /* Restore positional context. */
     copy_string(shell->program_path, sizeof(shell->program_path), saved_program_path);
+    if (shell->metadata != NULL) {
+      copy_string(shell->metadata->current_source_path,
+                  sizeof(shell->metadata->current_source_path),
+                  saved_source_path);
+      shell->metadata->current_source_line = saved_source_line;
+    }
     if (arksh_shell_set_positional_copy(shell, saved_positional_count, saved_positional_params) != 0) {
       snprintf(out, out_size, "%s:%zu: unable to restore source positional parameters",
                resolved, command_start_line == 0 ? line_number : command_start_line);
@@ -9607,8 +9783,8 @@ static int command_exec(ArkshShell *shell, int argc, char **argv, char *out, siz
   }
 
   if (argc < 2) {
-    snprintf(out, out_size, "usage: exec <command> [args...]");
-    return 1;
+    out[0] = '\0';
+    return 0;
   }
   if (resolve_command_path(shell, argv[1], resolved, sizeof(resolved)) != 0) {
     snprintf(out, out_size, "command not found: %s", argv[1]);
@@ -9874,6 +10050,39 @@ static int command_local(ArkshShell *shell, int argc, char **argv, char *out, si
       }
     }
   }
+  return 0;
+}
+
+static int command_declare_assoc(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  int i;
+
+  if (shell == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  out[0] = '\0';
+  if (argc < 3 || strcmp(argv[1], "-A") != 0) {
+    snprintf(out, out_size, "usage: %s -A <name> [name...]", argv[0] == NULL ? "declare" : argv[0]);
+    return 1;
+  }
+
+  for (i = 2; i < argc; ++i) {
+    ArkshValue dict_value;
+
+    if (!is_valid_identifier(argv[i])) {
+      snprintf(out, out_size, "%s: invalid associative array name: %s", argv[0] == NULL ? "declare" : argv[0], argv[i]);
+      return 1;
+    }
+    arksh_value_init(&dict_value);
+    arksh_value_set_dict(&dict_value);
+    if (arksh_shell_set_binding(shell, argv[i], &dict_value) != 0) {
+      arksh_value_free(&dict_value);
+      snprintf(out, out_size, "%s: unable to declare associative array: %s", argv[0] == NULL ? "declare" : argv[0], argv[i]);
+      return 1;
+    }
+    arksh_value_free(&dict_value);
+  }
+
   return 0;
 }
 
@@ -11821,6 +12030,8 @@ static int register_builtin_commands(ArkshShell *shell) {
       register_builtin(shell, "ulimit",   "show or change POSIX resource limits",           command_ulimit,   ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "shift",    "shift positional parameters left by n",          command_shift,    ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "local",    "declare function-local variables",               command_local,    ARKSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "declare",  "declare shell metadata such as associative arrays", command_declare_assoc, ARKSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "typeset",  "declare shell metadata such as associative arrays", command_declare_assoc, ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "readonly", "mark variables as read-only",                    command_readonly, ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "echo",     "print arguments to standard output",             command_echo,     ARKSH_BUILTIN_MUTANT) != 0) {
     return 1;
@@ -12802,8 +13013,15 @@ int arksh_shell_init(ArkshShell *shell) {
     shell->completion_generation = s_next_shell_generation++;
   }
   arksh_scratch_arena_init(&shell->scratch);
+  shell->metadata = allocate_shell_metadata_copy(NULL);
+  if (shell->metadata == NULL) {
+    arksh_scratch_arena_destroy(&shell->scratch);
+    return 1;
+  }
   shell->traps = (ArkshTrapEntry *) calloc(ARKSH_TRAP_COUNT, sizeof(*shell->traps));
   if (shell->traps == NULL) {
+    free(shell->metadata);
+    shell->metadata = NULL;
     arksh_scratch_arena_destroy(&shell->scratch);
     return 1;
   }
@@ -12896,6 +13114,7 @@ void arksh_shell_destroy(ArkshShell *shell) {
   }
 
   arksh_scratch_arena_destroy(&shell->scratch);
+  free(shell->metadata);
   free(shell->commands);
   free(shell->command_name_index);
   free(shell->plugins);

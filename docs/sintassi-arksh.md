@@ -267,6 +267,10 @@ Regole pratiche:
 - `eval "..."` riesegue la stringa nel contesto shell corrente
 - per `eval` e `trap`, la forma piu robusta sulla singola riga resta quella con apici singoli attorno al comando completo
 - `exec cmd ...` esegue il comando e poi termina la shell corrente
+- `exec > file` e `exec < file` rendono persistente la redirection nel processo shell corrente
+- `declare -A nome` e `typeset -A nome` dichiarano array associativi appoggiati ai `Dict`
+- `${name[key]}` legge una entry dell'array associativo; `${name[@]}` legge i valori; `${!name[@]}` legge le chiavi
+- `$LINENO`, `$FUNCNAME` e `$BASH_SOURCE` sono disponibili nelle espansioni shell
 - `wait [%job]` aspetta la fine di un background job
 - `trap "comando" EXIT` registra un trap minimo eseguito all'uscita della shell
 - `class Nome [extends Base1, Base2] do ... endclass` definisce una classe custom

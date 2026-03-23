@@ -209,6 +209,23 @@ Operatori supportati nelle value expression:
 condition ? true_value : false_value
 ```
 
+### 4.6 Variabili shell speciali e array associativi
+
+Sono disponibili anche:
+
+```text
+text("%s") -> print("$LINENO")
+text("%s") -> print("$FUNCNAME")
+text("%s") -> print("$BASH_SOURCE")
+
+declare -A colors
+colors[sky]=blue
+text("%s") -> print("${colors[sky]}")
+text("%s") -> print("${!colors[@]}")
+```
+
+`declare -A` e `typeset -A` usano internamente i `Dict`: `${name[key]}` legge una entry, `${name[@]}` espande i valori, `${!name[@]}` espande le chiavi.
+
 Esempi:
 
 ```text

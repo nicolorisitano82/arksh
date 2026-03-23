@@ -28,9 +28,9 @@ Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostitu
 | Funzioni con `local` scope | Implementato |
 | Subshell esplicite `( cmd )` | Implementate |
 | Gruppi di comandi `{ cmd; }` | Implementati |
-| `exec` con redirection (`exec >file`) | Non implementato |
-| `$LINENO`, `$FUNCNAME`, `$BASH_SOURCE` | Non implementati |
-| Array associativi POSIX-compatible | Non implementati |
+| `exec` con redirection (`exec >file`, `exec <file`) | Implementato |
+| `$LINENO`, `$FUNCNAME`, `$BASH_SOURCE` | Implementati |
+| Array associativi POSIX-compatible | Implementati su `Dict` con `declare -A` / `typeset -A` |
 
 ---
 
@@ -55,7 +55,7 @@ Quasi tutti gli script di sistema e gli strumenti (Docker entrypoint, systemd se
 - La sintassi object-pipeline (`|>`, `->`) non è POSIX e nessuno strumento la conosce.
 - Manca ancora una modalità di compatibilità `sh` che disabiliti esplicitamente le estensioni non-POSIX.
 - Il parsing di shebang multi-riga o di script complessi non è stato testato su corpora reali.
-- Restano scoperte diverse aree tipiche da shell di sistema: login shell, segnali completi, `exec` con redirection, variabili speciali stile bash (`$LINENO`, `$FUNCNAME`, `$BASH_SOURCE`).
+- Restano scoperte diverse aree tipiche da shell di sistema: login shell, segnali completi, mode `sh`, array indicizzati e alcune variabili/feature bash aggiuntive (`$PPID`, `$BASHPID`, `nameref`).
 
 ---
 
@@ -123,10 +123,10 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 **Obiettivo:** arksh può eseguire script bash di media complessità trovati in progetti reali.
 
 1. Array indicizzati `a=(v1 v2)` e accesso `${a[0]}`, `${#a[@]}`, iterazione.
-2. Array associativi `declare -A`.
+2. Array associativi `declare -A` — completati e mappati sui `Dict`.
 3. Espansioni di parametro complete: `${var#pattern}`, `${var##pattern}`, `${var%pattern}`, `${var%%pattern}`, `${var/pat/rep}`, `${var//pat/rep}`, `${var^}`, `${var^^}`, `${var,}`, `${var,,}`, `${#var}`, `${var:offset:len}`.
-4. `$LINENO`, `$FUNCNAME`, `$BASH_SOURCE`, `$PPID`, `$BASHPID`.
-5. `declare`, `typeset`, `readonly`, `nameref`.
+4. `$LINENO`, `$FUNCNAME`, `$BASH_SOURCE`, `$PPID`, `$BASHPID` — i primi tre sono implementati; restano `$PPID` e `$BASHPID`.
+5. `declare`, `typeset`, `readonly`, `nameref` — `declare/typeset -A` sono implementati; restano `nameref` e semantica bash completa.
 6. `printf` completo con tutti i formati POSIX e estensioni bash comuni.
 7. `mapfile` / `readarray`.
 8. Coroutine / coprocess `coproc`.

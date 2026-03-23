@@ -1,10 +1,12 @@
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
 #include <io.h>
+#include <sys/stat.h>
 #else
 #include <sys/wait.h>
 #include <unistd.h>
@@ -24,11 +26,17 @@
 #define arksh_dup2_fd _dup2
 #define arksh_close_fd _close
 #define arksh_fileno _fileno
+#define arksh_open_fd _open
 #else
 #define arksh_dup_fd dup
 #define arksh_dup2_fd dup2
 #define arksh_close_fd close
 #define arksh_fileno fileno
+#define arksh_open_fd open
+#endif
+
+#ifndef O_BINARY
+#define O_BINARY 0
 #endif
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {
@@ -37,6 +45,23 @@ static void copy_string(char *dest, size_t dest_size, const char *src) {
   }
 
   snprintf(dest, dest_size, "%s", src == NULL ? "" : src);
+}
+
+static int is_valid_identifier(const char *name) {
+  size_t i;
+
+  if (name == NULL || name[0] == '\0') {
+    return 0;
+  }
+  if (!(isalpha((unsigned char) name[0]) || name[0] == '_')) {
+    return 0;
+  }
+  for (i = 1; name[i] != '\0'; ++i) {
+    if (!(isalnum((unsigned char) name[i]) || name[i] == '_')) {
+      return 0;
+    }
+  }
+  return 1;
 }
 
 static int grow_heap_array(void **items, size_t *capacity, size_t required, size_t item_size, size_t max_capacity) {
@@ -255,6 +280,13 @@ static int build_here_string_text(
   text[length + 1] = '\0';
   return 0;
 }
+
+static int apply_exec_redirections_persistently(
+  ArkshShell *shell,
+  const ArkshCommandStageNode *stage,
+  char *out,
+  size_t out_size
+);
 
 static int expand_command_arguments(
   ArkshShell *shell,
@@ -4920,6 +4952,51 @@ static int execute_builtin_with_redirection(
   }
 
   build_command_argv(expanded_argv, expanded_argc, argv);
+  if (strcmp(command_def->name, "exec") == 0 && stage->redirection_count > 0) {
+    if (expanded_argc > 1) {
+      ArkshCommandStageNode exec_stage;
+      ArkshPlatformProcessSpec exec_spec;
+      ArkshPlatformAsyncProcess stopped_process;
+      int exec_exit_code = 0;
+      int argi;
+
+      memset(&exec_stage, 0, sizeof(exec_stage));
+      memset(&exec_spec, 0, sizeof(exec_spec));
+      memset(&stopped_process, 0, sizeof(stopped_process));
+      exec_stage.argc = stage->argc - 1;
+      for (argi = 1; argi < stage->argc; ++argi) {
+        copy_string(exec_stage.argv[argi - 1], sizeof(exec_stage.argv[argi - 1]), stage->argv[argi]);
+        copy_string(exec_stage.raw_argv[argi - 1], sizeof(exec_stage.raw_argv[argi - 1]), stage->raw_argv[argi]);
+      }
+      exec_stage.redirection_count = stage->redirection_count;
+      for (argi = 0; argi < (int) stage->redirection_count; ++argi) {
+        exec_stage.redirections[argi] = stage->redirections[argi];
+      }
+
+      if (populate_process_spec_from_stage(shell, &exec_stage, &exec_spec, out, out_size) != 0) {
+        return 1;
+      }
+      if (arksh_platform_run_process_pipeline(
+            shell->cwd, &exec_spec, 1, out, out_size, &exec_exit_code, &stopped_process,
+            shell->force_capture, shell->opt_pipefail
+          ) != 0) {
+        return 1;
+      }
+      shell->running = 0;
+      return exec_exit_code == 0 ? 0 : 1;
+    }
+
+    if (apply_exec_redirections_persistently(shell, stage, out, out_size) != 0) {
+      return 1;
+    }
+    if (command_def->fn(shell, expanded_argc, argv, command_output, sizeof(command_output)) != 0) {
+      copy_string(out, out_size, command_output);
+      return 1;
+    }
+    copy_string(out, out_size, command_output);
+    return 0;
+  }
+
   for (i = 0; i < stage->redirection_count; ++i) {
     switch (stage->redirections[i].kind) {
       case ARKSH_REDIRECT_INPUT:
@@ -5149,7 +5226,20 @@ static int execute_shell_function(
   }
 
   shell->function_depth++;
+  if (shell->metadata != NULL &&
+      shell->metadata->function_name_depth < ARKSH_MAX_FUNCTIONS) {
+    copy_string(
+      shell->metadata->function_name_stack[shell->metadata->function_name_depth],
+      sizeof(shell->metadata->function_name_stack[shell->metadata->function_name_depth]),
+      function_def->name
+    );
+    shell->metadata->function_name_depth++;
+  }
   status = arksh_shell_execute_line(shell, function_def->body, out, out_size);
+  if (shell->metadata != NULL && shell->metadata->function_name_depth > 0) {
+    shell->metadata->function_name_depth--;
+    shell->metadata->function_name_stack[shell->metadata->function_name_depth][0] = '\0';
+  }
   shell->function_depth--;
   if (status == 0 && shell->control_signal == ARKSH_CONTROL_SIGNAL_RETURN) {
     arksh_shell_clear_control_signal(shell);
@@ -5175,6 +5265,351 @@ static int split_posix_assignment(const char *s, char *name_buf, size_t name_buf
   return 1;
 }
 
+static int strip_assoc_key_quotes(const char *raw, char *out, size_t out_size) {
+  size_t len;
+
+  if (raw == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  len = strlen(raw);
+  if (len >= 2u &&
+      ((raw[0] == '"' && raw[len - 1] == '"') ||
+       (raw[0] == '\'' && raw[len - 1] == '\''))) {
+    size_t copy_len = len - 2u;
+    if (copy_len >= out_size) {
+      copy_len = out_size - 1u;
+    }
+    memmove(out, raw + 1, copy_len);
+    out[copy_len] = '\0';
+    return 0;
+  }
+
+  copy_string(out, out_size, raw);
+  return 0;
+}
+
+static int parse_assoc_assignment(
+  const char *s,
+  char *name_buf,
+  size_t name_buf_size,
+  char *key_buf,
+  size_t key_buf_size,
+  const char **value_out
+) {
+  size_t i = 0;
+  size_t name_len = 0;
+  size_t key_len = 0;
+
+  if (s == NULL || name_buf == NULL || key_buf == NULL || value_out == NULL) {
+    return 0;
+  }
+  if (!isalpha((unsigned char) s[0]) && s[0] != '_') {
+    return 0;
+  }
+  while (isalnum((unsigned char) s[i]) || s[i] == '_') {
+    if (name_len + 1 >= name_buf_size) {
+      return 0;
+    }
+    name_buf[name_len++] = s[i++];
+  }
+  name_buf[name_len] = '\0';
+  if (s[i] != '[') {
+    return 0;
+  }
+  i++;
+  while (s[i] != '\0' && s[i] != ']') {
+    if (key_len + 1 >= key_buf_size) {
+      return 0;
+    }
+    key_buf[key_len++] = s[i++];
+  }
+  key_buf[key_len] = '\0';
+  if (s[i] != ']' || s[i + 1] != '=') {
+    return 0;
+  }
+  if (strip_assoc_key_quotes(key_buf, key_buf, key_buf_size) != 0) {
+    return 0;
+  }
+  *value_out = s + i + 2;
+  return is_valid_identifier(name_buf) && key_buf[0] != '\0';
+}
+
+static int set_assoc_assignment_binding(
+  ArkshShell *shell,
+  const char *name,
+  const char *key,
+  const char *value_text,
+  char *out,
+  size_t out_size
+) {
+  const ArkshValue *existing;
+  ArkshValue dict_value;
+  ArkshValue string_value;
+  int status = 1;
+
+  if (shell == NULL || name == NULL || key == NULL || value_text == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  arksh_value_init(&dict_value);
+  arksh_value_init(&string_value);
+
+  existing = arksh_shell_get_binding(shell, name);
+  if (existing != NULL) {
+    if (existing->kind != ARKSH_VALUE_DICT) {
+      snprintf(out, out_size, "%s is not an associative array", name);
+      goto cleanup;
+    }
+    if (arksh_value_copy(&dict_value, existing) != 0) {
+      snprintf(out, out_size, "unable to copy associative array: %s", name);
+      goto cleanup;
+    }
+  } else {
+    arksh_value_set_dict(&dict_value);
+  }
+
+  arksh_value_set_string(&string_value, value_text);
+  if (arksh_value_map_set(&dict_value, key, &string_value) != 0) {
+    snprintf(out, out_size, "associative array is too large: %s", name);
+    goto cleanup;
+  }
+  if (arksh_shell_set_binding(shell, name, &dict_value) != 0) {
+    snprintf(out, out_size, "unable to store associative array: %s", name);
+    goto cleanup;
+  }
+
+  out[0] = '\0';
+  status = 0;
+
+cleanup:
+  arksh_value_free(&string_value);
+  arksh_value_free(&dict_value);
+  return status;
+}
+
+typedef struct {
+  int fd;
+  int saved_fd;
+  int used;
+} ArkshPersistentFdBackup;
+
+static int ensure_persistent_fd_backup(
+  ArkshPersistentFdBackup *backups,
+  size_t backup_count,
+  int fd
+) {
+  size_t i;
+
+  for (i = 0; i < backup_count; ++i) {
+    if (backups[i].used && backups[i].fd == fd) {
+      return 0;
+    }
+  }
+  for (i = 0; i < backup_count; ++i) {
+    if (!backups[i].used) {
+      backups[i].fd = fd;
+      backups[i].saved_fd = arksh_dup_fd(fd);
+      backups[i].used = 1;
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static void rollback_persistent_fd_backups(
+  ArkshPersistentFdBackup *backups,
+  size_t backup_count
+) {
+  size_t i;
+
+  for (i = 0; i < backup_count; ++i) {
+    if (!backups[i].used) {
+      continue;
+    }
+    if (backups[i].saved_fd >= 0) {
+      arksh_dup2_fd(backups[i].saved_fd, backups[i].fd);
+      arksh_close_fd(backups[i].saved_fd);
+    } else {
+      arksh_close_fd(backups[i].fd);
+    }
+    backups[i].used = 0;
+    backups[i].saved_fd = -1;
+  }
+}
+
+static void release_persistent_fd_backups(
+  ArkshPersistentFdBackup *backups,
+  size_t backup_count
+) {
+  size_t i;
+
+  for (i = 0; i < backup_count; ++i) {
+    if (!backups[i].used) {
+      continue;
+    }
+    if (backups[i].saved_fd >= 0) {
+      arksh_close_fd(backups[i].saved_fd);
+    }
+    backups[i].used = 0;
+    backups[i].saved_fd = -1;
+  }
+}
+
+static int apply_exec_redirections_persistently(
+  ArkshShell *shell,
+  const ArkshCommandStageNode *stage,
+  char *out,
+  size_t out_size
+) {
+  ArkshPersistentFdBackup backups[ARKSH_MAX_REDIRECTIONS];
+  size_t i;
+
+  if (shell == NULL || stage == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  memset(backups, 0, sizeof(backups));
+  for (i = 0; i < stage->redirection_count; ++i) {
+    int opened_fd = -1;
+    char expanded_target[ARKSH_MAX_TOKEN];
+
+    if (ensure_persistent_fd_backup(backups, ARKSH_MAX_REDIRECTIONS, stage->redirections[i].fd) != 0) {
+      snprintf(out, out_size, "too many persistent exec redirections");
+      rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+      return 1;
+    }
+
+    switch (stage->redirections[i].kind) {
+      case ARKSH_REDIRECT_INPUT:
+      case ARKSH_REDIRECT_FD_INPUT:
+        if (expand_single_word(shell, stage->redirections[i].raw_target, ARKSH_EXPAND_MODE_REDIRECT_TARGET, expanded_target, sizeof(expanded_target), out, out_size) != 0) {
+          rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+          return 1;
+        }
+        opened_fd = arksh_open_fd(expanded_target, O_RDONLY | O_BINARY);
+        if (opened_fd < 0 || arksh_dup2_fd(opened_fd, stage->redirections[i].fd) < 0) {
+          if (opened_fd >= 0) {
+            arksh_close_fd(opened_fd);
+          }
+          snprintf(out, out_size, "unable to open redirected input: %s", expanded_target);
+          rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+          return 1;
+        }
+        arksh_close_fd(opened_fd);
+        break;
+
+      case ARKSH_REDIRECT_OUTPUT_TRUNCATE:
+      case ARKSH_REDIRECT_FD_OUTPUT_TRUNCATE:
+      case ARKSH_REDIRECT_ERROR_TRUNCATE:
+        if (expand_single_word(shell, stage->redirections[i].raw_target, ARKSH_EXPAND_MODE_REDIRECT_TARGET, expanded_target, sizeof(expanded_target), out, out_size) != 0) {
+          rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+          return 1;
+        }
+        opened_fd = arksh_open_fd(expanded_target, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0666);
+        if (opened_fd < 0 || arksh_dup2_fd(opened_fd, stage->redirections[i].fd) < 0) {
+          if (opened_fd >= 0) {
+            arksh_close_fd(opened_fd);
+          }
+          snprintf(out, out_size, "unable to open redirected output: %s", expanded_target);
+          rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+          return 1;
+        }
+        arksh_close_fd(opened_fd);
+        break;
+
+      case ARKSH_REDIRECT_OUTPUT_APPEND:
+      case ARKSH_REDIRECT_FD_OUTPUT_APPEND:
+      case ARKSH_REDIRECT_ERROR_APPEND:
+        if (expand_single_word(shell, stage->redirections[i].raw_target, ARKSH_EXPAND_MODE_REDIRECT_TARGET, expanded_target, sizeof(expanded_target), out, out_size) != 0) {
+          rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+          return 1;
+        }
+        opened_fd = arksh_open_fd(expanded_target, O_WRONLY | O_CREAT | O_APPEND | O_BINARY, 0666);
+        if (opened_fd < 0 || arksh_dup2_fd(opened_fd, stage->redirections[i].fd) < 0) {
+          if (opened_fd >= 0) {
+            arksh_close_fd(opened_fd);
+          }
+          snprintf(out, out_size, "unable to open redirected output: %s", expanded_target);
+          rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+          return 1;
+        }
+        arksh_close_fd(opened_fd);
+        break;
+
+      case ARKSH_REDIRECT_ERROR_TO_OUTPUT:
+      case ARKSH_REDIRECT_FD_DUP_INPUT:
+      case ARKSH_REDIRECT_FD_DUP_OUTPUT:
+        if (ensure_persistent_fd_backup(backups, ARKSH_MAX_REDIRECTIONS, stage->redirections[i].target_fd) != 0 ||
+            arksh_dup2_fd(stage->redirections[i].target_fd, stage->redirections[i].fd) < 0) {
+          snprintf(out, out_size, "unable to duplicate file descriptor %d", stage->redirections[i].target_fd);
+          rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+          return 1;
+        }
+        break;
+
+      case ARKSH_REDIRECT_FD_CLOSE:
+        arksh_close_fd(stage->redirections[i].fd);
+        break;
+
+      case ARKSH_REDIRECT_HEREDOC:
+      case ARKSH_REDIRECT_HERESTRING: {
+        char input_text[ARKSH_MAX_OUTPUT];
+
+        input_text[0] = '\0';
+        if (stage->redirections[i].kind == ARKSH_REDIRECT_HERESTRING) {
+          if (build_here_string_text(shell, &stage->redirections[i], input_text, sizeof(input_text), out, out_size) != 0) {
+            rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+            return 1;
+          }
+        } else {
+          copy_string(input_text, sizeof(input_text), stage->redirections[i].heredoc_body);
+        }
+#ifdef _WIN32
+        snprintf(out, out_size, "exec here-doc redirections are not supported on Windows");
+        rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+        return 1;
+#else
+        {
+          int pipe_fds[2];
+          size_t length = strlen(input_text);
+
+          if (pipe(pipe_fds) != 0) {
+            snprintf(out, out_size, "unable to create persistent input pipe");
+            rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+            return 1;
+          }
+          if (length > 0u && write(pipe_fds[1], input_text, length) != (ssize_t) length) {
+            arksh_close_fd(pipe_fds[0]);
+            arksh_close_fd(pipe_fds[1]);
+            snprintf(out, out_size, "unable to write persistent input");
+            rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+            return 1;
+          }
+          arksh_close_fd(pipe_fds[1]);
+          if (arksh_dup2_fd(pipe_fds[0], stage->redirections[i].fd) < 0) {
+            arksh_close_fd(pipe_fds[0]);
+            snprintf(out, out_size, "unable to redirect persistent input");
+            rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+            return 1;
+          }
+          arksh_close_fd(pipe_fds[0]);
+        }
+#endif
+        break;
+      }
+      default:
+        snprintf(out, out_size, "unsupported exec redirection");
+        rollback_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+        return 1;
+    }
+  }
+
+  release_persistent_fd_backups(backups, ARKSH_MAX_REDIRECTIONS);
+  out[0] = '\0';
+  return 0;
+}
+
 static int execute_simple_command(ArkshShell *shell, const ArkshSimpleCommandNode *command, char *out, size_t out_size) {
   char expanded_argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
   char *argv[ARKSH_MAX_ARGS];
@@ -5196,6 +5631,36 @@ static int execute_simple_command(ArkshShell *shell, const ArkshSimpleCommandNod
 
   if (expanded_argc == 0) {
     return 0;
+  }
+
+  /* Associative array assignment backed by Dict bindings: name[key]=value */
+  {
+    int ai;
+    int all_assoc_assignments = 1;
+
+    for (ai = 0; ai < expanded_argc; ++ai) {
+      char name[ARKSH_MAX_TOKEN];
+      char key[ARKSH_MAX_NAME];
+      const char *value;
+
+      if (!parse_assoc_assignment(expanded_argv[ai], name, sizeof(name), key, sizeof(key), &value)) {
+        all_assoc_assignments = 0;
+        break;
+      }
+    }
+    if (all_assoc_assignments) {
+      for (ai = 0; ai < expanded_argc; ++ai) {
+        char name[ARKSH_MAX_TOKEN];
+        char key[ARKSH_MAX_NAME];
+        const char *value;
+
+        parse_assoc_assignment(expanded_argv[ai], name, sizeof(name), key, sizeof(key), &value);
+        if (set_assoc_assignment_binding(shell, name, key, value, out, out_size) != 0) {
+          return 1;
+        }
+      }
+      return 0;
+    }
   }
 
   /* E1-S7-T1: POSIX standalone assignment — VAR=value [VAR2=value2 ...]

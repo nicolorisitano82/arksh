@@ -598,6 +598,155 @@ static void expand_positional_list(ArkshShell *shell, char *out, size_t out_size
   }
 }
 
+static void append_assoc_joined(
+  char *out,
+  size_t out_size,
+  const char *text,
+  int *first_item
+) {
+  size_t current_len;
+  size_t remaining;
+
+  if (out == NULL || out_size == 0 || text == NULL || first_item == NULL) {
+    return;
+  }
+
+  current_len = strlen(out);
+  remaining = current_len < out_size ? out_size - current_len : 0u;
+  if (remaining == 0u) {
+    return;
+  }
+  if (!*first_item) {
+    snprintf(out + current_len, remaining, " ");
+    current_len = strlen(out);
+    remaining = current_len < out_size ? out_size - current_len : 0u;
+    if (remaining == 0u) {
+      return;
+    }
+  }
+  snprintf(out + current_len, remaining, "%s", text);
+  *first_item = 0;
+}
+
+static int strip_assoc_key_quotes(const char *raw, char *out, size_t out_size) {
+  size_t len;
+
+  if (raw == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  len = strlen(raw);
+  if (len >= 2u &&
+      ((raw[0] == '"' && raw[len - 1] == '"') ||
+       (raw[0] == '\'' && raw[len - 1] == '\''))) {
+    size_t copy_len = len - 2u;
+    if (copy_len >= out_size) {
+      copy_len = out_size - 1u;
+    }
+    memmove(out, raw + 1, copy_len);
+    out[copy_len] = '\0';
+    return 0;
+  }
+
+  copy_string(out, out_size, raw);
+  return 0;
+}
+
+static int lookup_assoc_binding(
+  ArkshShell *shell,
+  const char *name,
+  const ArkshValue **out_binding
+) {
+  const ArkshValue *binding;
+
+  if (out_binding == NULL) {
+    return 0;
+  }
+  *out_binding = NULL;
+  if (shell == NULL || name == NULL || name[0] == '\0') {
+    return 0;
+  }
+
+  binding = arksh_shell_get_binding(shell, name);
+  if (binding == NULL || binding->kind != ARKSH_VALUE_DICT) {
+    return 0;
+  }
+
+  *out_binding = binding;
+  return 1;
+}
+
+static int render_assoc_value(
+  const ArkshValue *binding,
+  const char *subscript,
+  int key_mode,
+  char *out,
+  size_t out_size,
+  int *out_is_set,
+  size_t *out_element_count
+) {
+  const ArkshValueItem *entry;
+  size_t i;
+  int first_item = 1;
+
+  if (out != NULL && out_size > 0) {
+    out[0] = '\0';
+  }
+  if (out_is_set != NULL) {
+    *out_is_set = 0;
+  }
+  if (out_element_count != NULL) {
+    *out_element_count = 0u;
+  }
+  if (binding == NULL || binding->kind != ARKSH_VALUE_DICT || out == NULL || out_size == 0 || subscript == NULL) {
+    return 0;
+  }
+
+  if (strcmp(subscript, "@") == 0 || strcmp(subscript, "*") == 0) {
+    for (i = 0; i < binding->map.count; ++i) {
+      char rendered[ARKSH_MAX_OUTPUT];
+
+      if (key_mode) {
+        append_assoc_joined(out, out_size, binding->map.entries[i].key, &first_item);
+      } else {
+        rendered[0] = '\0';
+        if (arksh_value_item_render(&binding->map.entries[i].value, rendered, sizeof(rendered)) != 0) {
+          rendered[0] = '\0';
+        }
+        append_assoc_joined(out, out_size, rendered, &first_item);
+      }
+    }
+    if (out_is_set != NULL) {
+      *out_is_set = 1;
+    }
+    if (out_element_count != NULL) {
+      *out_element_count = binding->map.count;
+    }
+    return 0;
+  }
+
+  if (key_mode) {
+    return 0;
+  }
+
+  entry = arksh_value_map_get_item(binding, subscript);
+  if (entry == NULL) {
+    return 0;
+  }
+
+  if (arksh_value_item_render(entry, out, out_size) != 0) {
+    out[0] = '\0';
+    return 1;
+  }
+  if (out_is_set != NULL) {
+    *out_is_set = 1;
+  }
+  if (out_element_count != NULL) {
+    *out_element_count = 1u;
+  }
+  return 0;
+}
+
 static int resolve_special_name(ArkshShell *shell, const char *name, char *out, size_t out_size) {
   int all_digits = 1;
   size_t k;
@@ -633,6 +782,39 @@ static int resolve_special_name(ArkshShell *shell, const char *name, char *out, 
       default:
         break;
     }
+  }
+
+  if (strcmp(name, "LINENO") == 0) {
+    snprintf(out, out_size, "%zu",
+             shell != NULL && shell->metadata != NULL &&
+                 shell->metadata->current_source_line > 0u
+               ? shell->metadata->current_source_line
+               : 1u);
+    return 1;
+  }
+  if (strcmp(name, "FUNCNAME") == 0) {
+    if (shell != NULL && shell->metadata != NULL &&
+        shell->metadata->function_name_depth > 0) {
+      copy_string(
+        out,
+        out_size,
+        shell->metadata->function_name_stack[shell->metadata->function_name_depth - 1]
+      );
+    } else {
+      out[0] = '\0';
+    }
+    return 1;
+  }
+  if (strcmp(name, "BASH_SOURCE") == 0) {
+    if (shell != NULL && shell->metadata != NULL &&
+        shell->metadata->current_source_path[0] != '\0') {
+      copy_string(out, out_size, shell->metadata->current_source_path);
+    } else if (shell != NULL) {
+      copy_string(out, out_size, shell->program_path);
+    } else {
+      out[0] = '\0';
+    }
+    return 1;
   }
 
   /* Numeric name: positional parameter. */
@@ -719,14 +901,19 @@ static int resolve_variable(ArkshShell *shell, const char *raw, size_t *index, c
 
   if (raw[i] == '{') {
     char var_name[128];
+    char assoc_subscript[ARKSH_MAX_NAME];
     size_t var_name_len = 0;
+    size_t assoc_subscript_len = 0;
     char operand[ARKSH_MAX_OUTPUT];
     size_t operand_len = 0;
     int length_mode = 0;
     int colon_prefix = 0;
+    int assoc_key_mode = 0;
+    int assoc_subscript_present = 0;
     char op = '\0';
     char op2 = '\0';
     char val_buf[ARKSH_MAX_OUTPUT];
+    size_t assoc_element_count = 0u;
     int is_set;
 
     i++; /* skip '{' */
@@ -739,6 +926,11 @@ static int resolve_variable(ArkshShell *shell, const char *raw, size_t *index, c
         length_mode = 1;
         i++; /* skip '#' */
       }
+    }
+
+    if (raw[i] == '!' && (isalpha((unsigned char) raw[i + 1]) || raw[i + 1] == '_')) {
+      assoc_key_mode = 1;
+      i++;
     }
 
     /* Read variable name. */
@@ -768,6 +960,28 @@ static int resolve_variable(ArkshShell *shell, const char *raw, size_t *index, c
       }
     }
     var_name[var_name_len] = '\0';
+
+    if (var_name_len > 0 && raw[i] == '[') {
+      i++;
+      while (raw[i] != '\0' && raw[i] != ']') {
+        if (assoc_subscript_len + 1 >= sizeof(assoc_subscript)) {
+          snprintf(error, error_size, "associative array key too long in ${...}");
+          return 1;
+        }
+        assoc_subscript[assoc_subscript_len++] = raw[i++];
+      }
+      assoc_subscript[assoc_subscript_len] = '\0';
+      if (raw[i] != ']') {
+        snprintf(error, error_size, "unterminated associative array subscript in ${...}");
+        return 1;
+      }
+      if (strip_assoc_key_quotes(assoc_subscript, assoc_subscript, sizeof(assoc_subscript)) != 0) {
+        snprintf(error, error_size, "associative array key too long in ${...}");
+        return 1;
+      }
+      assoc_subscript_present = 1;
+      i++;
+    }
 
     /* Detect operator after name. */
     if (raw[i] == ':' && (raw[i + 1] == '-' || raw[i + 1] == '='
@@ -808,11 +1022,33 @@ static int resolve_variable(ArkshShell *shell, const char *raw, size_t *index, c
     *index = i;
 
     /* Resolve variable value. */
-    is_set = lookup_var_value(shell, var_name, val_buf, sizeof(val_buf));
+    if (assoc_subscript_present || assoc_key_mode) {
+      const ArkshValue *binding = NULL;
+
+      is_set = 0;
+      val_buf[0] = '\0';
+      if (lookup_assoc_binding(shell, var_name, &binding)) {
+        if (!assoc_subscript_present) {
+          snprintf(error, error_size, "unsupported associative expansion: ${!%s}", var_name);
+          return 1;
+        }
+        if (render_assoc_value(binding, assoc_subscript, assoc_key_mode, val_buf, sizeof(val_buf), &is_set, &assoc_element_count) != 0) {
+          snprintf(error, error_size, "unable to render associative array expansion");
+          return 1;
+        }
+      }
+    } else {
+      is_set = lookup_var_value(shell, var_name, val_buf, sizeof(val_buf));
+    }
 
     /* ${#var}: return length. */
     if (length_mode) {
-      snprintf(out, out_size, "%zu", strlen(val_buf));
+      if (assoc_subscript_present &&
+          (strcmp(assoc_subscript, "@") == 0 || strcmp(assoc_subscript, "*") == 0)) {
+        snprintf(out, out_size, "%zu", assoc_element_count);
+      } else {
+        snprintf(out, out_size, "%zu", strlen(val_buf));
+      }
       return 0;
     }
 

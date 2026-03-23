@@ -1,0 +1,14 @@
+declare -A colors
+colors[sky]=blue
+colors[forest]=green
+text("%s") -> print("${colors[sky]}")
+text("%s") -> print("${#colors[@]}")
+text("%s") -> print("${colors[@]}")
+text("%s") -> print("${!colors[@]}")
+unset colors[sky]
+text("%s") -> print("${colors[sky]:-gone}")
+
+typeset -A names
+names[first]=alice
+text("%s") -> print("${names[first]}")
+text("assoc_arrays_done") -> print()

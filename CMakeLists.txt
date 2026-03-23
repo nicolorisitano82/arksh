@@ -342,7 +342,15 @@ if(BUILD_TESTING)
   add_test(NAME arksh_here_string_echo_stdin COMMAND arksh -c "\"${ARKSH_TEST_ECHO}\" <<< \"hello\"")
   add_test(NAME arksh_here_string_read_builtin COMMAND arksh -c "read line <<< \"word\" ; text(\"line=%s\") -> print(\"$line\")")
   add_test(NAME arksh_here_string_expand_variable COMMAND arksh -c "set HOME /tmp/arksh-home ; read line <<< \"$HOME\" ; text(\"%s\") -> print(\"$line\")")
+  add_test(NAME arksh_exec_redirect_stdin_persistent
+    COMMAND arksh -c "echo word > exec_in.txt ; exec < exec_in.txt ; read line ; text(\"%s\") -> print(\"$line\")")
   if(NOT WIN32)
+    add_test(NAME arksh_exec_redirect_stdout_persistent
+      COMMAND /bin/sh -c "\"$1\" -c 'exec > exec.out ; echo hi' >/dev/null && cat exec.out" sh $<TARGET_FILE:arksh>
+    )
+    add_test(NAME arksh_exec_command_redirect_stdout
+      COMMAND /bin/sh -c "./arksh -c 'exec ./arksh_test_emit_args hello world > exec_cmd.out' >/dev/null && cat exec_cmd.out"
+    )
     add_test(NAME arksh_proc_subst_diff_same
       COMMAND arksh -c "diff <(printf \"a\\n\") <(printf \"a\\n\") ; text(\"same\") -> print()"
       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -494,6 +502,7 @@ if(BUILD_TESTING)
   add_test(NAME arksh_positional_shell_pid COMMAND arksh -c "text(\"%s\") -> print(\"$$\")")
   add_test(NAME arksh_positional_source_args COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/source-params.arksh hello")
   add_test(NAME arksh_positional_scope_restore COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/params/scope-restore.arksh")
+  add_test(NAME arksh_shell_metadata_vars COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/shell-metadata.arksh")
   add_test(NAME arksh_param_expand_default COMMAND arksh -c "text(\"%s\") -> print(\"\${UNDEF:-fallback}\")")
   add_test(NAME arksh_param_expand_set_nodefault COMMAND arksh -c "set X hello ; text(\"%s\") -> print(\"\${X:-fallback}\")")
   add_test(NAME arksh_param_expand_assign COMMAND arksh -c "text(\"%s\") -> print(\"\${NEW:=assigned}\") ; text(\"%s\") -> print(\"\$NEW\")")
@@ -527,6 +536,18 @@ if(BUILD_TESTING)
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/posix-arith-expansion.arksh"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_golden_assoc_arrays
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/assoc-arrays.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_assoc_array_value
+    COMMAND arksh -c "declare -A colors ; colors[sky]=blue ; text(\"%s\") -> print(\"\${colors[sky]}\")")
+  add_test(NAME arksh_assoc_array_keys
+    COMMAND arksh -c "declare -A colors ; colors[sky]=blue ; colors[forest]=green ; text(\"%s|%s\") -> print(\"\${#colors[@]}\", \"\${!colors[@]}\")")
+  add_test(NAME arksh_assoc_array_unset
+    COMMAND arksh -c "declare -A colors ; colors[sky]=blue ; unset colors[sky] ; text(\"%s\") -> print(\"\${colors[sky]:-gone}\")")
+  add_test(NAME arksh_typeset_assoc
+    COMMAND arksh -c "typeset -A names ; names[first]=alice ; text(\"%s\") -> print(\"\${names[first]}\")")
 
   # E2-S5: binary arithmetic operators in value expression context
   add_test(NAME arksh_binop_add     COMMAND arksh -c "number(3) + number(4)")
@@ -1395,11 +1416,26 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_posix_assign_env_prefix PROPERTIES PASS_REGULAR_EXPRESSION "GREETING=hi")
   set_tests_properties(arksh_posix_fn_basic         PROPERTIES PASS_REGULAR_EXPRESSION "hello")
   set_tests_properties(arksh_posix_fn_positional    PROPERTIES PASS_REGULAR_EXPRESSION "foo bar")
+  set_tests_properties(arksh_shell_metadata_vars    PROPERTIES PASS_REGULAR_EXPRESSION "5\\|report_meta\\|.*shell-metadata\\.arksh[\r\n]+shell_metadata_done")
   set_tests_properties(arksh_getopts_loop           PROPERTIES PASS_REGULAR_EXPRESSION "RESET=a")
   set_tests_properties(arksh_here_string_echo_stdin      PROPERTIES PASS_REGULAR_EXPRESSION "hello")
   set_tests_properties(arksh_here_string_read_builtin    PROPERTIES PASS_REGULAR_EXPRESSION "line=word")
   set_tests_properties(arksh_here_string_expand_variable PROPERTIES PASS_REGULAR_EXPRESSION "/tmp/arksh-home")
+  set_tests_properties(arksh_exec_redirect_stdin_persistent PROPERTIES PASS_REGULAR_EXPRESSION "word")
+  set_tests_properties(arksh_golden_assoc_arrays PROPERTIES PASS_REGULAR_EXPRESSION "assoc_arrays_done")
+  set_tests_properties(arksh_assoc_array_value PROPERTIES PASS_REGULAR_EXPRESSION "blue")
+  set_tests_properties(arksh_assoc_array_keys PROPERTIES PASS_REGULAR_EXPRESSION "2\\|sky forest")
+  set_tests_properties(arksh_assoc_array_unset PROPERTIES PASS_REGULAR_EXPRESSION "gone")
+  set_tests_properties(arksh_typeset_assoc PROPERTIES PASS_REGULAR_EXPRESSION "alice")
   if(NOT WIN32)
+    set_tests_properties(arksh_exec_redirect_stdout_persistent PROPERTIES PASS_REGULAR_EXPRESSION "hi")
+    set_tests_properties(arksh_exec_command_redirect_stdout PROPERTIES PASS_REGULAR_EXPRESSION "hello[\r\n]+world")
+    set_tests_properties(
+      arksh_exec_redirect_stdout_persistent
+      arksh_exec_command_redirect_stdout
+      PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
     set_tests_properties(arksh_proc_subst_diff_same      PROPERTIES PASS_REGULAR_EXPRESSION "same")
     set_tests_properties(arksh_proc_subst_wc_lines       PROPERTIES PASS_REGULAR_EXPRESSION "(^|[ \t])2([ \t]|$)")
     set_tests_properties(arksh_proc_subst_read_redirect  PROPERTIES PASS_REGULAR_EXPRESSION "word")

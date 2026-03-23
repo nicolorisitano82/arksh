@@ -1,0 +1,6 @@
+function report_meta() do
+text("%s|%s|%s") -> print("$LINENO", "$FUNCNAME", "$BASH_SOURCE")
+endfunction
+
+report_meta
+text("shell_metadata_done") -> print()
