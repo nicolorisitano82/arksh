@@ -154,6 +154,8 @@ Examples:
 ```text
 . -> type
 README.md -> read_text(64)
+README.md -> permissions
+README.md -> chmod("640") -> permissions
 tests/fixtures/json/nested.json -> read_json() -> get_path("a[2].b")
 ```
 
@@ -332,6 +334,15 @@ For extended shell conditionals you can also use `[[ ... ]]`:
 set s demo.txt
 [[ "$s" == *.txt ]] && text("match") -> print()
 [[ "$s" =~ ^demo\\.[a-z]+$ ]] && text("$BASH_REMATCH") -> print()
+```
+
+On interactive POSIX sessions, `arksh` also refreshes terminal metadata when it receives `SIGWINCH`:
+
+```text
+shell() -> tty_cols
+shell() -> tty_rows
+proc() -> tty_cols
+proc() -> tty_rows
 ```
 
 ### 5.3 Bridge from commands to typed values

@@ -8,6 +8,8 @@ The core idea is that filesystem entities, values, command output, plugins, and 
 . -> type
 . -> children()
 README.md -> read_text(256)
+README.md -> permissions
+README.md -> chmod("644") -> permissions_octal
 . -> children() |> where(type == "file") |> sort(size desc)
 ```
 
@@ -146,6 +148,9 @@ The repository includes example `.arksh` scripts:
 . -> type
 README.md -> size
 README.md -> read_text(256)
+README.md -> permissions
+README.md -> permissions_octal
+README.md -> chmod("rw-r--r--") -> permissions_octal
 
 # Typed values
 text("hello")

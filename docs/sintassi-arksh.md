@@ -81,6 +81,9 @@ plugin autoload list
 . -> type
 . -> children()
 README.md -> read_text(128)
+README.md -> permissions
+README.md -> permissions_octal
+README.md -> chmod("600") -> permissions
 README.md -> parent()
 . -> describe()
 data.json -> read_json() -> get_path("a[2].b")
@@ -385,10 +388,14 @@ proc()
 proc() -> pid
 proc() -> pgid
 proc() -> sid
+proc() -> tty_cols
+proc() -> tty_rows
 env("PATH")
 shell() -> cwd
 shell() -> login_mode
 shell() -> has_tty
+shell() -> tty_cols
+shell() -> tty_rows
 ```
 
 ### 2.4 Metodi
