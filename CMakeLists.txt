@@ -1218,6 +1218,18 @@ if(BUILD_TESTING)
     COMMAND arksh -c "if [ 5 -gt 3 ]; then echo yes; fi"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_test_bracket_string_ops
+    COMMAND arksh -c "if [ \"abc\" \"<\" \"abd\" -a \"zzz\" \">\" \"aaa\" ]; then echo yes; fi"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_test_bracket_grouping
+    COMMAND arksh -c "if [ \"(\" 2 -lt 1 -o 3 -gt 2 \")\" -a ! foo = bar ]; then echo yes; fi"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_test_bracket_numeric_invalid
+    COMMAND arksh -c "[ nope -eq 3 ] ; echo done"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   add_test(NAME arksh_double_bracket_glob
     COMMAND arksh -c "set s demo.txt ; if [[ \"$s\" == *.txt ]]; then echo yes; fi"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -1246,6 +1258,8 @@ if(BUILD_TESTING)
     arksh_set_pipefail
     arksh_printf_basic arksh_param_subst_single arksh_param_subst_global
     arksh_test_builtin_string arksh_test_bracket_numeric
+    arksh_test_bracket_string_ops arksh_test_bracket_grouping
+    arksh_test_bracket_numeric_invalid
     arksh_double_bracket_glob arksh_double_bracket_regex
     arksh_double_bracket_logic arksh_double_bracket_unquoted_var
     arksh_cmd_subst_file
@@ -1268,6 +1282,9 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_param_subst_global PROPERTIES PASS_REGULAR_EXPRESSION "aaXXcc")
   set_tests_properties(arksh_test_builtin_string PROPERTIES PASS_REGULAR_EXPRESSION "yes")
   set_tests_properties(arksh_test_bracket_numeric PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(arksh_test_bracket_string_ops PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(arksh_test_bracket_grouping PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(arksh_test_bracket_numeric_invalid PROPERTIES PASS_REGULAR_EXPRESSION "integer expression expected: nope[\r\n]+done")
   set_tests_properties(arksh_double_bracket_glob PROPERTIES PASS_REGULAR_EXPRESSION "yes")
   set_tests_properties(arksh_double_bracket_regex PROPERTIES PASS_REGULAR_EXPRESSION "yes")
   set_tests_properties(arksh_double_bracket_logic PROPERTIES PASS_REGULAR_EXPRESSION "yes")
@@ -1304,6 +1321,18 @@ if(BUILD_TESTING)
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
   if(NOT WIN32)
+    add_test(NAME arksh_test_bracket_tty_false
+      COMMAND arksh -c "if [ ! -t 9 ]; then echo yes; fi"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+    add_test(NAME arksh_test_bracket_block_false
+      COMMAND arksh -c "if [ ! -b /dev/null ]; then echo yes; fi"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+    add_test(NAME arksh_test_bracket_socket_primary
+      COMMAND arksh -c "if [ -S /var/run/syslog ] || [ -S /private/var/run/syslog ] || [ -S /dev/log ] || [ -S /run/systemd/journal/socket ]; then echo yes; fi"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
     add_test(NAME arksh_ulimit_nofile
       COMMAND arksh -c "ulimit -n"
       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -1342,6 +1371,9 @@ if(BUILD_TESTING)
     set_tests_properties(arksh_proc_subst_wc_lines       PROPERTIES PASS_REGULAR_EXPRESSION "(^|[ \t])2([ \t]|$)")
     set_tests_properties(arksh_proc_subst_read_redirect  PROPERTIES PASS_REGULAR_EXPRESSION "word")
     set_tests_properties(arksh_proc_subst_output_redirect PROPERTIES PASS_REGULAR_EXPRESSION "2")
+    set_tests_properties(arksh_test_bracket_tty_false    PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+    set_tests_properties(arksh_test_bracket_block_false  PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+    set_tests_properties(arksh_test_bracket_socket_primary PROPERTIES PASS_REGULAR_EXPRESSION "yes")
   endif()
   if(NOT WIN32)
     set_tests_properties(arksh_ulimit_nofile        PROPERTIES PASS_REGULAR_EXPRESSION "[0-9]+|unlimited")
@@ -1431,6 +1463,12 @@ if(BUILD_TESTING)
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/posix-flags.arksh"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  if(NOT WIN32)
+    add_test(NAME arksh_golden_posix_test_bracket
+      COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/posix-test-bracket.arksh"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+  endif()
   set_tests_properties(
     arksh_golden_pipeline_chain
     arksh_golden_reduce_block
@@ -1446,6 +1484,9 @@ if(BUILD_TESTING)
     arksh_golden_posix_flags
     PROPERTIES TIMEOUT 15
   )
+  if(NOT WIN32)
+    set_tests_properties(arksh_golden_posix_test_bracket PROPERTIES TIMEOUT 15)
+  endif()
   # Each test checks a distinctive output string that only appears when the script ran fully.
   set_tests_properties(arksh_golden_pipeline_chain   PROPERTIES PASS_REGULAR_EXPRESSION "13")
   set_tests_properties(arksh_golden_reduce_block     PROPERTIES PASS_REGULAR_EXPRESSION "\\[10,20,30\\]")
@@ -1463,6 +1504,10 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_golden_json_query_transform PROPERTIES PASS_REGULAR_EXPRESSION "e7s3_roundtrip_ok")
   # E11-S1: integrated smoke for errexit, nounset, pipefail and xtrace
   set_tests_properties(arksh_golden_posix_flags PROPERTIES PASS_REGULAR_EXPRESSION "posix_flags_done")
+  if(NOT WIN32)
+    # E11-S3: POSIX [ ] primaries, grouping and missing-file coverage
+    set_tests_properties(arksh_golden_posix_test_bracket PROPERTIES PASS_REGULAR_EXPRESSION "bracket_complete")
+  endif()
 
   # plugin autoload tests
   file(MAKE_DIRECTORY

@@ -1,0 +1,31 @@
+set TESTDIR /tmp/arksh_test_bracket_$$
+
+mkdir -p $TESTDIR
+printf hello > $TESTDIR/plain.txt
+ln -sf $TESTDIR/plain.txt $TESTDIR/link.txt
+mkfifo $TESTDIR/pipe.fifo
+mkdir -p $TESTDIR/sticky.dir
+chmod +t $TESTDIR/sticky.dir
+
+printf fresh > $TESTDIR/newer.txt
+cat < $TESTDIR/newer.txt > /dev/null
+sleep 1
+printf ! >> $TESTDIR/newer.txt
+
+if [ -e $TESTDIR/plain.txt -a -f $TESTDIR/plain.txt ]; then echo regular; fi
+if [ ! -e $TESTDIR/missing.txt ]; then echo missing; fi
+if [ -L $TESTDIR/link.txt -a -h $TESTDIR/link.txt ]; then echo symlink; fi
+if [ -p $TESTDIR/pipe.fifo ]; then echo fifo; fi
+if [ -S /var/run/syslog ] || [ -S /private/var/run/syslog ] || [ -S /dev/log ] || [ -S /run/systemd/journal/socket ]; then echo socket; fi
+if [ -c /dev/null ]; then echo chardev; fi
+if [ -u /usr/bin/crontab ] || [ -u /bin/ps ] || [ -u /usr/bin/su ] || [ -u /usr/bin/sudo ]; then echo setuid; fi
+if [ -g /usr/bin/write ] || [ -g /usr/sbin/postqueue ] || [ -g /usr/sbin/postdrop ]; then echo setgid; fi
+if [ -k $TESTDIR/sticky.dir ]; then echo sticky; fi
+if [ -O $TESTDIR/plain.txt -a -G $TESTDIR/plain.txt ]; then echo owner; fi
+if [ -N $TESTDIR/newer.txt ]; then echo newer; fi
+if [ ! -t 9 ]; then echo notty; fi
+if [ ! -b /dev/null ]; then echo noblock; fi
+if [ "abc" "<" "abd" -a "zzz" ">" "aaa" ]; then echo strings; fi
+if [ "(" 2 -lt 1 -o 3 -gt 2 ")" -a ! foo = bar ]; then echo grouped; fi
+
+echo bracket_complete

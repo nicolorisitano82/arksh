@@ -928,13 +928,13 @@ Stato story: `[ ]`
 
 ### E11-S3. Built-in `[ ]` completo
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E11-S3-T1` **Primari file mancanti** — aggiungere a `command_test`: `-b` (block special), `-c` (char special), `-g` (setgid), `-k` (sticky bit), `-p` (named pipe), `-S` (socket), `-u` (setuid), `-L`/`-h` (symlink), `-t fd` (file descriptor associato a un terminale via `isatty`), `-O` (owned by effective uid), `-G` (owned by effective gid), `-N` (modificato dopo l'ultimo accesso).
-- `[ ]` `E11-S3-T2` **Confronti stringa** — verificare copertura completa di `=`, `!=`, `<`, `>`; correggere eventuali discrepanze rispetto a POSIX.
-- `[ ]` `E11-S3-T3` **Confronti numerici** — `-eq`, `-ne`, `-lt`, `-le`, `-gt`, `-ge`; gestione stringhe non-numeriche con errore descrittivo.
-- `[ ]` `E11-S3-T4` **Operatori logici e raggruppamento** — `!`, `-a`, `-o`, `(`, `)` dentro `[ ]`; precedenza: `!` > `(` `)` > `-a` > `-o`.
-- `[ ]` `E11-S3-T5` **Test** — golden script con tutti i primari; verifica comportamento su file inesistente, symlink, fifo.
+- `[x]` `E11-S3-T1` **Primari file mancanti** — `command_test` ora copre anche `-b`, `-c`, `-g`, `-k`, `-p`, `-S`, `-u`, `-L`/`-h`, `-t fd`, `-O`, `-G`, `-N`, con fallback esplicito sui target non POSIX.
+- `[x]` `E11-S3-T2` **Confronti stringa** — copertura completa di `=`, `!=`, `<`, `>` confermata e protetta da CTest dedicati.
+- `[x]` `E11-S3-T3` **Confronti numerici** — `-eq`, `-ne`, `-lt`, `-le`, `-gt`, `-ge` validano davvero input interi e producono errore descrittivo su stringhe non numeriche.
+- `[x]` `E11-S3-T4` **Operatori logici e raggruppamento** — `!`, `-a`, `-o`, `(`, `)` supportati nel builtin `[ ]` con precedenza `!` > `()` > `-a` > `-o`.
+- `[x]` `E11-S3-T5` **Test** — aggiunti CTest mirati e una fixture golden POSIX su file inesistente, symlink, fifo, socket, `-t` e grouping.
 
 ### E11-S4. Doppio bracket `[[ ]]`
 
@@ -1086,16 +1086,15 @@ Stato story: `[x]`
 Questa è la priorità più alta se l'obiettivo resta usare `arksh` come shell di sistema.
 Le parti più chiaramente mancanti oggi sono:
 
-1. `E11-S3` — chiudere i primari POSIX mancanti di `[ ]`
-2. `E11-S2` — aritmetica `$(( ))`
-3. `E11-S5` — riallineare formalmente subshell e group command al backlog POSIX
-4. `E11-S7` — `local` in funzioni shell in forma POSIX-like
+1. `E11-S2` — aritmetica `$(( ))`
+2. `E11-S5` — riallineare formalmente subshell e group command al backlog POSIX
+3. `E11-S7` — `local` in funzioni shell in forma POSIX-like
 
 Nota operativa:
 
-- `E11-S4`, `E11-S6`, `E11-S8` e `E11-S9` sono chiuse e non sono piu blocchi attivi
+- `E11-S3`, `E11-S4`, `E11-S6`, `E11-S8` e `E11-S9` sono chiuse e non sono piu blocchi attivi
 - `E11-S1` è chiusa
-- `E11-S2`, `E11-S3`, `E11-S5` e `E11-S7` hanno copertura parziale o sostanziale nel codice e nella suite test, ma vanno chiuse story-per-story nel backlog prima di considerare completata l'epoca
+- `E11-S2`, `E11-S5` e `E11-S7` hanno copertura parziale o sostanziale nel codice e nella suite test, ma vanno chiuse story-per-story nel backlog prima di considerare completata l'epoca
 
 ### Priorità 2 — portare il progetto a livello distribuzione (E9)
 
@@ -1115,15 +1114,14 @@ Dopo il POSIX core, il valore più alto è chiudere packaging e release:
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E11-S3`
-2. `E11-S2`
-3. audit/chiusura backlog su `E11-S5`
-4. audit/chiusura backlog su `E11-S7`
-5. `E9-S2`
-6. `E9-S3`
-7. `E9-S4`
-8. `E9-S5`
-9. `E10-S1`
+1. `E11-S2`
+2. audit/chiusura backlog su `E11-S5`
+3. audit/chiusura backlog su `E11-S7`
+4. `E9-S2`
+5. `E9-S3`
+6. `E9-S4`
+7. `E9-S5`
+8. `E10-S1`
 
 ---
 

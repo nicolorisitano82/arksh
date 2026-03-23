@@ -10962,12 +10962,29 @@ static int command_ulimit(ArkshShell *shell, int argc, char **argv, char *out, s
 /* Forward declaration. */
 static int test_eval(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size);
 
-static int test_primary(int argc, char **argv, char *err, size_t err_size) {
-  (void) err;
-  (void) err_size;
+static int parse_test_integer(const char *text, long *out_value, char *err, size_t err_size) {
+  char *endptr = NULL;
+  long value;
 
+  if (text == NULL || out_value == NULL || err == NULL || err_size == 0) {
+    return 1;
+  }
+
+  errno = 0;
+  value = strtol(text, &endptr, 10);
+  if (endptr == text || *endptr != '\0' || errno == ERANGE) {
+    snprintf(err, err_size, "test: integer expression expected: %s", text);
+    return 1;
+  }
+
+  *out_value = value;
+  return 0;
+}
+
+static int test_primary(int argc, char **argv, char *err, size_t err_size) {
   if (argc == 0) {
-    return 1; /* false */
+    snprintf(err, err_size, "test: missing expression");
+    return 2;
   }
 
   if (argc == 1) {
@@ -11032,6 +11049,35 @@ static int test_primary(int argc, char **argv, char *err, size_t err_size) {
       struct stat st;
       return (stat(arg, &st) == 0 && S_ISSOCK(st.st_mode)) ? 0 : 1;
     }
+    if (strcmp(op, "-g") == 0) {
+      struct stat st;
+      return (stat(arg, &st) == 0 && (st.st_mode & S_ISGID) != 0) ? 0 : 1;
+    }
+    if (strcmp(op, "-u") == 0) {
+      struct stat st;
+      return (stat(arg, &st) == 0 && (st.st_mode & S_ISUID) != 0) ? 0 : 1;
+    }
+    if (strcmp(op, "-k") == 0) {
+      struct stat st;
+#ifdef S_ISVTX
+      return (stat(arg, &st) == 0 && (st.st_mode & S_ISVTX) != 0) ? 0 : 1;
+#else
+      (void) st;
+      return 1;
+#endif
+    }
+    if (strcmp(op, "-O") == 0) {
+      struct stat st;
+      return (stat(arg, &st) == 0 && st.st_uid == geteuid()) ? 0 : 1;
+    }
+    if (strcmp(op, "-G") == 0) {
+      struct stat st;
+      return (stat(arg, &st) == 0 && st.st_gid == getegid()) ? 0 : 1;
+    }
+    if (strcmp(op, "-N") == 0) {
+      struct stat st;
+      return (stat(arg, &st) == 0 && st.st_mtime > st.st_atime) ? 0 : 1;
+    }
     if (strcmp(op, "-t") == 0) {
       return isatty(atoi(arg)) ? 0 : 1;
     }
@@ -11047,6 +11093,12 @@ static int test_primary(int argc, char **argv, char *err, size_t err_size) {
       return 1;
     }
     if (strcmp(op, "-t") == 0) {
+      return 1;
+    }
+    if (strcmp(op, "-g") == 0 || strcmp(op, "-u") == 0 || strcmp(op, "-k") == 0 ||
+        strcmp(op, "-O") == 0 || strcmp(op, "-G") == 0 || strcmp(op, "-N") == 0 ||
+        strcmp(op, "-L") == 0 || strcmp(op, "-h") == 0 || strcmp(op, "-b") == 0 ||
+        strcmp(op, "-c") == 0 || strcmp(op, "-p") == 0 || strcmp(op, "-S") == 0) {
       return 1;
     }
 #endif
@@ -11079,23 +11131,33 @@ static int test_primary(int argc, char **argv, char *err, size_t err_size) {
     }
 
     /* Numeric comparisons. */
-    if (strcmp(op, "-eq") == 0) {
-      return strtol(lhs, NULL, 10) == strtol(rhs, NULL, 10) ? 0 : 1;
-    }
-    if (strcmp(op, "-ne") == 0) {
-      return strtol(lhs, NULL, 10) != strtol(rhs, NULL, 10) ? 0 : 1;
-    }
-    if (strcmp(op, "-lt") == 0) {
-      return strtol(lhs, NULL, 10) <  strtol(rhs, NULL, 10) ? 0 : 1;
-    }
-    if (strcmp(op, "-le") == 0) {
-      return strtol(lhs, NULL, 10) <= strtol(rhs, NULL, 10) ? 0 : 1;
-    }
-    if (strcmp(op, "-gt") == 0) {
-      return strtol(lhs, NULL, 10) >  strtol(rhs, NULL, 10) ? 0 : 1;
-    }
-    if (strcmp(op, "-ge") == 0) {
-      return strtol(lhs, NULL, 10) >= strtol(rhs, NULL, 10) ? 0 : 1;
+    if (strcmp(op, "-eq") == 0 || strcmp(op, "-ne") == 0 ||
+        strcmp(op, "-lt") == 0 || strcmp(op, "-le") == 0 ||
+        strcmp(op, "-gt") == 0 || strcmp(op, "-ge") == 0) {
+      long lhs_value;
+      long rhs_value;
+
+      if (parse_test_integer(lhs, &lhs_value, err, err_size) != 0 ||
+          parse_test_integer(rhs, &rhs_value, err, err_size) != 0) {
+        return 2;
+      }
+
+      if (strcmp(op, "-eq") == 0) {
+        return lhs_value == rhs_value ? 0 : 1;
+      }
+      if (strcmp(op, "-ne") == 0) {
+        return lhs_value != rhs_value ? 0 : 1;
+      }
+      if (strcmp(op, "-lt") == 0) {
+        return lhs_value < rhs_value ? 0 : 1;
+      }
+      if (strcmp(op, "-le") == 0) {
+        return lhs_value <= rhs_value ? 0 : 1;
+      }
+      if (strcmp(op, "-gt") == 0) {
+        return lhs_value > rhs_value ? 0 : 1;
+      }
+      return lhs_value >= rhs_value ? 0 : 1;
     }
 
 #ifndef _WIN32
@@ -11132,10 +11194,19 @@ static int test_eval(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size
 
 static int test_eval_or(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
   int result = test_eval_and(argc_ptr, argv_ptr, err, err_size);
+
+  if (result > 1) {
+    return result;
+  }
   while (*argc_ptr >= 1 && strcmp((*argv_ptr)[0], "-o") == 0) {
+    int right;
+
     (*argc_ptr)--;
     (*argv_ptr)++;
-    int right = test_eval_and(argc_ptr, argv_ptr, err, err_size);
+    right = test_eval_and(argc_ptr, argv_ptr, err, err_size);
+    if (right > 1) {
+      return right;
+    }
     result = (result == 0 || right == 0) ? 0 : 1;
   }
   return result;
@@ -11143,10 +11214,19 @@ static int test_eval_or(int *argc_ptr, char ***argv_ptr, char *err, size_t err_s
 
 static int test_eval_and(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
   int result = test_eval_not(argc_ptr, argv_ptr, err, err_size);
+
+  if (result > 1) {
+    return result;
+  }
   while (*argc_ptr >= 1 && strcmp((*argv_ptr)[0], "-a") == 0) {
+    int right;
+
     (*argc_ptr)--;
     (*argv_ptr)++;
-    int right = test_eval_not(argc_ptr, argv_ptr, err, err_size);
+    right = test_eval_not(argc_ptr, argv_ptr, err, err_size);
+    if (right > 1) {
+      return right;
+    }
     result = (result == 0 && right == 0) ? 0 : 1;
   }
   return result;
@@ -11154,10 +11234,32 @@ static int test_eval_and(int *argc_ptr, char ***argv_ptr, char *err, size_t err_
 
 static int test_eval_not(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
   if (*argc_ptr >= 1 && strcmp((*argv_ptr)[0], "!") == 0) {
+    int val;
+
     (*argc_ptr)--;
     (*argv_ptr)++;
-    int val = test_eval_not(argc_ptr, argv_ptr, err, err_size);
+    val = test_eval_not(argc_ptr, argv_ptr, err, err_size);
+    if (val > 1) {
+      return val;
+    }
     return val == 0 ? 1 : 0;
+  }
+  if (*argc_ptr >= 1 && strcmp((*argv_ptr)[0], "(") == 0) {
+    int grouped;
+
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    grouped = test_eval(argc_ptr, argv_ptr, err, err_size);
+    if (grouped > 1) {
+      return grouped;
+    }
+    if (*argc_ptr <= 0 || strcmp((*argv_ptr)[0], ")") != 0) {
+      snprintf(err, err_size, "test: missing closing )");
+      return 2;
+    }
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    return grouped;
   }
   /* Collect args for primary until we hit -a, -o, or run out. */
   char *prim_argv[16];
@@ -11165,6 +11267,7 @@ static int test_eval_not(int *argc_ptr, char ***argv_ptr, char *err, size_t err_
   while (*argc_ptr > 0 &&
          strcmp((*argv_ptr)[0], "-a") != 0 &&
          strcmp((*argv_ptr)[0], "-o") != 0 &&
+         strcmp((*argv_ptr)[0], ")") != 0 &&
          prim_argc < 15) {
     /* Look-ahead: stop before a binary operator at position 2 (e.g. a -eq b). */
     if (prim_argc == 1 && *argc_ptr >= 3) {
@@ -11188,6 +11291,10 @@ static int test_eval_not(int *argc_ptr, char ***argv_ptr, char *err, size_t err_
     prim_argv[prim_argc++] = (*argv_ptr)[0];
     (*argc_ptr)--;
     (*argv_ptr)++;
+  }
+  if (prim_argc == 0) {
+    snprintf(err, err_size, "test: missing expression");
+    return 2;
   }
   return test_primary(prim_argc, prim_argv, err, err_size);
 }
@@ -11215,6 +11322,12 @@ static int command_test(ArkshShell *shell, int argc, char **argv, char *out, siz
   result = test_eval(&eval_argc, &eval_argv, err, sizeof(err));
   if (err[0] != '\0' && out != NULL && out_size > 0) {
     copy_string(out, out_size, err);
+  }
+  if (result <= 1 && eval_argc > 0) {
+    if (out != NULL && out_size > 0 && err[0] == '\0') {
+      copy_string(out, out_size, "test: too many arguments");
+    }
+    return 2;
   }
   return result;
 }

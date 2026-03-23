@@ -109,7 +109,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 | `readonly`                             | Si     | Si     | No     | Si      | Si     | Si |
 | `getopts` built-in                     | Si     | Si     | No     | No      | Si     | Si (POSIX base, `OPTIND`/`OPTARG`) |
 | `ulimit` / `umask`                     | Si     | Si     | No     | No      | Si     | Si (POSIX su Unix, stub espliciti su Windows) |
-| `test` / `[` / `[[ ]]`                 | Si     | Si     | Si     | Si      | Si     | Parziale avanzato (`[[ ]]` con glob/regex, `[ ]` ancora da completare sui primari POSIX) |
+| `test` / `[` / `[[ ]]`                 | Si     | Si     | Si     | Si      | Si     | Si (`[ ]` con primari POSIX principali, `[[ ]]` con glob/regex) |
 | `$((...))` arithmetic expansion        | Si     | Si     | `math` | Nativi  | Si     | Si |
 | Operatore ternario                     | No     | No     | No     | `if` inline | No | Si (`? :`) |
 | Classi / tipi custom                   | No     | No     | No     | No      | No     | Si |
