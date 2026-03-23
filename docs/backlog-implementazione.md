@@ -71,9 +71,10 @@ Il backlog sotto copre **il rimanente** verso una shell completa e usabile.
 7. `E7` JSON e dati strutturati a livello prodotto
 8. `E8` Qualita, test e CI
 9. `E12` Prestazioni e footprint CPU/memoria
-10. `E9` Packaging, release e documentazione finale
-11. `E10` Plugin HTTP ufficiale
-12. `E11` POSIX core per uso come shell di sistema
+10. `E11` POSIX core per uso come shell di sistema
+11. `E13` Segnali e gestione TTY come shell di sistema
+12. `E9` Packaging, release e documentazione finale
+13. `E10` Plugin HTTP ufficiale
 
 ---
 
@@ -1081,18 +1082,28 @@ Stato story: `[x]`
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E11 `[x]`, E12 `[x]`
 **In corso:** nessuna
-**Aperte:** E9 (release), E10 (HTTP plugin)
+**Aperte:** E13 (segnali e TTY), E9 (release), E10 (HTTP plugin)
 
-### Priorità 1 — portare il progetto a livello distribuzione (E9)
+### Priorità 1 — segnali e TTY da shell di sistema (E13)
 
-Con il POSIX core chiuso, il valore più alto adesso è chiudere packaging e release:
+Con il POSIX core chiuso, il prossimo gap tecnico più importante per usare `arksh`
+come vera shell di sistema è rendere solidi segnali, sessione e terminale:
+
+1. `E13-S1` — trap e propagazione segnali POSIX completi
+2. `E13-S2` — `--login`, `setsid` e process group corretti
+3. `E13-S3` — `SIGWINCH` e resize del terminale
+4. `E13-S4` — restore TTY, raw mode e `stty`
+
+### Priorità 2 — portare il progetto a livello distribuzione (E9)
+
+Una volta chiuso `E13`, il valore più alto torna su packaging e release:
 
 1. `E9-S2` — packaging target (`Homebrew`, pacchetto Linux, strategia Windows)
 2. `E9-S3` — ABI plugin e versioning
 3. `E9-S4` — documentazione finale e troubleshooting
 4. `E9-S5` — release process, changelog e criteri `1.0`
 
-### Priorità 2 — plugin HTTP ufficiale (E10)
+### Priorità 3 — plugin HTTP ufficiale (E10)
 
 `E10-S1` resta importante ma non blocca il core shell. Conviene affrontarla:
 
@@ -1101,11 +1112,59 @@ Con il POSIX core chiuso, il valore più alto adesso è chiudere packaging e rel
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E9-S2`
-2. `E9-S3`
-3. `E9-S4`
-4. `E9-S5`
-5. `E10-S1`
+1. `E13-S1`
+2. `E13-S2`
+3. `E13-S3`
+4. `E13-S4`
+5. `E9-S2`
+6. `E9-S3`
+7. `E9-S4`
+8. `E9-S5`
+9. `E10-S1`
+
+---
+
+## E13. Segnali e gestione TTY come shell di sistema
+
+Stato epoca: `[ ]`
+
+Questa epoca traduce il blocco `1.2 Segnali e gestione TTY` del documento
+`docs/arksh-come-shell-di-sistema.md` in story implementabili una alla volta.
+
+### E13-S1. Trap e propagazione segnali POSIX
+
+Stato story: `[ ]`
+
+- `[ ]` `E13-S1-T1` completare `trap` per tutti i segnali POSIX supportati dal target e allineare `trap -p`, reset e dispatch asincrono
+- `[ ]` `E13-S1-T2` garantire la propagazione corretta dei segnali ai child process e ai job foreground/background nei casi edge
+- `[ ]` `E13-S1-T3` consolidare la gestione di `SIGCHLD` per job control robusto, senza race tra reap, `jobs`, `fg` e `wait`
+- `[ ]` `E13-S1-T4` aggiungere test PTY e smoke test dedicati per `INT`, `TERM`, `HUP`, `PIPE`, `QUIT`, `TSTP`
+
+### E13-S2. Login shell, sessione e process group
+
+Stato story: `[ ]`
+
+- `[ ]` `E13-S2-T1` introdurre `--login` con lettura dei file di startup coerente per shell di login
+- `[ ]` `E13-S2-T2` implementare `setsid` e il ruolo di session leader sui target POSIX supportati
+- `[ ]` `E13-S2-T3` rifinire handoff e restore del controlling TTY con `tcsetpgrp` per shell e job foreground
+- `[ ]` `E13-S2-T4` aggiungere test end-to-end su login mode, sessione e process group
+
+### E13-S3. Resize terminale e line editor
+
+Stato story: `[ ]`
+
+- `[ ]` `E13-S3-T1` aggiungere handler `SIGWINCH` con refresh delle dimensioni del terminale
+- `[ ]` `E13-S3-T2` notificare line editor e prompt del resize con redraw coerente del buffer corrente
+- `[ ]` `E13-S3-T3` aggiungere smoke test PTY per resize e regressioni sul rendering interattivo
+
+### E13-S4. Ripristino TTY e raw mode affidabili
+
+Stato story: `[ ]`
+
+- `[ ]` `E13-S4-T1` centralizzare snapshot e restore dello stato TTY nel runtime interattivo
+- `[ ]` `E13-S4-T2` aggiungere un percorso di ripristino affidabile su crash o uscita anomala della shell
+- `[ ]` `E13-S4-T3` introdurre `stty` built-in oppure passthrough ben definito e documentato
+- `[ ]` `E13-S4-T4` aggiungere test di regressione sul ripristino del terminale dopo errori, segnali e aborti del line editor
 
 ---
 
