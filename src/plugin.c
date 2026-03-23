@@ -31,6 +31,10 @@ static int host_register_type_descriptor(ArkshShell *shell, const char *type_nam
   return arksh_shell_register_type_descriptor(shell, type_name, description);
 }
 
+static unsigned long long host_capability_flags(void) {
+  return ARKSH_PLUGIN_CAP_ALL_CURRENT;
+}
+
 static void copy_string(char *dest, size_t dest_size, const char *src) {
   if (dest_size == 0) {
     return;
@@ -277,8 +281,11 @@ int arksh_shell_resolve_plugin_path(const ArkshShell *shell, const char *query, 
 int arksh_shell_load_plugin(ArkshShell *shell, const char *path, char *out, size_t out_size) {
   char resolved[ARKSH_MAX_PATH];
   void *handle;
+  ArkshPluginQueryFn query_fn;
   ArkshPluginInitFn init_fn;
-  ArkshPluginInfo info;
+  ArkshPluginInfo query_info;
+  ArkshPluginInfo init_info;
+  ArkshPluginInfo final_info;
   ArkshPluginHost host;
   size_t i;
   int status;
@@ -318,6 +325,13 @@ int arksh_shell_load_plugin(ArkshShell *shell, const char *path, char *out, size
     return 1;
   }
 
+  query_fn = (ArkshPluginQueryFn) arksh_platform_library_symbol(handle, "arksh_plugin_query");
+  if (query_fn == NULL) {
+    snprintf(out, out_size, "missing arksh_plugin_query in %s: %s", resolved, arksh_platform_last_error());
+    arksh_platform_library_close(handle);
+    return 1;
+  }
+
   init_fn = (ArkshPluginInitFn) arksh_platform_library_symbol(handle, "arksh_plugin_init");
   if (init_fn == NULL) {
     snprintf(out, out_size, "missing arksh_plugin_init in %s: %s", resolved, arksh_platform_last_error());
@@ -325,8 +339,57 @@ int arksh_shell_load_plugin(ArkshShell *shell, const char *path, char *out, size
     return 1;
   }
 
-  memset(&info, 0, sizeof(info));
+  memset(&query_info, 0, sizeof(query_info));
+  if (query_fn(&query_info) != 0) {
+    snprintf(out, out_size, "plugin query failed for %s", resolved);
+    arksh_platform_library_close(handle);
+    return 1;
+  }
+  if (query_info.abi_major != ARKSH_PLUGIN_ABI_MAJOR) {
+    snprintf(
+      out,
+      out_size,
+      "incompatible plugin ABI for %s: plugin requires %u.%u, host provides %u.%u",
+      resolved,
+      query_info.abi_major,
+      query_info.abi_minor,
+      ARKSH_PLUGIN_ABI_MAJOR,
+      ARKSH_PLUGIN_ABI_MINOR
+    );
+    arksh_platform_library_close(handle);
+    return 1;
+  }
+  if (query_info.abi_minor > ARKSH_PLUGIN_ABI_MINOR) {
+    snprintf(
+      out,
+      out_size,
+      "plugin ABI too new for %s: plugin requires %u.%u, host provides %u.%u",
+      resolved,
+      query_info.abi_major,
+      query_info.abi_minor,
+      ARKSH_PLUGIN_ABI_MAJOR,
+      ARKSH_PLUGIN_ABI_MINOR
+    );
+    arksh_platform_library_close(handle);
+    return 1;
+  }
+  if ((query_info.required_host_capabilities & ~host_capability_flags()) != 0) {
+    snprintf(
+      out,
+      out_size,
+      "plugin %s requires unsupported host capabilities (0x%llx)",
+      resolved,
+      (unsigned long long) (query_info.required_host_capabilities & ~host_capability_flags())
+    );
+    arksh_platform_library_close(handle);
+    return 1;
+  }
+
+  memset(&init_info, 0, sizeof(init_info));
   host.api_version = ARKSH_PLUGIN_API_VERSION;
+  host.abi_major = ARKSH_PLUGIN_ABI_MAJOR;
+  host.abi_minor = ARKSH_PLUGIN_ABI_MINOR;
+  host.capability_flags = host_capability_flags();
   host.register_command = host_register_command;
   host.register_property_extension = host_register_property_extension;
   host.register_method_extension = host_register_method_extension;
@@ -340,7 +403,7 @@ int arksh_shell_load_plugin(ArkshShell *shell, const char *path, char *out, size
   shell->plugins[shell->plugin_count].active = 1;
   shell->loading_plugin_index = (int) shell->plugin_count;
 
-  status = init_fn(shell, &host, &info);
+  status = init_fn(shell, &host, &init_info);
   shell->loading_plugin_index = -1;
   if (status != 0) {
     snprintf(out, out_size, "plugin init failed for %s", resolved);
@@ -349,11 +412,38 @@ int arksh_shell_load_plugin(ArkshShell *shell, const char *path, char *out, size
     return 1;
   }
 
-  copy_string(shell->plugins[shell->plugin_count].name, sizeof(shell->plugins[shell->plugin_count].name), info.name[0] == '\0' ? "unnamed-plugin" : info.name);
-  copy_string(shell->plugins[shell->plugin_count].version, sizeof(shell->plugins[shell->plugin_count].version), info.version[0] == '\0' ? "0.0.0" : info.version);
-  copy_string(shell->plugins[shell->plugin_count].description, sizeof(shell->plugins[shell->plugin_count].description), info.description);
+  final_info = query_info;
+  if (init_info.name[0] != '\0') {
+    copy_string(final_info.name, sizeof(final_info.name), init_info.name);
+  }
+  if (init_info.version[0] != '\0') {
+    copy_string(final_info.version, sizeof(final_info.version), init_info.version);
+  }
+  if (init_info.description[0] != '\0') {
+    copy_string(final_info.description, sizeof(final_info.description), init_info.description);
+  }
+  if (init_info.abi_major != 0) {
+    final_info.abi_major = init_info.abi_major;
+  }
+  if (init_info.abi_minor != 0) {
+    final_info.abi_minor = init_info.abi_minor;
+  }
+  if (init_info.required_host_capabilities != 0) {
+    final_info.required_host_capabilities = init_info.required_host_capabilities;
+  }
+  if (init_info.plugin_capabilities != 0) {
+    final_info.plugin_capabilities = init_info.plugin_capabilities;
+  }
+
+  copy_string(shell->plugins[shell->plugin_count].name, sizeof(shell->plugins[shell->plugin_count].name), final_info.name[0] == '\0' ? "unnamed-plugin" : final_info.name);
+  copy_string(shell->plugins[shell->plugin_count].version, sizeof(shell->plugins[shell->plugin_count].version), final_info.version[0] == '\0' ? "0.0.0" : final_info.version);
+  copy_string(shell->plugins[shell->plugin_count].description, sizeof(shell->plugins[shell->plugin_count].description), final_info.description);
+  shell->plugins[shell->plugin_count].abi_major = final_info.abi_major;
+  shell->plugins[shell->plugin_count].abi_minor = final_info.abi_minor;
+  shell->plugins[shell->plugin_count].required_host_capabilities = final_info.required_host_capabilities;
+  shell->plugins[shell->plugin_count].plugin_capabilities = final_info.plugin_capabilities;
   shell->plugin_count++;
 
-  snprintf(out, out_size, "plugin loaded: %s (%s)", info.name[0] == '\0' ? "unnamed-plugin" : info.name, resolved);
+  snprintf(out, out_size, "plugin loaded: %s (%s)", final_info.name[0] == '\0' ? "unnamed-plugin" : final_info.name, resolved);
   return 0;
 }

@@ -600,19 +600,36 @@ static int git_info_resolver(
   return 0;
 }
 
+ARKSH_PLUGIN_EXPORT int arksh_plugin_query(ArkshPluginInfo *out_info) {
+  if (out_info == NULL) {
+    return 1;
+  }
+
+  memset(out_info, 0, sizeof(*out_info));
+  snprintf(out_info->name, sizeof(out_info->name), "git-prompt-plugin");
+  snprintf(out_info->version, sizeof(out_info->version), "0.1.0");
+  snprintf(out_info->description, sizeof(out_info->description), "Git branch and state resolvers for prompt segments");
+  out_info->abi_major = ARKSH_PLUGIN_ABI_MAJOR;
+  out_info->abi_minor = ARKSH_PLUGIN_ABI_MINOR;
+  out_info->required_host_capabilities = ARKSH_PLUGIN_CAP_VALUE_RESOLVERS;
+  out_info->plugin_capabilities = ARKSH_PLUGIN_CAP_VALUE_RESOLVERS;
+  return 0;
+}
+
 ARKSH_PLUGIN_EXPORT int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHost *host, ArkshPluginInfo *out_info) {
   if (shell == NULL || host == NULL || out_info == NULL) {
     return 1;
   }
 
-  if (host->api_version != ARKSH_PLUGIN_API_VERSION ||
+  if (host->abi_major != ARKSH_PLUGIN_ABI_MAJOR ||
+      host->abi_minor < ARKSH_PLUGIN_ABI_MINOR ||
       host->register_value_resolver == NULL) {
     return 1;
   }
 
-  snprintf(out_info->name, sizeof(out_info->name), "git-prompt-plugin");
-  snprintf(out_info->version, sizeof(out_info->version), "0.1.0");
-  snprintf(out_info->description, sizeof(out_info->description), "Git branch and state resolvers for prompt segments");
+  if (arksh_plugin_query(out_info) != 0) {
+    return 1;
+  }
 
   if (host->register_value_resolver(shell, "git", "current Git branch + state mark, suitable for prompt segments", git_prompt_resolver) != 0) {
     return 1;

@@ -96,6 +96,40 @@ static void copy_string(char *dest, size_t dest_size, const char *src) {
   snprintf(dest, dest_size, "%s", src == NULL ? "" : src);
 }
 
+static void format_plugin_capabilities(unsigned long long flags, char *out, size_t out_size) {
+  struct {
+    unsigned long long flag;
+    const char *name;
+  } entries[] = {
+    { ARKSH_PLUGIN_CAP_COMMANDS, "commands" },
+    { ARKSH_PLUGIN_CAP_PROPERTY_EXTENSIONS, "properties" },
+    { ARKSH_PLUGIN_CAP_METHOD_EXTENSIONS, "methods" },
+    { ARKSH_PLUGIN_CAP_VALUE_RESOLVERS, "resolvers" },
+    { ARKSH_PLUGIN_CAP_PIPELINE_STAGES, "stages" },
+    { ARKSH_PLUGIN_CAP_TYPE_DESCRIPTORS, "types" }
+  };
+  size_t i;
+
+  if (out == NULL || out_size == 0) {
+    return;
+  }
+
+  out[0] = '\0';
+  for (i = 0; i < sizeof(entries) / sizeof(entries[0]); ++i) {
+    if ((flags & entries[i].flag) == 0) {
+      continue;
+    }
+    if (out[0] != '\0') {
+      snprintf(out + strlen(out), out_size - strlen(out), ",");
+    }
+    snprintf(out + strlen(out), out_size - strlen(out), "%s", entries[i].name);
+  }
+
+  if (out[0] == '\0') {
+    snprintf(out, out_size, "none");
+  }
+}
+
 static ArkshShellMetadata *allocate_shell_metadata_copy(const ArkshShellMetadata *source) {
   ArkshShellMetadata *metadata = (ArkshShellMetadata *) malloc(sizeof(*metadata));
 
@@ -8728,16 +8762,22 @@ static int command_plugin(ArkshShell *shell, int argc, char **argv, char *out, s
 
     out[0] = '\0';
     for (i = 0; i < shell->plugin_count; ++i) {
+      char provides[128];
+
+      format_plugin_capabilities(shell->plugins[i].plugin_capabilities, provides, sizeof(provides));
       snprintf(
         out + strlen(out),
         out_size - strlen(out),
-        "%s%s %s [%s] %s :: %s",
+        "%s%s %s [abi %u.%u] [%s] %s :: %s :: provides=%s",
         i == 0 ? "" : "\n",
         shell->plugins[i].name,
         shell->plugins[i].version,
+        shell->plugins[i].abi_major,
+        shell->plugins[i].abi_minor,
         shell->plugins[i].active ? "enabled" : "disabled",
         shell->plugins[i].path,
-        shell->plugins[i].description
+        shell->plugins[i].description,
+        provides
       );
     }
     return 0;
@@ -8752,19 +8792,29 @@ static int command_plugin(ArkshShell *shell, int argc, char **argv, char *out, s
   }
 
   if (argc >= 3 && strcmp(argv[1], "info") == 0) {
+    char requires[128];
+    char provides[128];
+
     plugin = find_loaded_plugin(shell, argv[2]);
     if (plugin == NULL) {
       snprintf(out, out_size, "plugin not found: %s", argv[2]);
       return 1;
     }
 
+    format_plugin_capabilities(plugin->required_host_capabilities, requires, sizeof(requires));
+    format_plugin_capabilities(plugin->plugin_capabilities, provides, sizeof(provides));
+
     snprintf(
       out,
       out_size,
-      "name=%s\nversion=%s\nstatus=%s\npath=%s\ndescription=%s",
+      "name=%s\nversion=%s\nstatus=%s\nabi=%u.%u\nrequires=%s\nprovides=%s\npath=%s\ndescription=%s",
       plugin->name,
       plugin->version,
       plugin->active ? "enabled" : "disabled",
+      plugin->abi_major,
+      plugin->abi_minor,
+      requires,
+      provides,
       plugin->path,
       plugin->description
     );

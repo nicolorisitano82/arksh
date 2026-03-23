@@ -144,6 +144,8 @@ endfunction()
 arksh_add_plugin(arksh_sample_plugin plugins/sample/sample_plugin.c)
 arksh_add_plugin(arksh_skeleton_plugin plugins/skeleton/skeleton_plugin.c)
 arksh_add_plugin(arksh_git_prompt_plugin plugins/git/git_prompt_plugin.c)
+arksh_add_plugin(arksh_bad_abi_plugin tests/plugins/bad_abi_plugin.c)
+arksh_add_plugin(arksh_need_cap_plugin tests/plugins/need_cap_plugin.c)
 # E6-S2-T3: typed-map example plugin (links against libm for sqrt)
 arksh_add_plugin(arksh_point_plugin plugins/point/point_plugin.c)
 if(NOT WIN32)
@@ -398,6 +400,26 @@ if(BUILD_TESTING)
   add_test(NAME arksh_pipeline_pluck COMMAND arksh -c "list(map(\"name\", \"alpha\"), map(\"name\", \"beta\")) |> pluck(\"name\") |> join(\",\")")
   add_test(NAME arksh_plugin_value_resolver COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_sample_plugin> ; sample() -> name")
   add_test(NAME arksh_plugin_pipeline_stage COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_sample_plugin> ; text(\"ciao\") |> sample_wrap()")
+  add_test(NAME arksh_plugin_info_abi COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_sample_plugin> ; plugin info sample-plugin")
+  set_tests_properties(arksh_plugin_info_abi PROPERTIES
+    PASS_REGULAR_EXPRESSION "abi=5\\.0"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_plugin_list_caps COMMAND arksh -c "plugin load $<TARGET_FILE_NAME:arksh_sample_plugin> ; plugin list")
+  set_tests_properties(arksh_plugin_list_caps PROPERTIES
+    PASS_REGULAR_EXPRESSION "sample-plugin 0\\.2\\.0 \\[abi 5\\.0\\].*provides=commands,properties,methods,resolvers,stages"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_plugin_bad_abi_rejected COMMAND arksh -c "if plugin load $<TARGET_FILE_NAME:arksh_bad_abi_plugin> ; then false ; else true ; fi")
+  set_tests_properties(arksh_plugin_bad_abi_rejected PROPERTIES
+    PASS_REGULAR_EXPRESSION "incompatible plugin ABI"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_plugin_need_cap_rejected COMMAND arksh -c "if plugin load $<TARGET_FILE_NAME:arksh_need_cap_plugin> ; then false ; else true ; fi")
+  set_tests_properties(arksh_plugin_need_cap_rejected PROPERTIES
+    PASS_REGULAR_EXPRESSION "requires unsupported host capabilities"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   add_test(NAME arksh_standard_rc_dir COMMAND arksh -c "type docs")
   set_tests_properties(arksh_standard_rc_dir PROPERTIES
     ENVIRONMENT "HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;USERPROFILE=${CMAKE_CURRENT_BINARY_DIR}/runtime/home-empty;ARKSH_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/runtime/config-home"

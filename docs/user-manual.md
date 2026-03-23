@@ -528,6 +528,7 @@ plugin autoload list
 ```
 
 The sample plugin adds a command, a resolver, a stage, a property, and a method. The base template lives in `plugins/skeleton`.
+`plugin info` shows ABI and capability metadata, and `plugin list` includes the ABI plus the capabilities provided by each loaded plugin.
 
 ## 10. Prompt and Startup
 

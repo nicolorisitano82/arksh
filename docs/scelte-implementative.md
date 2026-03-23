@@ -329,28 +329,45 @@ plugin=./build/arksh_sample_plugin.so
 
 ## Sistema plugin
 
-### ABI v1
+### ABI v5
 
-Il plugin esporta:
+Il plugin esporta due entry point:
 
 ```c
+int arksh_plugin_query(ArkshPluginInfo *out_info);
 int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHost *host, ArkshPluginInfo *out_info);
 ```
 
+`arksh_plugin_query(...)` dichiara:
+
+- nome, versione e descrizione del plugin
+- `abi_major` / `abi_minor`
+- capability richieste dal core host
+- capability offerte dal plugin
+
+Il core valida `query` prima di chiamare `init`, cosi puo rifiutare subito plugin
+con ABI incompatibile o con capability non supportate.
+
 Il core espone al plugin:
 
-- `api_version`
+- `api_version` come alias legacy del major
+- `abi_major`
+- `abi_minor`
+- `capability_flags`
 - `register_command(...)`
 - `register_property_extension(...)`
 - `register_method_extension(...)`
+- `register_value_resolver(...)`
+- `register_pipeline_stage(...)`
+- `register_type_descriptor(...)`
 
 ### Motivazione
 
-L'ABI v1 resta piccola per tre ragioni:
+L'ABI v5 resta piccola per tre ragioni:
 
 1. minimizza il rischio di rottura binaria
 2. rende semplice scrivere plugin in C
-3. lascia spazio ad ABI v2 e v3
+3. formalizza cosa il plugin richiede e cosa il core offre
 
 Le estensioni registrate entrano in un registry runtime comune usato anche dal linguaggio `extend ...`.
 

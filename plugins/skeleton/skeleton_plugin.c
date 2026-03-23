@@ -174,12 +174,39 @@ static int skeleton_object_action(
   return 0;
 }
 
+ARKSH_PLUGIN_EXPORT int arksh_plugin_query(ArkshPluginInfo *out_info) {
+  if (out_info == NULL) {
+    return 1;
+  }
+
+  memset(out_info, 0, sizeof(*out_info));
+  snprintf(out_info->name, sizeof(out_info->name), "skeleton-plugin");
+  snprintf(out_info->version, sizeof(out_info->version), "0.1.0");
+  snprintf(
+    out_info->description,
+    sizeof(out_info->description),
+    "Template plugin che registra un comando, una proprieta e un metodo stub"
+  );
+  out_info->abi_major = ARKSH_PLUGIN_ABI_MAJOR;
+  out_info->abi_minor = ARKSH_PLUGIN_ABI_MINOR;
+  out_info->required_host_capabilities =
+    ARKSH_PLUGIN_CAP_COMMANDS |
+    ARKSH_PLUGIN_CAP_PROPERTY_EXTENSIONS |
+    ARKSH_PLUGIN_CAP_METHOD_EXTENSIONS |
+    ARKSH_PLUGIN_CAP_VALUE_RESOLVERS |
+    ARKSH_PLUGIN_CAP_PIPELINE_STAGES |
+    ARKSH_PLUGIN_CAP_TYPE_DESCRIPTORS;
+  out_info->plugin_capabilities = out_info->required_host_capabilities;
+  return 0;
+}
+
 ARKSH_PLUGIN_EXPORT int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHost *host, ArkshPluginInfo *out_info) {
   if (shell == NULL || host == NULL || out_info == NULL) {
     return 1;
   }
 
-  if (host->api_version != ARKSH_PLUGIN_API_VERSION ||
+  if (host->abi_major != ARKSH_PLUGIN_ABI_MAJOR ||
+      host->abi_minor < ARKSH_PLUGIN_ABI_MINOR ||
       host->register_command == NULL ||
       host->register_property_extension == NULL ||
       host->register_method_extension == NULL ||
@@ -189,13 +216,9 @@ ARKSH_PLUGIN_EXPORT int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHo
     return 1;
   }
 
-  snprintf(out_info->name, sizeof(out_info->name), "skeleton-plugin");
-  snprintf(out_info->version, sizeof(out_info->version), "0.1.0");
-  snprintf(
-    out_info->description,
-    sizeof(out_info->description),
-    "Template plugin che registra un comando, una proprieta e un metodo stub"
-  );
+  if (arksh_plugin_query(out_info) != 0) {
+    return 1;
+  }
 
   if (host->register_command(shell, "skeleton-info", "template command exported by skeleton-plugin", skeleton_info_command) != 0) {
     return 1;

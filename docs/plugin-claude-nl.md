@@ -44,7 +44,7 @@ nl copia tutti i file .jpg dalla cartella downloads a foto/archivio
 └─────────────────────┘
 ```
 
-Il plugin si integra con arksh usando l'ABI v4 (`ARKSH_PLUGIN_API_VERSION 4`) e registra:
+Il plugin si integra con arksh usando l'ABI plugin formalizzata v5 (`ARKSH_PLUGIN_ABI_MAJOR 5`, `ARKSH_PLUGIN_ABI_MINOR 0`) e registra:
 
 | Punto di estensione          | Nome          | Scopo                                      |
 |------------------------------|---------------|--------------------------------------------|
@@ -71,7 +71,7 @@ plugins/
 
 ---
 
-## Implementazione: `arksh_plugin_init`
+## Implementazione: `arksh_plugin_query` + `arksh_plugin_init`
 
 ```c
 #include <stdio.h>
@@ -84,18 +84,36 @@ plugins/
 #define PLUGIN_VERSION "1.0.0"
 #define PLUGIN_DESC    "Traduce linguaggio naturale in comandi shell via Claude"
 
+ARKSH_PLUGIN_EXPORT int arksh_plugin_query(ArkshPluginInfo *out_info)
+{
+  if (out_info == NULL) {
+    return 1;
+  }
+
+  memset(out_info, 0, sizeof(*out_info));
+  strncpy(out_info->name, PLUGIN_NAME, sizeof(out_info->name) - 1);
+  strncpy(out_info->version, PLUGIN_VERSION, sizeof(out_info->version) - 1);
+  strncpy(out_info->description, PLUGIN_DESC, sizeof(out_info->description) - 1);
+  out_info->abi_major = ARKSH_PLUGIN_ABI_MAJOR;
+  out_info->abi_minor = ARKSH_PLUGIN_ABI_MINOR;
+  out_info->required_host_capabilities =
+      ARKSH_PLUGIN_CAP_COMMANDS | ARKSH_PLUGIN_CAP_PIPELINE_STAGES;
+  out_info->plugin_capabilities = out_info->required_host_capabilities;
+  return 0;
+}
+
 ARKSH_PLUGIN_EXPORT int arksh_plugin_init(
     ArkshShell *shell,
     const ArkshPluginHost *host,
     ArkshPluginInfo *out_info)
 {
-  if (host->api_version < ARKSH_PLUGIN_API_VERSION) {
+  if (host->abi_major != ARKSH_PLUGIN_ABI_MAJOR ||
+      host->abi_minor < ARKSH_PLUGIN_ABI_MINOR) {
     return 1;  /* ABI incompatibile */
   }
-
-  strncpy(out_info->name,        PLUGIN_NAME,    sizeof(out_info->name) - 1);
-  strncpy(out_info->version,     PLUGIN_VERSION, sizeof(out_info->version) - 1);
-  strncpy(out_info->description, PLUGIN_DESC,    sizeof(out_info->description) - 1);
+  if (arksh_plugin_query(out_info) != 0) {
+    return 1;
+  }
 
   host->register_command(shell, "nl",        "Esegui comando in linguaggio naturale",   cmd_nl);
   host->register_command(shell, "nl-dry",    "Traduce NL senza eseguire",               cmd_nl_dry);

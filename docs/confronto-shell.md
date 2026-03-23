@@ -40,7 +40,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 | JSON nativo                       | No (jq esterno) | No | No | Si | No | Si (`to_json`, `from_json`, `read_json`, `write_json`, query `get_path`/`set_path`/`pluck`) |
 | Classi definibili dall'utente     | No     | No     | No     | No      | No     | Si (`class ... endclass`) |
 | Ereditarietà                      | No     | No     | No     | No      | No     | Si, multipla a precedenza sinistra |
-| Tipi custom da plugin             | No     | No     | No     | Parziale | No    | Si (typed-map con `register_type_descriptor`, ABI v4 usata nel core plugin) |
+| Tipi custom da plugin             | No     | No     | No     | Parziale | No    | Si (typed-map con `register_type_descriptor`, ABI C formalizzata v5 con metadata e capability flags) |
 | Estensioni di tipo runtime        | No     | No     | No     | No      | No     | Si (`extend target property/method`) |
 
 ---
@@ -135,9 +135,9 @@ La dimensione più importante per capire il posizionamento di arksh.
 
 | Caratteristica                         | bash   | zsh    | fish   | nushell | dash   | arksh   |
 |----------------------------------------|--------|--------|--------|---------|--------|--------|
-| Plugin / moduli di terze parti         | No (solo script) | Si (zplug, zinit, ecc.) | Si (fisher, oh-my-fish) | Si (moduli) | No | Si (ABI C già usata; versioning formale ancora in backlog) |
+| Plugin / moduli di terze parti         | No (solo script) | Si (zplug, zinit, ecc.) | Si (fisher, oh-my-fish) | Si (moduli) | No | Si (ABI C formalizzata v5, query metadata, capability flags e test di regressione) |
 | Aggiungere comandi da plugin           | Script | Script | Script | Script/plugin | No | Si (libreria dinamica) |
-| Aggiungere tipi / resolver da plugin   | No     | No     | No     | Parziale | No | Si (typed-map con `register_type_descriptor`, ABI v4) |
+| Aggiungere tipi / resolver da plugin   | No     | No     | No     | Parziale | No | Si (typed-map con `register_type_descriptor`, resolver/stage/type metadata, ABI v5) |
 | Aggiungere stage pipeline da plugin    | No     | No     | No     | Parziale | No | Si (con descrizione; visibili in `help stages`) |
 | Aggiungere proprietà/metodi oggetto    | No     | No     | No     | No      | No     | Si (su tipi built-in e su tipi custom del plugin) |
 | Introspezione metadati a runtime       | No     | No     | No     | Parziale | No     | Si (`help commands\|resolvers\|stages\|types`, `help <name>`) |
@@ -197,7 +197,7 @@ Nushell è la shell che si avvicina di più al posizionamento di arksh. Le diffe
 | Classi definibili dall'utente       | No                                       | Si                                             |
 | Estensioni di tipo runtime          | No                                       | Si (`extend`)                                  |
 | Linguaggio implementazione          | Rust                                     | C11 (portabile, embeddable)                    |
-| Plugin in linguaggio nativo         | Si (Rust o via protocollo)               | Si (C, ABI v4 già usata; formalizzazione release ancora aperta) |
+| Plugin in linguaggio nativo         | Si (Rust o via protocollo)               | Si (C, ABI v5 con query/init separati, capability flags e regressioni loader) |
 | Integrazione filesystem come oggetti| Parziale (LS come tabella)               | Completa (ogni path è un oggetto interrogabile)|
 | JSON                                | Si (nativo)                              | Si (nativo)                                    |
 | Ereditarietà / OOP                  | No                                       | Si (classi con ereditarietà multipla)          |

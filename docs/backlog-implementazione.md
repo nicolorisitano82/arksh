@@ -73,8 +73,9 @@ Il backlog sotto copre **il rimanente** verso una shell completa e usabile.
 9. `E12` Prestazioni e footprint CPU/memoria
 10. `E11` POSIX core per uso come shell di sistema
 11. `E13` Segnali e gestione TTY come shell di sistema
-12. `E9` Packaging, release e documentazione finale
-13. `E10` Plugin HTTP ufficiale
+12. `E14` Modalità compatibilità `sh`
+13. `E9` Packaging, release e documentazione finale
+14. `E10` Plugin HTTP ufficiale
 
 ---
 
@@ -431,7 +432,7 @@ Stato story: `[x]`
 
 Stato story: `[x]`
 
-- `[x]` `E6-S4-T1` esporre metadati su resolver, stage e tipi — `description` aggiunto a `ArkshValueResolverDef` e `ArkshPipelineStageDef`; tutti i resolver e stage built-in registrati con descrizione; `register_builtin_pipeline_stages()` registra i 22 stage built-in al boot; `ARKSH_MAX_PIPELINE_STAGE_HANDLERS` alzato a 64; `ABI v4`
+- `[x]` `E6-S4-T1` esporre metadati su resolver, stage e tipi — `description` aggiunto a `ArkshValueResolverDef` e `ArkshPipelineStageDef`; tutti i resolver e stage built-in registrati con descrizione; `register_builtin_pipeline_stages()` registra i 22 stage built-in al boot; `ARKSH_MAX_PIPELINE_STAGE_HANDLERS` alzato a 64; base poi formalizzata nell'`ABI v5`
 - `[x]` `E6-S4-T2` migliorare `help` e completion con introspezione typed — `help commands|resolvers|stages|types` mostra la sezione corrispondente con descrizioni; `help <name>` ricerca in tutte le categorie e mostra categoria + descrizione; `arksh_shell_print_help` ristrutturato con sezioni dinamiche; completion stage ora guidata da `shell->pipeline_stages[]` (rimosso array statico hardcoded da `line_editor.c`)
 - `[x]` `E6-S4-T3` documentare per plugin author — `plugins/skeleton/README.md` aggiornato con guida completa: versione ABI, firma callback, descrizioni, `register_type_descriptor`, introspezione runtime; `sample_plugin.c` e `point_plugin.c` aggiornati con descrizioni
 
@@ -821,11 +822,11 @@ Stato story: `[ ]`
 
 ### E9-S3. ABI plugin e versioning
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E9-S3-T1` versionare formalmente l'ABI plugin
-- `[ ]` `E9-S3-T2` aggiungere capability flags
-- `[ ]` `E9-S3-T3` aggiungere test di regressione ABI
+- `[x]` `E9-S3-T1` versionare formalmente l'ABI plugin — introdotti `ARKSH_PLUGIN_ABI_MAJOR 5` e `ARKSH_PLUGIN_ABI_MINOR 0`; nuovo entry point `arksh_plugin_query(...)`; `plugin load` valida major/minor prima di chiamare `arksh_plugin_init(...)`
+- `[x]` `E9-S3-T2` aggiungere capability flags — `ArkshPluginInfo` e `ArkshPluginHost` espongono capability host/plugin (`commands`, `properties`, `methods`, `resolvers`, `stages`, `types`); `plugin list` e `plugin info` mostrano ABI e capability
+- `[x]` `E9-S3-T3` aggiungere test di regressione ABI — plugin negativi `bad-abi-plugin` e `need-cap-plugin`; CTest verifica rifiuto loader, `plugin info` e `plugin list`
 
 ### E9-S4. Documentazione finale e troubleshooting
 
@@ -1080,33 +1081,42 @@ Stato story: `[x]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E11 `[x]`, E12 `[x]`
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E11 `[x]`, E12 `[x]`, E13 `[x]`
 **In corso:** nessuna
-**Aperte:** E9 (release), E10 (HTTP plugin)
+**Aperte:** E14 (`sh` mode), E9 (release), E10 (HTTP plugin)
 
-### Priorità 1 — portare il progetto a livello distribuzione (E9)
+### Priorità 1 — modalità compatibilità `sh` (E14)
+
+Il gap tecnico più visibile per avvicinarsi davvero al ruolo di shell di sistema
+è una modalità `sh` esplicita che disabiliti le estensioni arksh e renda il
+comportamento prevedibile per script e shebang classici:
+
+1. `E14-S1` — flag `--sh`, runtime `sh_mode`, disattivazione delle estensioni non-POSIX e test dedicati
+
+### Priorità 2 — portare il progetto a livello distribuzione (E9)
 
 Una volta chiuso `E13`, il valore più alto torna su packaging e release:
 
 1. `E9-S2` — packaging target (`Homebrew`, pacchetto Linux, strategia Windows)
-2. `E9-S3` — ABI plugin e versioning
-3. `E9-S4` — documentazione finale e troubleshooting
-4. `E9-S5` — release process, changelog e criteri `1.0`
+2. `E9-S4` — documentazione finale e troubleshooting
+3. `E9-S5` — release process, changelog e criteri `1.0`
+4. `E10-S1` — plugin HTTP ufficiale
 
-### Priorità 2 — plugin HTTP ufficiale (E10)
+### Priorità 3 — plugin HTTP ufficiale (E10)
 
 `E10-S1` resta importante ma non blocca il core shell. Conviene affrontarla:
 
-- dopo `E9-S3`, se vuoi un'ABI plugin più stabile prima di pubblicare un plugin ufficiale
+- dopo `E9-S4`, se vuoi una guida plugin author e troubleshooting già chiari prima di pubblicare un plugin ufficiale
 - oppure in parallelo al packaging, se il focus si sposta sulle integrazioni API
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E9-S2`
-2. `E9-S3`
+1. `E14-S1`
+2. `E9-S2`
 3. `E9-S4`
 4. `E9-S5`
 5. `E10-S1`
+6. `E14-S1`
 
 ---
 
@@ -1151,6 +1161,26 @@ Stato story: `[x]`
 - `[x]` `E13-S4-T2` aggiungere un percorso di ripristino affidabile su crash o uscita anomala della shell
 - `[x]` `E13-S4-T3` introdurre `stty` built-in oppure passthrough ben definito e documentato
 - `[x]` `E13-S4-T4` aggiungere test di regressione sul ripristino del terminale dopo errori, segnali e aborti del line editor
+
+---
+
+## E14. Modalità compatibilità `sh`
+
+Stato epoca: `[ ]`
+
+Questa epoca traduce il gap "manca una modalità `sh`" in un blocco
+implementabile senza confonderlo con il packaging o con la compatibilità POSIX
+già raggiunta nel core.
+
+### E14-S1. Runtime e parser in modalità `sh`
+
+Stato story: `[ ]`
+
+- `[ ]` `E14-S1-T1` introdurre un flag runtime `sh_mode`, attivabile con `--sh` e anche quando `argv[0]` è `sh`
+- `[ ]` `E14-S1-T2` far rifiutare al lexer/parser le sintassi non-POSIX in `sh_mode`, almeno: `->`, `|>`, block literal, `let`, `extend`, `class`, `[[ ]]`, `<<<`, `<(...)`, `>(...)`, `switch`
+- `[ ]` `E14-S1-T3` definire la policy di runtime in `sh_mode`: niente plugin/autoload/config arksh-specifica, prompt minimale e startup compatibile
+- `[ ]` `E14-S1-T4` supportare startup compatibile `sh` tramite `ENV` e documentare chiaramente le differenze rispetto alla modalità arksh completa
+- `[ ]` `E14-S1-T5` aggiungere test end-to-end su `arksh --sh`, su invocazione come `sh`, e su errori espliciti quando uno script usa estensioni non permesse
 
 ---
 

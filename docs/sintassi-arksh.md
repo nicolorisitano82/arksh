@@ -70,7 +70,7 @@ prompt render
 plugin load build/arksh_sample_plugin.so
 plugin load git-prompt-plugin
 plugin list
-plugin info arksh_sample_plugin
+plugin info sample-plugin
 plugin enable arksh_sample_plugin
 plugin disable arksh_sample_plugin
 plugin autoload set /usr/local/lib/arksh/arksh_trash_plugin.dylib

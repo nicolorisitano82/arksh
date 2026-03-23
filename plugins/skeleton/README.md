@@ -42,15 +42,30 @@ cc -std=c11 -Wall -Wextra -pedantic -Iinclude -shared plugins/skeleton/skeleton_
 3. sostituisci gli stub con logica reale
 4. carica il plugin con `plugin load ...`
 
-## API per plugin author (v4)
+## API per plugin author (v5)
 
 ### Versione ABI
 
-`ARKSH_PLUGIN_API_VERSION 4`. Verificare sempre la versione prima di usare i puntatori a funzione:
+L'ABI corrente e `ARKSH_PLUGIN_ABI_MAJOR 5` / `ARKSH_PLUGIN_ABI_MINOR 0`.
+Ogni plugin dovrebbe esportare sia `arksh_plugin_query(...)` sia `arksh_plugin_init(...)`:
 
 ```c
-if (host->api_version < 4) { return 1; }
+ARKSH_PLUGIN_EXPORT int arksh_plugin_query(ArkshPluginInfo *out_info) {
+  memset(out_info, 0, sizeof(*out_info));
+  strncpy(out_info->name, "my-plugin", sizeof(out_info->name) - 1);
+  out_info->abi_major = ARKSH_PLUGIN_ABI_MAJOR;
+  out_info->abi_minor = ARKSH_PLUGIN_ABI_MINOR;
+  out_info->required_host_capabilities =
+      ARKSH_PLUGIN_CAP_COMMANDS | ARKSH_PLUGIN_CAP_VALUE_RESOLVERS;
+  out_info->plugin_capabilities = out_info->required_host_capabilities;
+  return 0;
+}
+
+if (host->abi_major != ARKSH_PLUGIN_ABI_MAJOR ||
+    host->abi_minor < ARKSH_PLUGIN_ABI_MINOR) { return 1; }
 ```
+
+`plugin info ...` e `plugin list` mostrano ABI e capability negoziate.
 
 ### Registrare un value resolver
 

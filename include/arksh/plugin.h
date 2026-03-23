@@ -18,10 +18,28 @@ typedef int (*ArkshExtensionMethodFn)(ArkshShell *shell, const ArkshValue *recei
 typedef int (*ArkshValueResolverFn)(ArkshShell *shell, int argc, const ArkshValue *args, ArkshValue *out_value, char *error, size_t error_size);
 typedef int (*ArkshPipelineStageFn)(ArkshShell *shell, ArkshValue *value, const char *raw_args, char *error, size_t error_size);
 
+typedef enum {
+  ARKSH_PLUGIN_CAP_COMMANDS            = 1ull << 0,
+  ARKSH_PLUGIN_CAP_PROPERTY_EXTENSIONS = 1ull << 1,
+  ARKSH_PLUGIN_CAP_METHOD_EXTENSIONS   = 1ull << 2,
+  ARKSH_PLUGIN_CAP_VALUE_RESOLVERS     = 1ull << 3,
+  ARKSH_PLUGIN_CAP_PIPELINE_STAGES     = 1ull << 4,
+  ARKSH_PLUGIN_CAP_TYPE_DESCRIPTORS    = 1ull << 5
+} ArkshPluginCapability;
+
+#define ARKSH_PLUGIN_CAP_ALL_CURRENT \
+  (ARKSH_PLUGIN_CAP_COMMANDS | ARKSH_PLUGIN_CAP_PROPERTY_EXTENSIONS | \
+   ARKSH_PLUGIN_CAP_METHOD_EXTENSIONS | ARKSH_PLUGIN_CAP_VALUE_RESOLVERS | \
+   ARKSH_PLUGIN_CAP_PIPELINE_STAGES | ARKSH_PLUGIN_CAP_TYPE_DESCRIPTORS)
+
 typedef struct {
   char name[64];
   char version[32];
   char description[160];
+  unsigned int abi_major;
+  unsigned int abi_minor;
+  unsigned long long required_host_capabilities;
+  unsigned long long plugin_capabilities;
 } ArkshPluginInfo;
 
 /*
@@ -47,7 +65,10 @@ typedef struct {
  * mutable: replace its content in-place to transform the pipeline value.
  */
 typedef struct {
-  unsigned int api_version;
+  unsigned int api_version; /* legacy alias of abi_major for transitional code */
+  unsigned int abi_major;
+  unsigned int abi_minor;
+  unsigned long long capability_flags;
   int (*register_command)(ArkshShell *shell, const char *name, const char *description, ArkshCommandFn fn);
   int (*register_property_extension)(ArkshShell *shell, const char *target, const char *name, ArkshExtensionPropertyFn fn);
   int (*register_method_extension)(ArkshShell *shell, const char *target, const char *name, ArkshExtensionMethodFn fn);
@@ -59,7 +80,9 @@ typedef struct {
   int (*register_type_descriptor)(ArkshShell *shell, const char *type_name, const char *description);
 } ArkshPluginHost;
 
-#define ARKSH_PLUGIN_API_VERSION 4
+#define ARKSH_PLUGIN_ABI_MAJOR 5
+#define ARKSH_PLUGIN_ABI_MINOR 0
+#define ARKSH_PLUGIN_API_VERSION ARKSH_PLUGIN_ABI_MAJOR
 
 #ifdef _WIN32
 #define ARKSH_PLUGIN_EXPORT __declspec(dllexport)
@@ -68,6 +91,7 @@ typedef struct {
 #endif
 
 typedef int (*ArkshPluginInitFn)(ArkshShell *shell, const ArkshPluginHost *host, ArkshPluginInfo *out_info);
+typedef int (*ArkshPluginQueryFn)(ArkshPluginInfo *out_info);
 typedef void (*ArkshPluginShutdownFn)(ArkshShell *shell);
 
 #ifdef __cplusplus

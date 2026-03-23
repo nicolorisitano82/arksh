@@ -300,6 +300,9 @@ plugin enable sample-plugin
 plugin autoload list
 ```
 
+`plugin info` now reports ABI and capability metadata, and `plugin list` shows the
+ABI plus the capabilities provided by each loaded plugin.
+
 The plugin template is available in [plugins/skeleton](plugins/skeleton).
 The Git prompt plugin docs are in [plugins/git/README.md](plugins/git/README.md).
 

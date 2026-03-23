@@ -527,7 +527,9 @@ plugin enable sample-plugin
 plugin autoload list
 ```
 
-Il sample plugin aggiunge un comando, un resolver, uno stage, una proprietà e un metodo. Il template base è in `plugins/skeleton`.
+Il sample plugin aggiunge un comando, un resolver, uno stage, una proprietà e un metodo. `plugin info`
+mostra anche ABI e capability, mentre `plugin list` mostra ABI e capability offerte da ogni plugin caricato.
+Il template base è in `plugins/skeleton`.
 
 ## 10. Prompt e startup
 

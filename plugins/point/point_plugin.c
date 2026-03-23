@@ -243,12 +243,35 @@ static int point_stage_as_point(
 
 /* ------------------------------------------------------------------ init */
 
+ARKSH_PLUGIN_EXPORT int arksh_plugin_query(ArkshPluginInfo *out_info) {
+  if (out_info == NULL) {
+    return 1;
+  }
+
+  memset(out_info, 0, sizeof(*out_info));
+  snprintf(out_info->name,        sizeof(out_info->name),        "point-plugin");
+  snprintf(out_info->version,     sizeof(out_info->version),     "1.0.0");
+  snprintf(out_info->description, sizeof(out_info->description),
+           "2D Point typed-map type: point(x,y), -> x/y, -> distance(), -> translate(dx,dy), |> as_point");
+  out_info->abi_major = ARKSH_PLUGIN_ABI_MAJOR;
+  out_info->abi_minor = ARKSH_PLUGIN_ABI_MINOR;
+  out_info->required_host_capabilities =
+    ARKSH_PLUGIN_CAP_PROPERTY_EXTENSIONS |
+    ARKSH_PLUGIN_CAP_METHOD_EXTENSIONS |
+    ARKSH_PLUGIN_CAP_VALUE_RESOLVERS |
+    ARKSH_PLUGIN_CAP_PIPELINE_STAGES |
+    ARKSH_PLUGIN_CAP_TYPE_DESCRIPTORS;
+  out_info->plugin_capabilities = out_info->required_host_capabilities;
+  return 0;
+}
+
 ARKSH_PLUGIN_EXPORT int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHost *host, ArkshPluginInfo *out_info) {
   if (shell == NULL || host == NULL || out_info == NULL) {
     return 1;
   }
 
-  if (host->api_version != ARKSH_PLUGIN_API_VERSION ||
+  if (host->abi_major != ARKSH_PLUGIN_ABI_MAJOR ||
+      host->abi_minor < ARKSH_PLUGIN_ABI_MINOR ||
       host->register_command == NULL ||
       host->register_property_extension == NULL ||
       host->register_method_extension == NULL ||
@@ -258,10 +281,9 @@ ARKSH_PLUGIN_EXPORT int arksh_plugin_init(ArkshShell *shell, const ArkshPluginHo
     return 1;
   }
 
-  snprintf(out_info->name,        sizeof(out_info->name),        "point-plugin");
-  snprintf(out_info->version,     sizeof(out_info->version),     "1.0.0");
-  snprintf(out_info->description, sizeof(out_info->description),
-           "2D Point typed-map type: point(x,y), -> x/y, -> distance(), -> translate(dx,dy), |> as_point");
+  if (arksh_plugin_query(out_info) != 0) {
+    return 1;
+  }
 
   /* Describe the type to the host (T1) */
   if (host->register_type_descriptor(shell, POINT_TYPE_NAME,

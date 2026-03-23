@@ -73,6 +73,10 @@ typedef struct {
   char version[32];
   char description[ARKSH_MAX_DESCRIPTION];
   char path[ARKSH_MAX_PATH];
+  unsigned int abi_major;
+  unsigned int abi_minor;
+  unsigned long long required_host_capabilities;
+  unsigned long long plugin_capabilities;
   void *handle;
   int active;
 } ArkshLoadedPlugin;
