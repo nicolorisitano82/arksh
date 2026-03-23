@@ -267,6 +267,16 @@ set -o pipefail
 /usr/bin/true | /usr/bin/false | /usr/bin/true
 ```
 
+Sui runtime POSIX, `stty` e disponibile anche come builtin passthrough:
+
+```text
+stty -a
+stty echo
+stty -echo
+```
+
+Il runtime interattivo mantiene uno snapshot centralizzato dello stato TTY pre-raw, quindi se la REPL termina per un segnale anomalo supportato mentre il line editor e in raw mode, il terminale viene ripristinato prima dell'uscita del processo.
+
 ## 5. Pipeline
 
 ### 5.1 Pipeline oggetti

@@ -35,6 +35,7 @@ Nested member chains are first-class syntax, so direct forms like `data.json -> 
 - Runtime extensions via `extend` and native plugins
 - Job control with `jobs`, `fg`, `bg`, `wait`, foreground process groups, and `Ctrl-Z` handling on POSIX systems
 - Login shell bootstrap on POSIX with `--login`, arksh-specific login profiles, `setsid()` for non-interactive login sessions, and controlling-TTY handoff
+- Reliable POSIX TTY restore for the interactive line editor on abnormal termination paths, plus `stty` passthrough as a shell builtin
 - Startup files, aliases, shell variables, exported variables, and persistent history
 - Prompt configuration with theme segments
 - Interactive line editor with highlighting, autosuggestion, and contextual completion

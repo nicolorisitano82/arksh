@@ -1503,42 +1503,6 @@ static size_t word_forward(const char *buf, size_t length, size_t cursor) {
 }
 
 #ifdef _WIN32
-typedef struct {
-  HANDLE input_handle;
-  DWORD original_mode;
-  int active;
-} ArkshTerminalState;
-
-static int terminal_enter_raw(ArkshTerminalState *state) {
-  DWORD mode;
-
-  if (state == NULL) {
-    return 1;
-  }
-
-  memset(state, 0, sizeof(*state));
-  state->input_handle = GetStdHandle(STD_INPUT_HANDLE);
-  if (state->input_handle == INVALID_HANDLE_VALUE || !GetConsoleMode(state->input_handle, &mode)) {
-    return 1;
-  }
-
-  state->original_mode = mode;
-  mode &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT);
-  if (!SetConsoleMode(state->input_handle, mode)) {
-    return 1;
-  }
-
-  state->active = 1;
-  return 0;
-}
-
-static void terminal_leave_raw(ArkshTerminalState *state) {
-  if (state != NULL && state->active) {
-    SetConsoleMode(state->input_handle, state->original_mode);
-    state->active = 0;
-  }
-}
-
 static int read_key(void) {
   int ch = _getch();
 
@@ -1614,41 +1578,6 @@ int arksh_line_editor_is_interactive(void) {
   return _isatty(_fileno(stdin)) && _isatty(_fileno(stdout));
 }
 #else
-typedef struct {
-  struct termios original;
-  int active;
-} ArkshTerminalState;
-
-static int terminal_enter_raw(ArkshTerminalState *state) {
-  struct termios raw;
-
-  if (state == NULL || tcgetattr(STDIN_FILENO, &state->original) != 0) {
-    return 1;
-  }
-
-  raw = state->original;
-  raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
-  raw.c_oflag &= ~(OPOST);
-  raw.c_cflag |= CS8;
-  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
-  raw.c_cc[VMIN] = 1;
-  raw.c_cc[VTIME] = 0;
-
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) {
-    return 1;
-  }
-
-  state->active = 1;
-  return 0;
-}
-
-static void terminal_leave_raw(ArkshTerminalState *state) {
-  if (state != NULL && state->active) {
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &state->original);
-    state->active = 0;
-  }
-}
-
 static int read_key(void) {
   unsigned char ch = 0;
 
@@ -1972,7 +1901,6 @@ ArkshLineReadStatus arksh_line_editor_read_line(
   char *out,
   size_t out_size
 ) {
-  ArkshTerminalState terminal_state;
   /* Single-line editing buffer — reused for each continuation line. */
   char line[ARKSH_MAX_LINE];
   char active_prompt_buf[ARKSH_MAX_OUTPUT];
@@ -2004,7 +1932,7 @@ ArkshLineReadStatus arksh_line_editor_read_line(
   copy_string(active_prompt_buf, sizeof(active_prompt_buf), prompt);
   active_prompt = active_prompt_buf;
 
-  if (terminal_enter_raw(&terminal_state) != 0) {
+  if (arksh_shell_enter_raw_mode(shell) != 0) {
     return ARKSH_LINE_READ_ERROR;
   }
 
@@ -2030,7 +1958,7 @@ ArkshLineReadStatus arksh_line_editor_read_line(
     }
 
     if (key == -1) {
-      terminal_leave_raw(&terminal_state);
+      arksh_shell_leave_raw_mode(shell);
       return ARKSH_LINE_READ_ERROR;
     }
 
@@ -2069,7 +1997,7 @@ ArkshLineReadStatus arksh_line_editor_read_line(
       }
 
       /* Complete (or no callback): submit. */
-      terminal_leave_raw(&terminal_state);
+      arksh_shell_leave_raw_mode(shell);
       fputc('\n', stdout);
       copy_string(out, out_size, multi);
       return ARKSH_LINE_READ_OK;
@@ -2077,13 +2005,13 @@ ArkshLineReadStatus arksh_line_editor_read_line(
 
     if (key == ARKSH_KEY_CTRL_D) {
       if (length == 0 && multi_len == 0) {
-        terminal_leave_raw(&terminal_state);
+        arksh_shell_leave_raw_mode(shell);
         fputc('\n', stdout);
         return ARKSH_LINE_READ_EOF;
       }
       /* In multiline mode: submit whatever we have. */
       if (multi_len > 0) {
-        terminal_leave_raw(&terminal_state);
+        arksh_shell_leave_raw_mode(shell);
         fputc('\n', stdout);
         copy_string(out, out_size, multi);
         return ARKSH_LINE_READ_OK;
@@ -2092,7 +2020,7 @@ ArkshLineReadStatus arksh_line_editor_read_line(
     }
 
     if (key == ARKSH_KEY_CTRL_C) {
-      terminal_leave_raw(&terminal_state);
+      arksh_shell_leave_raw_mode(shell);
       out[0] = '\0';
       fputs("^C\n", stdout);
       return ARKSH_LINE_READ_OK;
@@ -2188,7 +2116,7 @@ ArkshLineReadStatus arksh_line_editor_read_line(
             history_index = shell->history_count;
             history_scratch[0] = '\0';
           } else {
-            terminal_leave_raw(&terminal_state);
+            arksh_shell_leave_raw_mode(shell);
             fputc('\n', stdout);
             copy_string(out, out_size, multi);
             return ARKSH_LINE_READ_OK;

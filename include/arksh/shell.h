@@ -4,6 +4,10 @@
 #include <signal.h>
 #include <stddef.h>
 
+#ifndef _WIN32
+#include <termios.h>
+#endif
+
 #include "arksh/arena.h"
 #include "arksh/ast.h"
 #include "arksh/object.h"
@@ -372,6 +376,14 @@ typedef struct ArkshShell {
   int shell_has_tty;
   int shell_is_session_leader;
   int shell_is_process_group_leader;
+#ifdef _WIN32
+  void *tty_input_handle;
+  unsigned long tty_saved_input_mode;
+#else
+  struct termios tty_saved_state;
+#endif
+  int tty_saved_state_valid;
+  int tty_raw_active;
   int interactive_shell;
   int login_mode;
   int force_capture; /* 1 inside capture()/capture_lines()/bridge — always capture stdout */
@@ -388,6 +400,9 @@ extern volatile sig_atomic_t arksh_terminal_resize_pending;
 int arksh_shell_init(ArkshShell *shell);
 int arksh_shell_init_with_options(ArkshShell *shell, const char *program_path, int login_mode);
 void arksh_shell_destroy(ArkshShell *shell);
+int arksh_shell_enter_raw_mode(ArkshShell *shell);
+void arksh_shell_leave_raw_mode(ArkshShell *shell);
+void arksh_shell_restore_tty(ArkshShell *shell);
 int arksh_shell_run_repl(ArkshShell *shell);
 int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, size_t out_size);
 void arksh_shell_refresh_terminal_state(ArkshShell *shell);

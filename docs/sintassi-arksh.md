@@ -35,6 +35,9 @@ umask
 umask 077
 umask "u=rwx,g=rx,o="
 ulimit -n
+stty -a
+stty echo
+stty -echo
 set -e
 set -u
 set -x

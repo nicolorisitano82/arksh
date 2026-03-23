@@ -1082,18 +1082,9 @@ Stato story: `[x]`
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E11 `[x]`, E12 `[x]`
 **In corso:** nessuna
-**Aperte:** E13 (segnali e TTY), E9 (release), E10 (HTTP plugin)
+**Aperte:** E9 (release), E10 (HTTP plugin)
 
-### Priorità 1 — segnali e TTY da shell di sistema (E13)
-
-Con il POSIX core chiuso, il prossimo gap tecnico più importante per usare `arksh`
-come vera shell di sistema è rendere solidi segnali, sessione e terminale:
-
-1. `E13-S4` — restore TTY, raw mode e `stty`
-2. `E9-S2` — packaging target e installazione distribuita
-3. `E9-S3` — ABI plugin e versioning
-
-### Priorità 2 — portare il progetto a livello distribuzione (E9)
+### Priorità 1 — portare il progetto a livello distribuzione (E9)
 
 Una volta chiuso `E13`, il valore più alto torna su packaging e release:
 
@@ -1102,7 +1093,7 @@ Una volta chiuso `E13`, il valore più alto torna su packaging e release:
 3. `E9-S4` — documentazione finale e troubleshooting
 4. `E9-S5` — release process, changelog e criteri `1.0`
 
-### Priorità 3 — plugin HTTP ufficiale (E10)
+### Priorità 2 — plugin HTTP ufficiale (E10)
 
 `E10-S1` resta importante ma non blocca il core shell. Conviene affrontarla:
 
@@ -1111,18 +1102,17 @@ Una volta chiuso `E13`, il valore più alto torna su packaging e release:
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E13-S4`
-2. `E9-S2`
-3. `E9-S3`
-4. `E9-S4`
-5. `E9-S5`
-6. `E10-S1`
+1. `E9-S2`
+2. `E9-S3`
+3. `E9-S4`
+4. `E9-S5`
+5. `E10-S1`
 
 ---
 
 ## E13. Segnali e gestione TTY come shell di sistema
 
-Stato epoca: `[~]`
+Stato epoca: `[x]`
 
 Questa epoca traduce il blocco `1.2 Segnali e gestione TTY` del documento
 `docs/arksh-come-shell-di-sistema.md` in story implementabili una alla volta.
@@ -1155,12 +1145,12 @@ Stato story: `[x]`
 
 ### E13-S4. Ripristino TTY e raw mode affidabili
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E13-S4-T1` centralizzare snapshot e restore dello stato TTY nel runtime interattivo
-- `[ ]` `E13-S4-T2` aggiungere un percorso di ripristino affidabile su crash o uscita anomala della shell
-- `[ ]` `E13-S4-T3` introdurre `stty` built-in oppure passthrough ben definito e documentato
-- `[ ]` `E13-S4-T4` aggiungere test di regressione sul ripristino del terminale dopo errori, segnali e aborti del line editor
+- `[x]` `E13-S4-T1` centralizzare snapshot e restore dello stato TTY nel runtime interattivo
+- `[x]` `E13-S4-T2` aggiungere un percorso di ripristino affidabile su crash o uscita anomala della shell
+- `[x]` `E13-S4-T3` introdurre `stty` built-in oppure passthrough ben definito e documentato
+- `[x]` `E13-S4-T4` aggiungere test di regressione sul ripristino del terminale dopo errori, segnali e aborti del line editor
 
 ---
 

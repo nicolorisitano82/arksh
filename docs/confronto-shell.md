@@ -157,7 +157,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 | Binario singolo                | Si     | Si     | No (richiede libs) | Si | Si | Si |
 | Dipendenze a runtime           | libc, readline | libc, ncurses | vari | libc | libc | libc |
 | Scripting cross-platform nativo| No (POSIX non su Windows) | No | Parziale | Si | No | Si (stesso codice) |
-| Adatto come shell di sistema   | Si     | Si     | No     | No      | Si (minimalismo) | Non ancora (mancano login/signals/release) |
+| Adatto come shell di sistema   | Si     | Si     | No     | No      | Si (minimalismo) | Non ancora (mancano modalita `sh` e release) |
 | Adatto come shell interattiva  | Si     | Si (ottima) | Si (ottima) | Si (ottima) | No (minima) | Si (gia usabile, ancora in evoluzione) |
 
 ---
@@ -179,7 +179,7 @@ Asse 2: Scripting puro                    ←———————————�
 | fish    | UX out-of-the-box eccellente, highlighting nativo  | Rompe POSIX, nessun tipo strutturato           |
 | nushell | Dati strutturati, pipeline tipizzate               | Rottura totale con shell classica, no classi   |
 | dash    | Velocità, POSIX stretto, shell di sistema          | Nessuna funzione interattiva                   |
-| arksh   | Object model + pipeline tipizzate + namespace di sistema + tipi numerici espliciti + JSON nativo + Matrix/Dict + plugin ABI in C + UX interattiva + core POSIX chiuso | Ecosistema piccolo; restano da chiudere resize/restore TTY, modalità `sh` e packaging/release |
+| arksh   | Object model + pipeline tipizzate + namespace di sistema + tipi numerici espliciti + JSON nativo + Matrix/Dict + plugin ABI in C + UX interattiva + core POSIX chiuso | Ecosistema piccolo; restano da chiudere modalita `sh`, packaging/release e l'ecosistema di distribuzione |
 
 ---
 

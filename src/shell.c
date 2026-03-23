@@ -7,7 +7,9 @@
 #include <string.h>
 #include <time.h>
 
-#ifndef _WIN32
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <fcntl.h>
 #include <fnmatch.h>
 #include <regex.h>
@@ -31,6 +33,8 @@
 static volatile sig_atomic_t s_pending_traps[ARKSH_TRAP_COUNT];
 volatile sig_atomic_t arksh_terminal_resize_pending = 0;
 static unsigned long s_next_shell_generation = 1u;
+static ArkshShell *s_tty_restore_shell = NULL;
+static int s_tty_atexit_installed = 0;
 
 /* Mapping from ArkshTrapKind to POSIX signal number (0 for pseudo-signals). */
 static const struct { const char *name; ArkshTrapKind kind; int signum; }
@@ -62,7 +66,8 @@ s_trap_map[] = {
 typedef enum {
   ARKSH_SIGNAL_POLICY_DEFAULT = 0,
   ARKSH_SIGNAL_POLICY_IGNORE,
-  ARKSH_SIGNAL_POLICY_HANDLE
+  ARKSH_SIGNAL_POLICY_HANDLE,
+  ARKSH_SIGNAL_POLICY_RESTORE_AND_DEFAULT
 } ArkshSignalPolicy;
 #endif
 
@@ -80,6 +85,7 @@ static int build_class_property_list(const ArkshShell *shell, const char *class_
 static int build_class_method_list(const ArkshShell *shell, const char *class_name, ArkshValue *out_value, char *out, size_t out_size);
 #ifndef _WIN32
 static void arksh_generic_signal_handler(int signum);
+static void arksh_restore_and_reraise_signal_handler(int signum);
 #endif
 
 static void copy_string(char *dest, size_t dest_size, const char *src) {
@@ -104,6 +110,34 @@ static ArkshShellMetadata *allocate_shell_metadata_copy(const ArkshShellMetadata
   return metadata;
 }
 
+static void restore_tty_best_effort(ArkshShell *shell) {
+  if (shell == NULL || !shell->tty_saved_state_valid) {
+    if (s_tty_restore_shell == shell) {
+      s_tty_restore_shell = NULL;
+    }
+    return;
+  }
+
+#ifdef _WIN32
+  if (shell->tty_input_handle != NULL) {
+    SetConsoleMode((HANDLE) shell->tty_input_handle, shell->tty_saved_input_mode);
+  }
+  shell->tty_input_handle = NULL;
+#else
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &shell->tty_saved_state);
+#endif
+
+  shell->tty_saved_state_valid = 0;
+  shell->tty_raw_active = 0;
+  if (s_tty_restore_shell == shell) {
+    s_tty_restore_shell = NULL;
+  }
+}
+
+static void restore_tty_at_exit(void) {
+  restore_tty_best_effort(s_tty_restore_shell);
+}
+
 #ifndef _WIN32
 static void install_signal_disposition(int signum, ArkshSignalPolicy policy) {
   struct sigaction action;
@@ -116,6 +150,8 @@ static void install_signal_disposition(int signum, ArkshSignalPolicy policy) {
     action.sa_handler = SIG_IGN;
   } else if (policy == ARKSH_SIGNAL_POLICY_HANDLE) {
     action.sa_handler = arksh_generic_signal_handler;
+  } else if (policy == ARKSH_SIGNAL_POLICY_RESTORE_AND_DEFAULT) {
+    action.sa_handler = arksh_restore_and_reraise_signal_handler;
   } else {
     action.sa_handler = SIG_DFL;
   }
@@ -7914,6 +7950,17 @@ static void arksh_generic_signal_handler(int signum) {
     }
   }
 }
+
+static void arksh_restore_and_reraise_signal_handler(int signum) {
+  if (s_tty_restore_shell != NULL) {
+    restore_tty_best_effort(s_tty_restore_shell);
+  }
+
+  signal(signum, SIG_DFL);
+  if (kill(getpid(), signum) != 0) {
+    _exit(128 + signum);
+  }
+}
 #endif
 
 /* Translate a signal name (with or without "SIG" prefix) to its trap kind. */
@@ -7943,6 +7990,20 @@ static int trap_kind_is_interactive_ignored(ArkshTrapKind kind) {
          kind == ARKSH_TRAP_TTOU;
 }
 
+static int trap_kind_should_restore_on_terminate(ArkshTrapKind kind) {
+  return kind == ARKSH_TRAP_HUP  ||
+         kind == ARKSH_TRAP_QUIT ||
+         kind == ARKSH_TRAP_ILL  ||
+         kind == ARKSH_TRAP_ABRT ||
+         kind == ARKSH_TRAP_FPE  ||
+         kind == ARKSH_TRAP_SEGV ||
+         kind == ARKSH_TRAP_PIPE ||
+         kind == ARKSH_TRAP_ALRM ||
+         kind == ARKSH_TRAP_TERM ||
+         kind == ARKSH_TRAP_USR1 ||
+         kind == ARKSH_TRAP_USR2;
+}
+
 #ifndef _WIN32
 static ArkshSignalPolicy signal_policy_for_trap(const ArkshShell *shell, ArkshTrapKind kind) {
   int interactive = arksh_line_editor_is_interactive();
@@ -7960,6 +8021,10 @@ static ArkshSignalPolicy signal_policy_for_trap(const ArkshShell *shell, ArkshTr
     if (kind == ARKSH_TRAP_CHLD) {
       return ARKSH_SIGNAL_POLICY_HANDLE;
     }
+  }
+
+  if (trap_kind_should_restore_on_terminate(kind)) {
+    return ARKSH_SIGNAL_POLICY_RESTORE_AND_DEFAULT;
   }
 
   return ARKSH_SIGNAL_POLICY_DEFAULT;
@@ -9929,6 +9994,18 @@ static int command_exec(ArkshShell *shell, int argc, char **argv, char *out, siz
   status = arksh_execute_external_command(shell, argc - 1, argv + 1, out, out_size);
   shell->running = 0;
   return status;
+}
+
+static int command_stty(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+#ifdef _WIN32
+  (void) shell;
+  (void) argc;
+  (void) argv;
+  snprintf(out, out_size, "stty is not supported on Windows");
+  return 1;
+#else
+  return arksh_execute_external_command(shell, argc, argv, out, out_size);
+#endif
 }
 
 /* E1-S6-T1: Full POSIX trap built-in. */
@@ -12168,6 +12245,7 @@ static int register_builtin_commands(ArkshShell *shell) {
       register_builtin(shell, "fg",       "resume or wait for a background job in the foreground", command_fg, ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "wait",     "wait for background jobs to complete",           command_wait,     ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "read",     "read a line from stdin into variables",          command_read,     ARKSH_BUILTIN_MUTANT) != 0 ||
+      register_builtin(shell, "stty",     "show or change terminal line settings",          command_stty,     ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "getopts",  "parse option flags from positional arguments",   command_getopts,  ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "umask",    "show or change the process file mode creation mask", command_umask, ARKSH_BUILTIN_MUTANT) != 0 ||
       register_builtin(shell, "ulimit",   "show or change POSIX resource limits",           command_ulimit,   ARKSH_BUILTIN_MUTANT) != 0 ||
@@ -13114,6 +13192,68 @@ static void refresh_shell_process_metadata(ArkshShell *shell, const ArkshPlatfor
   shell->shell_is_process_group_leader = info->is_process_group_leader;
 }
 
+int arksh_shell_enter_raw_mode(ArkshShell *shell) {
+  if (shell == NULL) {
+    return 1;
+  }
+  if (shell->tty_raw_active) {
+    return 0;
+  }
+
+#ifdef _WIN32
+  {
+    HANDLE input_handle;
+    DWORD mode;
+
+    input_handle = GetStdHandle(STD_INPUT_HANDLE);
+    if (input_handle == INVALID_HANDLE_VALUE || !GetConsoleMode(input_handle, &mode)) {
+      return 1;
+    }
+
+    shell->tty_input_handle = (void *) input_handle;
+    shell->tty_saved_input_mode = (unsigned long) mode;
+    mode &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT);
+    if (!SetConsoleMode(input_handle, mode)) {
+      shell->tty_input_handle = NULL;
+      return 1;
+    }
+  }
+#else
+  {
+    struct termios raw;
+
+    if (tcgetattr(STDIN_FILENO, &shell->tty_saved_state) != 0) {
+      return 1;
+    }
+
+    raw = shell->tty_saved_state;
+    raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+    raw.c_oflag &= ~(OPOST);
+    raw.c_cflag |= CS8;
+    raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+    raw.c_cc[VMIN] = 1;
+    raw.c_cc[VTIME] = 0;
+
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) {
+      return 1;
+    }
+  }
+#endif
+
+  shell->tty_saved_state_valid = 1;
+  shell->tty_raw_active = 1;
+  s_tty_restore_shell = shell;
+  return 0;
+}
+
+void arksh_shell_restore_tty(ArkshShell *shell) {
+  restore_tty_best_effort(shell);
+}
+
+void arksh_shell_leave_raw_mode(ArkshShell *shell) {
+  restore_tty_best_effort(shell);
+}
+
 void arksh_shell_refresh_terminal_state(ArkshShell *shell) {
   ArkshPlatformProcessInfo info;
   unsigned long cols = 0;
@@ -13262,6 +13402,10 @@ int arksh_shell_init_with_options(ArkshShell *shell, const char *program_path, i
   if (shell->completion_generation == 0) {
     shell->completion_generation = s_next_shell_generation++;
   }
+  if (!s_tty_atexit_installed) {
+    atexit(restore_tty_at_exit);
+    s_tty_atexit_installed = 1;
+  }
   arksh_scratch_arena_init(&shell->scratch);
   shell->metadata = allocate_shell_metadata_copy(NULL);
   if (shell->metadata == NULL) {
@@ -13356,6 +13500,7 @@ void arksh_shell_destroy(ArkshShell *shell) {
     return;
   }
 
+  arksh_shell_restore_tty(shell);
   save_history(shell);
 
   while (shell->scope_frame != NULL) {

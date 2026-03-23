@@ -15,6 +15,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/select.h>
+#include <termios.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -35,6 +36,16 @@ static int g_failures = 0;
       g_failures++;                                                    \
     }                                                                  \
   } while (0)
+
+static void setup_child_env(void) {
+  setenv("HOME", ".", 1);
+  setenv("USERPROFILE", ".", 1);
+  setenv("ARKSH_CONFIG_HOME", "./pty-config-home", 1);
+  setenv("ARKSH_STATE_HOME", "./pty-state-home", 1);
+  setenv("ARKSH_DATA_HOME", "./pty-data-home", 1);
+  setenv("ARKSH_GLOBAL_PROFILE", "/nonexistent", 1);
+  setenv("ARKSH_LOGIN_PROFILE", "/nonexistent", 1);
+}
 
 /* Read from fd for up to timeout_ms milliseconds.
    Returns bytes read, or 0 on timeout / error. */
@@ -87,18 +98,48 @@ static int spawn_arksh_with_args(pid_t *pid, char *const argv[]) {
     return -1;
   }
   if (child == 0) {
-    setenv("HOME", ".", 1);
-    setenv("USERPROFILE", ".", 1);
-    setenv("ARKSH_CONFIG_HOME", "./pty-config-home", 1);
-    setenv("ARKSH_STATE_HOME", "./pty-state-home", 1);
-    setenv("ARKSH_DATA_HOME", "./pty-data-home", 1);
-    setenv("ARKSH_GLOBAL_PROFILE", "/nonexistent", 1);
-    setenv("ARKSH_LOGIN_PROFILE", "/nonexistent", 1);
+    setup_child_env();
     execv("./arksh", argv);
     _exit(127);
   }
   *pid = child;
   return master;
+}
+
+static int spawn_arksh_with_openpty(pid_t *pid, int *out_master, int *out_slave, char *const argv[]) {
+  int master = -1;
+  int slave = -1;
+  pid_t child;
+
+  if (pid == NULL || out_master == NULL || out_slave == NULL) {
+    return -1;
+  }
+
+  if (openpty(&master, &slave, NULL, NULL, NULL) != 0) {
+    return -1;
+  }
+
+  child = fork();
+  if (child < 0) {
+    close(master);
+    close(slave);
+    return -1;
+  }
+
+  if (child == 0) {
+    close(master);
+    if (login_tty(slave) != 0) {
+      _exit(127);
+    }
+    setup_child_env();
+    execv("./arksh", argv);
+    _exit(127);
+  }
+
+  *pid = child;
+  *out_master = master;
+  *out_slave = slave;
+  return 0;
 }
 
 static int spawn_arksh(pid_t *pid) {
@@ -109,6 +150,13 @@ static int spawn_arksh(pid_t *pid) {
 
 static void cleanup(pid_t pid, int master) {
   close(master);
+  kill(pid, SIGTERM);
+  waitpid(pid, NULL, 0);
+}
+
+static void cleanup_openpty(pid_t pid, int master, int slave) {
+  close(master);
+  close(slave);
   kill(pid, SIGTERM);
   waitpid(pid, NULL, 0);
 }
@@ -341,6 +389,89 @@ static void test_terminal_resize_redraw(void) {
   cleanup(pid, master);
 }
 
+/* Test 9: stty is available as a builtin passthrough in interactive mode. */
+static void test_stty_passthrough(void) {
+  pid_t pid;
+  int master;
+  char buf[4096];
+
+  master = spawn_arksh(&pid);
+  if (master < 0) {
+    EXPECT(0, "stty_passthrough: forkpty failed");
+    return;
+  }
+
+  drain(master, buf, sizeof(buf), 1200);
+  write(master, "stty -a\n", 8);
+  drain(master, buf, sizeof(buf), 1000);
+
+  EXPECT(strstr(buf, "speed") != NULL,
+         "stty_passthrough: stty -a output appears");
+
+  cleanup(pid, master);
+}
+
+/* Test 10: the shell restores canonical tty settings before dying on SIGTERM. */
+static void test_tty_restored_after_sigterm(void) {
+  pid_t pid;
+  int master = -1;
+  int slave = -1;
+  int status = -1;
+  char buf[4096];
+  char *argv[] = { "./arksh", NULL };
+  struct termios before;
+  struct termios during;
+  struct termios after;
+
+  if (spawn_arksh_with_openpty(&pid, &master, &slave, argv) != 0) {
+    EXPECT(0, "tty_restored_after_sigterm: openpty spawn failed");
+    return;
+  }
+
+  if (tcgetattr(slave, &before) != 0) {
+    EXPECT(0, "tty_restored_after_sigterm: tcgetattr before failed");
+    cleanup_openpty(pid, master, slave);
+    return;
+  }
+
+  drain(master, buf, sizeof(buf), 1200);
+
+  if (tcgetattr(slave, &during) != 0) {
+    EXPECT(0, "tty_restored_after_sigterm: tcgetattr during failed");
+    cleanup_openpty(pid, master, slave);
+    return;
+  }
+
+  EXPECT((during.c_lflag & ECHO) == 0,
+         "tty_restored_after_sigterm: raw mode disables ECHO");
+  EXPECT((during.c_lflag & ICANON) == 0,
+         "tty_restored_after_sigterm: raw mode disables ICANON");
+  EXPECT((during.c_lflag & ISIG) == 0,
+         "tty_restored_after_sigterm: raw mode disables ISIG");
+
+  kill(pid, SIGTERM);
+  usleep(150000);
+
+  if (tcgetattr(slave, &after) != 0 && tcgetattr(master, &after) != 0) {
+    EXPECT(0, "tty_restored_after_sigterm: tcgetattr after failed");
+    kill(pid, SIGKILL);
+    waitpid(pid, &status, 0);
+    close(master);
+    close(slave);
+    return;
+  }
+  waitpid(pid, &status, 0);
+  EXPECT((WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM) ||
+         (WIFEXITED(status) && WEXITSTATUS(status) == 128 + SIGTERM),
+         "tty_restored_after_sigterm: shell exits after SIGTERM");
+  EXPECT((after.c_lflag & (ECHO | ICANON | ISIG)) ==
+         (before.c_lflag & (ECHO | ICANON | ISIG)),
+         "tty_restored_after_sigterm: tty flags restored after signal");
+
+  close(master);
+  close(slave);
+}
+
 /* ------------------------------------------------------------------ main */
 
 int main(void) {
@@ -352,6 +483,8 @@ int main(void) {
   test_trap_int_prompt();
   test_trap_tstp_prompt();
   test_terminal_resize_redraw();
+  test_stty_passthrough();
+  test_tty_restored_after_sigterm();
 
   if (g_failures > 0) {
     fprintf(stderr, "%d PTY test(s) FAILED\n", g_failures);

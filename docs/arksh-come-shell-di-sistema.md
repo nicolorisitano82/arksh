@@ -44,7 +44,7 @@ Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostitu
 | `SIGWINCH` e resize del terminale | Implementato sui target POSIX supportati |
 | `setsid` / gestione corretta del process group come login shell | Implementato sui target POSIX supportati |
 | Mode `--login` | Implementato |
-| `stty` e raw mode ripristino affidabile al crash | Non garantito |
+| `stty` e raw mode ripristino affidabile al crash | Implementato sui target POSIX supportati |
 
 ---
 
@@ -55,7 +55,7 @@ Quasi tutti gli script di sistema e gli strumenti (Docker entrypoint, systemd se
 - La sintassi object-pipeline (`|>`, `->`) non è POSIX e nessuno strumento la conosce.
 - Manca ancora una modalità di compatibilità `sh` che disabiliti esplicitamente le estensioni non-POSIX.
 - Il parsing di shebang multi-riga o di script complessi non è stato testato su corpora reali.
-- Restano scoperte diverse aree tipiche da shell di sistema: login shell, segnali completi, mode `sh`, array indicizzati e alcune variabili/feature bash aggiuntive (`$PPID`, `$BASHPID`, `nameref`).
+- Restano scoperte diverse aree tipiche da shell di sistema: mode `sh`, array indicizzati e alcune variabili/feature bash aggiuntive (`$PPID`, `$BASHPID`, `nameref`), oltre alla validazione su corpora reali di script di sistema.
 
 ---
 
@@ -113,8 +113,8 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 2. Modalità `--login` — completata con profili arksh dedicati: `ARKSH_GLOBAL_PROFILE`, `${config_dir}/profile`, `~/.arksh_profile` e override `ARKSH_LOGIN_PROFILE`.
 3. `setsid` e process group — completato sui target POSIX supportati: i login shell senza TTY fanno `setsid()` quando serve, le shell interattive si portano nel proprio process group e reclamano il controlling TTY con `tcsetpgrp()`.
 4. `SIGWINCH` handler — completato: aggiorna dimensioni del terminale, notifica il line editor e ridisegna il buffer corrente senza perderlo.
-5. Ripristino del terminale al crash — installare un handler di ultimo resort che chiama `tcsetattr` con i settings originali.
-6. `stty` built-in o passthrough — necessario per script di configurazione terminale.
+5. Ripristino del terminale al crash — completato: il runtime interattivo centralizza lo snapshot TTY pre-raw e lo ripristina prima di terminare su segnali di uscita anomala supportati.
+6. `stty` built-in o passthrough — completato come passthrough built-in ben definito sui target POSIX supportati.
 
 ---
 
@@ -168,6 +168,6 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 | Shell interattiva personale | Si (con limitazioni) | Mancano alcune feature avanzate, ma l'uso quotidiano base funziona |
 | Shell di sviluppo in progetti arksh | Si | E il caso d'uso primario del repository |
 | Scripting su sistemi POSIX | Si, con limiti | Il core POSIX del progetto e chiuso; restano fuori soprattutto modalita `sh`, segnali completi, `exec` con redirection e alcune variabili/feature stile bash |
-| Shell di sistema (`/bin/sh` replacement) | No | Mancano ancora restore TTY/raw mode, modalità `sh` e packaging/release |
-| Shell in container / initrd | No | Mancano robustezza finale, startup audit dedicato e un passaggio conclusivo su TTY/crash recovery |
+| Shell di sistema (`/bin/sh` replacement) | No | Mancano ancora modalità `sh` e packaging/release |
+| Shell in container / initrd | No | Mancano robustezza finale, startup audit dedicato e packaging minimale |
 | Default shell utente (`chsh`) | Parziale | Possibile su macOS/Linux per chi conosce le limitazioni; sconsigliato per uso generale |
