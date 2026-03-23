@@ -268,6 +268,14 @@ cat < README.md | wc -l
 ls missing 2>&1 | wc -l
 ```
 
+Per condizioni shell estese puoi usare anche `[[ ... ]]`:
+
+```text
+set s demo.txt
+[[ "$s" == *.txt ]] && text("match") -> print()
+[[ "$s" =~ ^demo\\.[a-z]+$ ]] && text("$BASH_REMATCH") -> print()
+```
+
 ### 5.3 Bridge tra comandi e valori tipizzati
 
 Usa:
@@ -534,6 +542,7 @@ Built-in usati più spesso:
 - `read`
 - `printf`
 - `test`
+- `[[`
 - `let`
 - `extend`
 - `plugin`

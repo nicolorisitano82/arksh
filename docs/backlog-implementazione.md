@@ -938,12 +938,12 @@ Stato story: `[ ]`
 
 ### E11-S4. Doppio bracket `[[ ]]`
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E11-S4-T1` **Lexer** — token `DBLBRACKET_OPEN` (`[[`) e `DBLBRACKET_CLOSE` (`]]`); il contenuto interno non subisce word splitting né globbing.
-- `[ ]` `E11-S4-T2` **Parser** — nodo AST `CONDITIONAL_EXP`; eredita tutti i primari di `[ ]`; aggiunge `=~` (match regex POSIX ERE via `regcomp`/`regexec`, cattura in `$BASH_REMATCH`) e `==` con pattern glob (via `fnmatch`).
-- `[ ]` `E11-S4-T3` **Executor** — valutare il nodo; le variabili non espanse subiscono word splitting solo se non quotate; operatori `&&` e `||` corti-circuitati.
-- `[ ]` `E11-S4-T4` **Test** — golden script: `[[ "$s" == *.txt ]]`, `[[ "$s" =~ ^[0-9]+$ ]]`, operatori logici, variabili non quotate.
+- `[x]` `E11-S4-T1` **Lexer** — il lexer entra in modalita condizionale quando incontra `[[` come command word, mantiene `]]` come chiusura e non tokenizza `&&`, `||`, `!`, `(`, `)` come operatori di command list all'interno; in questo contesto non c'e word splitting ne globbing sugli argomenti.
+- `[x]` `E11-S4-T2` **Parser** — `[[ ... ]]` viene preservato come simple command dedicato, cosi puo convivere correttamente con `&&`/`||` esterni nelle command list e con `if`/`while`/`until`.
+- `[x]` `E11-S4-T3` **Executor** — valutazione estesa con primari ereditati da `[ ]`, `==`/`=` con pattern glob, `!=`, `=~` via regex POSIX ERE, cattura in `$BASH_REMATCH`, espansione senza word splitting/pathname expansion e operatori `&&` / `||` con cortocircuito.
+- `[x]` `E11-S4-T4` **Test** — aggiunti test CTest per `[[ "$s" == *.txt ]]`, `[[ "$s" =~ ^[0-9]+$ ]]`, operatori logici e variabili non quotate; suite completa verde.
 
 ### E11-S5. Subshell `( )` e gruppi `{ }`
 
@@ -1086,10 +1086,10 @@ Stato story: `[x]`
 Questa è la priorità più alta se l'obiettivo resta usare `arksh` come shell di sistema.
 Le parti più chiaramente mancanti oggi sono:
 
-1. `E11-S4` — `[[ ]]` con `=~` e pattern glob
-2. `E11-S6` — completare `getopts`, aggiungere `ulimit` e `umask`
-3. `E11-S8` — here-string `<<<`
-4. `E11-S9` — sostituzione di processo `<()` / `>()`
+1. `E11-S6` — completare `getopts`, aggiungere `ulimit` e `umask`
+2. `E11-S8` — here-string `<<<`
+3. `E11-S9` — sostituzione di processo `<()` / `>()`
+4. `E11-S3` — chiudere i primari POSIX mancanti di `[ ]`
 
 Nota operativa:
 
@@ -1113,11 +1113,11 @@ Dopo il POSIX core, il valore più alto è chiudere packaging e release:
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E11-S4`
-2. `E11-S6`
-3. `E11-S8`
-4. `E11-S9`
-5. audit backlog su `E11-S1`, `E11-S2`, `E11-S3`, `E11-S5`, `E11-S7`
+1. `E11-S6`
+2. `E11-S8`
+3. `E11-S9`
+4. `E11-S3`
+5. audit backlog su `E11-S1`, `E11-S2`, `E11-S5`, `E11-S7`
 6. `E9-S2`
 7. `E9-S3`
 8. `E9-S4`

@@ -140,6 +140,8 @@ EOF
 pwd ; ls
 true && text("ok") -> print()
 false || text("fallback") -> print()
+set s demo.txt ; [[ "$s" == *.txt ]] && text("match") -> print()
+set n 42 ; [[ "$n" =~ ^[0-9]+$ ]] && text("$BASH_REMATCH") -> print()
 sleep 5 &
 sleep 5 & jobs
 fg
@@ -219,6 +221,9 @@ Document(text("manuale")) -> label()
 Regole pratiche:
 
 - `condizione ? vero : falso` restituisce un valore e funziona dentro `let`, block, argomenti metodo e top-level value expression
+- `[[ ... ]]` estende i test shell con `==`/`=` su pattern glob, `=~` su regex POSIX ERE, `!`, `&&`, `||` e parentesi di raggruppamento
+- dentro `[[ ... ]]` le espansioni fanno parameter expansion e command substitution, ma non fanno word splitting ne pathname expansion
+- quando `=~` ha successo, `$BASH_REMATCH` contiene il match completo; il binding tipizzato `BASH_REMATCH` espone la lista delle catture disponibili
 - le condizioni di `if`, `while` e `until` provano prima a valutare una value expression e ne usano la truthiness
 - se la condizione non e una value expression valida, `arksh` la esegue come comando shell classico e usa il suo exit status
 - `break [count]` interrompe il loop corrente o uno piu esterno

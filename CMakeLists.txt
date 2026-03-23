@@ -1128,6 +1128,22 @@ if(BUILD_TESTING)
     COMMAND arksh -c "if [ 5 -gt 3 ]; then echo yes; fi"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_double_bracket_glob
+    COMMAND arksh -c "set s demo.txt ; if [[ \"$s\" == *.txt ]]; then echo yes; fi"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_double_bracket_regex
+    COMMAND arksh -c "set s 12345 ; if [[ \"$s\" =~ ^[0-9]+$ ]]; then echo yes; fi"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_double_bracket_logic
+    COMMAND arksh -c "set s demo.txt ; set n 42 ; if [[ \"$s\" == *.txt && \"$n\" =~ ^[0-9]+$ ]]; then echo yes; fi"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_double_bracket_unquoted_var
+    COMMAND arksh -c "set s demo.txt ; if [[ $s == *.txt ]]; then echo yes; fi"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   add_test(NAME arksh_cmd_subst_file
     COMMAND arksh -c "echo hello > /tmp/arksh_cs_test.txt; set contents \$(< /tmp/arksh_cs_test.txt); echo \$contents"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -1135,7 +1151,10 @@ if(BUILD_TESTING)
   set_tests_properties(
     arksh_trap_posix_all arksh_trap_err arksh_set_errexit arksh_set_nounset
     arksh_printf_basic arksh_param_subst_single arksh_param_subst_global
-    arksh_test_builtin_string arksh_test_bracket_numeric arksh_cmd_subst_file
+    arksh_test_builtin_string arksh_test_bracket_numeric
+    arksh_double_bracket_glob arksh_double_bracket_regex
+    arksh_double_bracket_logic arksh_double_bracket_unquoted_var
+    arksh_cmd_subst_file
     PROPERTIES TIMEOUT 10
   )
   set_tests_properties(arksh_trap_posix_all    PROPERTIES PASS_REGULAR_EXPRESSION "TERM")
@@ -1147,6 +1166,10 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_param_subst_global PROPERTIES PASS_REGULAR_EXPRESSION "aaXXcc")
   set_tests_properties(arksh_test_builtin_string PROPERTIES PASS_REGULAR_EXPRESSION "yes")
   set_tests_properties(arksh_test_bracket_numeric PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(arksh_double_bracket_glob PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(arksh_double_bracket_regex PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(arksh_double_bracket_logic PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(arksh_double_bracket_unquoted_var PROPERTIES PASS_REGULAR_EXPRESSION "yes")
   set_tests_properties(arksh_cmd_subst_file    PROPERTIES PASS_REGULAR_EXPRESSION "hello")
 
   # E1-S7: POSIX script syntax compatibility

@@ -246,6 +246,47 @@ static int expand_command_arguments(
   return 0;
 }
 
+static int expand_conditional_arguments(
+  ArkshShell *shell,
+  const char raw_argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN],
+  int argc,
+  char expanded_argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN],
+  int *out_argc,
+  char *error,
+  size_t error_size
+) {
+  int expanded_count = 0;
+  int i;
+
+  if (raw_argv == NULL || expanded_argv == NULL || out_argc == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+
+  for (i = 0; i < argc; ++i) {
+    char values[1][ARKSH_MAX_TOKEN];
+    int value_count = 0;
+    ArkshExpandMode mode = i == 0 ? ARKSH_EXPAND_MODE_COMMAND_NAME : ARKSH_EXPAND_MODE_CONDITIONAL;
+
+    if (arksh_expand_word(shell, raw_argv[i], mode, values, 1, &value_count, error, error_size) != 0) {
+      return 1;
+    }
+    if (value_count != 1) {
+      snprintf(error, error_size, "conditional expansion produced an unexpected number of values");
+      return 1;
+    }
+    if (expanded_count >= ARKSH_MAX_ARGS) {
+      snprintf(error, error_size, "conditional expression has too many arguments");
+      return 1;
+    }
+
+    copy_string(expanded_argv[expanded_count], sizeof(expanded_argv[expanded_count]), values[0]);
+    expanded_count++;
+  }
+
+  *out_argc = expanded_count;
+  return 0;
+}
+
 static int plugin_index_is_active(const ArkshShell *shell, int plugin_index) {
   if (shell == NULL || plugin_index < 0) {
     return 1;
@@ -4966,7 +5007,11 @@ static int execute_simple_command(ArkshShell *shell, const ArkshSimpleCommandNod
     return 1;
   }
 
-  if (expand_command_arguments(shell, command->raw_argv, command->argc, expanded_argv, &expanded_argc, out, out_size) != 0) {
+  if (command->argc > 0 && strcmp(command->raw_argv[0], "[[") == 0) {
+    if (expand_conditional_arguments(shell, command->raw_argv, command->argc, expanded_argv, &expanded_argc, out, out_size) != 0) {
+      return 1;
+    }
+  } else if (expand_command_arguments(shell, command->raw_argv, command->argc, expanded_argv, &expanded_argc, out, out_size) != 0) {
     return 1;
   }
 

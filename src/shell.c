@@ -8,6 +8,8 @@
 #include <time.h>
 
 #ifndef _WIN32
+#include <fnmatch.h>
+#include <regex.h>
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -585,6 +587,7 @@ static int parse_error_is_incomplete_compound(const char *error) {
          (strncmp(error, "unterminated if command", 22) == 0 ||
           strncmp(error, "unterminated while command", 25) == 0 ||
           strncmp(error, "unterminated until command", 25) == 0 ||
+          strncmp(error, "unterminated [[ conditional", 27) == 0 ||
           strncmp(error, "unterminated heredoc", 20) == 0 ||
           strncmp(error, "unterminated for command", 23) == 0 ||
           strncmp(error, "unterminated case command", 24) == 0 ||
@@ -10491,6 +10494,432 @@ static int command_lbracket(ArkshShell *shell, int argc, char **argv, char *out,
   return command_test(shell, argc - 1, argv, out, out_size);
 }
 
+static int double_bracket_match_glob(const char *text, const char *pattern) {
+  if (text == NULL || pattern == NULL) {
+    return 1;
+  }
+#ifndef _WIN32
+  return fnmatch(pattern, text, 0) == 0 ? 0 : 1;
+#else
+  /* Minimal cross-platform fallback: supports * and ? wildcards. */
+  while (*pattern != '\0') {
+    if (*pattern == '*') {
+      pattern++;
+      do {
+        if (double_bracket_match_glob(text, pattern) == 0) {
+          return 0;
+        }
+      } while (*text++ != '\0');
+      return 1;
+    }
+    if (*pattern == '?') {
+      if (*text == '\0') {
+        return 1;
+      }
+      pattern++;
+      text++;
+      continue;
+    }
+    if (*pattern != *text) {
+      return 1;
+    }
+    pattern++;
+    text++;
+  }
+  return *text == '\0' ? 0 : 1;
+#endif
+}
+
+static void clear_bash_rematch(ArkshShell *shell) {
+  if (shell == NULL) {
+    return;
+  }
+  arksh_shell_set_var(shell, "BASH_REMATCH", "", 0);
+  arksh_shell_unset_binding(shell, "BASH_REMATCH");
+}
+
+static int set_bash_rematch_capture(
+  ArkshShell *shell,
+  const char *text,
+#ifndef _WIN32
+  const regmatch_t *matches,
+  size_t match_count,
+#endif
+  char *err,
+  size_t err_size
+) {
+  ArkshValue captures;
+  size_t i;
+
+  if (shell == NULL) {
+    return 1;
+  }
+
+  arksh_value_init(&captures);
+#ifndef _WIN32
+  for (i = 0; i < match_count; ++i) {
+    ArkshValue entry;
+    char capture[ARKSH_MAX_TOKEN];
+    regoff_t start;
+    regoff_t end;
+    size_t length;
+
+    if (matches[i].rm_so < 0 || matches[i].rm_eo < matches[i].rm_so) {
+      continue;
+    }
+    start = matches[i].rm_so;
+    end = matches[i].rm_eo;
+    length = (size_t) (end - start);
+    if (length >= sizeof(capture)) {
+      arksh_value_free(&captures);
+      snprintf(err, err_size, "regex capture too long");
+      return 1;
+    }
+    memcpy(capture, text + start, length);
+    capture[length] = '\0';
+
+    arksh_value_init(&entry);
+    arksh_value_set_string(&entry, capture);
+    if (arksh_value_list_append_value(&captures, &entry) != 0) {
+      arksh_value_free(&entry);
+      arksh_value_free(&captures);
+      snprintf(err, err_size, "unable to store regex capture");
+      return 1;
+    }
+    arksh_value_free(&entry);
+  }
+#else
+  (void) text;
+#endif
+
+  if (captures.kind == ARKSH_VALUE_EMPTY) {
+    arksh_value_set_string(&captures, "");
+  }
+
+  if (captures.kind == ARKSH_VALUE_LIST && captures.list.count > 0) {
+    char first_capture[ARKSH_MAX_TOKEN];
+    if (arksh_value_item_render(&captures.list.items[0], first_capture, sizeof(first_capture)) != 0) {
+      arksh_value_free(&captures);
+      snprintf(err, err_size, "unable to render regex capture");
+      return 1;
+    }
+    if (arksh_shell_set_var(shell, "BASH_REMATCH", first_capture, 0) != 0) {
+      arksh_value_free(&captures);
+      snprintf(err, err_size, "unable to store BASH_REMATCH");
+      return 1;
+    }
+  } else if (arksh_shell_set_var(shell, "BASH_REMATCH", "", 0) != 0) {
+    arksh_value_free(&captures);
+    snprintf(err, err_size, "unable to store BASH_REMATCH");
+    return 1;
+  }
+
+  if (arksh_shell_set_binding(shell, "BASH_REMATCH", &captures) != 0) {
+    arksh_value_free(&captures);
+    snprintf(err, err_size, "unable to store BASH_REMATCH binding");
+    return 1;
+  }
+
+  arksh_value_free(&captures);
+  return 0;
+}
+
+static int double_bracket_primary_eval(
+  ArkshShell *shell,
+  int argc,
+  char **argv,
+  char *err,
+  size_t err_size
+) {
+  if (argc == 3 && (strcmp(argv[1], "==") == 0 || strcmp(argv[1], "=") == 0)) {
+    clear_bash_rematch(shell);
+    return double_bracket_match_glob(argv[0], argv[2]);
+  }
+  if (argc == 3 && strcmp(argv[1], "!=") == 0) {
+    clear_bash_rematch(shell);
+    return double_bracket_match_glob(argv[0], argv[2]) == 0 ? 1 : 0;
+  }
+  if (argc == 3 && strcmp(argv[1], "=~") == 0) {
+#ifndef _WIN32
+    regex_t regex;
+    regmatch_t matches[16];
+    size_t match_count;
+    int regex_status;
+
+    clear_bash_rematch(shell);
+    memset(&regex, 0, sizeof(regex));
+    regex_status = regcomp(&regex, argv[2], REG_EXTENDED);
+    if (regex_status != 0) {
+      char regex_err[128];
+      regerror(regex_status, &regex, regex_err, sizeof(regex_err));
+      snprintf(err, err_size, "[[: invalid regex: %s", regex_err);
+      regfree(&regex);
+      return 2;
+    }
+
+    match_count = (size_t) regex.re_nsub + 1u;
+    if (match_count > (sizeof(matches) / sizeof(matches[0]))) {
+      match_count = sizeof(matches) / sizeof(matches[0]);
+    }
+
+    regex_status = regexec(&regex, argv[0], match_count, matches, 0);
+    if (regex_status == 0) {
+      int set_status = set_bash_rematch_capture(shell, argv[0], matches, match_count, err, err_size);
+      regfree(&regex);
+      return set_status == 0 ? 0 : 2;
+    }
+    regfree(&regex);
+    if (regex_status == REG_NOMATCH) {
+      clear_bash_rematch(shell);
+      return 1;
+    }
+    snprintf(err, err_size, "[[: regex evaluation failed");
+    return 2;
+#else
+    clear_bash_rematch(shell);
+    snprintf(err, err_size, "[[: regex operator is not supported on Windows");
+    return 2;
+#endif
+  }
+
+  clear_bash_rematch(shell);
+  return test_primary(argc, argv, err, err_size);
+}
+
+static int double_bracket_skip_or(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size);
+
+static int double_bracket_skip_primary(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
+  int depth = 0;
+
+  if (argc_ptr == NULL || argv_ptr == NULL || err == NULL || err_size == 0) {
+    return 1;
+  }
+  if (*argc_ptr <= 0) {
+    snprintf(err, err_size, "[[: missing conditional expression");
+    return 1;
+  }
+
+  if (strcmp((*argv_ptr)[0], "!") == 0) {
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    return double_bracket_skip_primary(argc_ptr, argv_ptr, err, err_size);
+  }
+
+  if (strcmp((*argv_ptr)[0], "(") == 0) {
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    if (double_bracket_skip_or(argc_ptr, argv_ptr, err, err_size) != 0) {
+      return 1;
+    }
+    if (*argc_ptr <= 0 || strcmp((*argv_ptr)[0], ")") != 0) {
+      snprintf(err, err_size, "[[: missing closing )");
+      return 1;
+    }
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    return 0;
+  }
+
+  while (*argc_ptr > 0) {
+    const char *token = (*argv_ptr)[0];
+    if (depth == 0 &&
+        (strcmp(token, "&&") == 0 ||
+         strcmp(token, "||") == 0 ||
+         strcmp(token, ")") == 0)) {
+      break;
+    }
+    if (strcmp(token, "(") == 0) {
+      depth++;
+    } else if (strcmp(token, ")") == 0 && depth > 0) {
+      depth--;
+    }
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+  }
+
+  return 0;
+}
+
+static int double_bracket_skip_and(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
+  if (double_bracket_skip_primary(argc_ptr, argv_ptr, err, err_size) != 0) {
+    return 1;
+  }
+  while (*argc_ptr > 0 && strcmp((*argv_ptr)[0], "&&") == 0) {
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    if (double_bracket_skip_primary(argc_ptr, argv_ptr, err, err_size) != 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int double_bracket_skip_or(int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
+  if (double_bracket_skip_and(argc_ptr, argv_ptr, err, err_size) != 0) {
+    return 1;
+  }
+  while (*argc_ptr > 0 && strcmp((*argv_ptr)[0], "||") == 0) {
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    if (double_bracket_skip_and(argc_ptr, argv_ptr, err, err_size) != 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int double_bracket_eval_or(ArkshShell *shell, int *argc_ptr, char ***argv_ptr, char *err, size_t err_size);
+static int double_bracket_eval_and(ArkshShell *shell, int *argc_ptr, char ***argv_ptr, char *err, size_t err_size);
+static int double_bracket_eval_not(ArkshShell *shell, int *argc_ptr, char ***argv_ptr, char *err, size_t err_size);
+
+static int double_bracket_eval_or(ArkshShell *shell, int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
+  int result = double_bracket_eval_and(shell, argc_ptr, argv_ptr, err, err_size);
+
+  if (result == 2) {
+    return 2;
+  }
+
+  while (*argc_ptr > 0 && strcmp((*argv_ptr)[0], "||") == 0) {
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    if (result == 0) {
+      if (double_bracket_skip_and(argc_ptr, argv_ptr, err, err_size) != 0) {
+        return 2;
+      }
+      continue;
+    }
+    result = double_bracket_eval_and(shell, argc_ptr, argv_ptr, err, err_size);
+  }
+
+  return result;
+}
+
+static int double_bracket_eval_and(ArkshShell *shell, int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
+  int result = double_bracket_eval_not(shell, argc_ptr, argv_ptr, err, err_size);
+
+  if (result == 2) {
+    return 2;
+  }
+
+  while (*argc_ptr > 0 && strcmp((*argv_ptr)[0], "&&") == 0) {
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    if (result != 0) {
+      if (double_bracket_skip_primary(argc_ptr, argv_ptr, err, err_size) != 0) {
+        return 2;
+      }
+      continue;
+    }
+    result = double_bracket_eval_not(shell, argc_ptr, argv_ptr, err, err_size);
+  }
+
+  return result;
+}
+
+static int double_bracket_eval_not(ArkshShell *shell, int *argc_ptr, char ***argv_ptr, char *err, size_t err_size) {
+  if (*argc_ptr <= 0) {
+    snprintf(err, err_size, "[[: missing conditional expression");
+    return 2;
+  }
+
+  if (strcmp((*argv_ptr)[0], "!") == 0) {
+    int value;
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    value = double_bracket_eval_not(shell, argc_ptr, argv_ptr, err, err_size);
+    if (value == 2) {
+      return 2;
+    }
+    return value == 0 ? 1 : 0;
+  }
+
+  if (strcmp((*argv_ptr)[0], "(") == 0) {
+    int result;
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    result = double_bracket_eval_or(shell, argc_ptr, argv_ptr, err, err_size);
+    if (result == 2) {
+      return 2;
+    }
+    if (*argc_ptr <= 0 || strcmp((*argv_ptr)[0], ")") != 0) {
+      snprintf(err, err_size, "[[: missing closing )");
+      return 2;
+    }
+    (*argc_ptr)--;
+    (*argv_ptr)++;
+    return result;
+  }
+
+  {
+    char *prim_argv[16];
+    int prim_argc = 0;
+    int depth = 0;
+
+    while (*argc_ptr > 0 && prim_argc < (int) (sizeof(prim_argv) / sizeof(prim_argv[0]))) {
+      const char *token = (*argv_ptr)[0];
+
+      if (depth == 0 &&
+          (strcmp(token, "&&") == 0 ||
+           strcmp(token, "||") == 0 ||
+           strcmp(token, ")") == 0)) {
+        break;
+      }
+      if (strcmp(token, "(") == 0) {
+        depth++;
+      } else if (strcmp(token, ")") == 0 && depth > 0) {
+        depth--;
+      }
+      prim_argv[prim_argc++] = (*argv_ptr)[0];
+      (*argc_ptr)--;
+      (*argv_ptr)++;
+    }
+
+    if (prim_argc == 0) {
+      snprintf(err, err_size, "[[: missing conditional expression");
+      return 2;
+    }
+
+    return double_bracket_primary_eval(shell, prim_argc, prim_argv, err, err_size);
+  }
+}
+
+static int command_double_lbracket(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
+  int eval_argc;
+  char **eval_argv;
+  int result;
+  char err[256];
+
+  if (out != NULL && out_size > 0) {
+    out[0] = '\0';
+  }
+
+  if (argc < 2 || strcmp(argv[argc - 1], "]]") != 0) {
+    if (out != NULL && out_size > 0) {
+      snprintf(out, out_size, "[[: missing closing ]]");
+    }
+    return 2;
+  }
+
+  eval_argc = argc - 2;
+  eval_argv = argv + 1;
+  err[0] = '\0';
+
+  if (eval_argc <= 0) {
+    return 1;
+  }
+
+  result = double_bracket_eval_or(shell, &eval_argc, &eval_argv, err, sizeof(err));
+  if (result != 2 && eval_argc > 0) {
+    snprintf(err, sizeof(err), "[[: unexpected token: %s", eval_argv[0]);
+    result = 2;
+  }
+
+  if (err[0] != '\0' && out != NULL && out_size > 0) {
+    copy_string(out, out_size, err);
+  }
+  return result;
+}
+
 static int register_builtin_commands(ArkshShell *shell) {
   /* --- PURE: read-only, never modifies shell state ----------------------- */
   if (register_builtin(shell, "help",      "show commands and expression syntax",       command_help,    ARKSH_BUILTIN_PURE) != 0 ||
@@ -10543,7 +10972,8 @@ static int register_builtin_commands(ArkshShell *shell) {
   /* --- PURE: new POSIX commands (no shell state modification) ------------ */
   if (register_builtin(shell, "printf",   "format and print arguments",                    command_printf,   ARKSH_BUILTIN_PURE)   != 0 ||
       register_builtin(shell, "test",     "evaluate a conditional expression",             command_test,     ARKSH_BUILTIN_PURE)   != 0 ||
-      register_builtin(shell, "[",        "evaluate a conditional expression",             command_lbracket, ARKSH_BUILTIN_PURE)   != 0) {
+      register_builtin(shell, "[",        "evaluate a conditional expression",             command_lbracket, ARKSH_BUILTIN_PURE)   != 0 ||
+      register_builtin(shell, "[[",       "evaluate an extended conditional expression",   command_double_lbracket, ARKSH_BUILTIN_PURE) != 0) {
     return 1;
   }
 

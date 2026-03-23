@@ -25,6 +25,7 @@ Nested member chains are first-class syntax, so direct forms like `data.json -> 
 - Native execution of external commands with shell pipes, redirections, and heredoc support
 - Shell/object bridge: external command output can become typed pipeline input
 - Control flow: `if`, `elif`, `else`, `while`, `until`, `for`, `break`, `continue`, `return`, ternary `?:`, `switch`, and `case`
+- Extended conditionals with `[[ ... ]]`, glob matching on `==`, and POSIX ERE regex matching via `=~`
 - Shell functions with named parameters, local scope, and `builtin` fallback
 - Custom classes with instantiation, properties, methods, `init`, and left-to-right multiple inheritance
 - Runtime extensions via `extend` and native plugins
@@ -86,6 +87,7 @@ On Linux, replace `-dynamiclib -undefined dynamic_lookup` with `-shared -fPIC`. 
 ./build/arksh -c 'env() -> HOME'
 ./build/arksh -c 'shell() -> plugins |> count()'
 ./build/arksh -c 'true && text("ok") -> print()'
+./build/arksh -c 'set s demo.txt ; [[ "$s" == *.txt ]] && echo yes'
 ./build/arksh -c 'sleep 1 & jobs'
 ./build/arksh -c 'perf on ; perf reset ; . -> children() |> count() ; perf show'
 ```

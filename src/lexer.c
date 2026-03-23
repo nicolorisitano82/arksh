@@ -134,7 +134,15 @@ static int is_special_token_start(const char *line, size_t index, size_t len) {
          line[index] == ',';
 }
 
-static int scan_word_token(const char *line, size_t *index, size_t len, ArkshToken *out_token, char *error, size_t error_size) {
+static int scan_word_token(
+  const char *line,
+  size_t *index,
+  size_t len,
+  ArkshToken *out_token,
+  char *error,
+  size_t error_size,
+  int conditional_mode
+) {
   char cooked[ARKSH_MAX_TOKEN];
   char raw[ARKSH_MAX_TOKEN];
   size_t cooked_len = 0;
@@ -227,7 +235,24 @@ static int scan_word_token(const char *line, size_t *index, size_t len, ArkshTok
       continue;
     }
 
-    if (isspace((unsigned char) c) || is_special_token_start(line, *index, len)) {
+    if (isspace((unsigned char) c)) {
+      break;
+    }
+
+    if (conditional_mode) {
+      if (c == ']' && *index + 1 < len && line[*index + 1] == ']') {
+        break;
+      }
+      if (c == '&' && *index + 1 < len && line[*index + 1] == '&') {
+        break;
+      }
+      if (c == '|' && *index + 1 < len && line[*index + 1] == '|') {
+        break;
+      }
+      if (c == '!' || c == '(' || c == ')') {
+        break;
+      }
+    } else if (is_special_token_start(line, *index, len)) {
       break;
     }
 
@@ -376,6 +401,9 @@ const char *arksh_token_kind_name(ArkshTokenKind kind) {
 int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, size_t error_size) {
   size_t i = 0;
   size_t len;
+  int in_double_bracket = 0;
+  int command_word_allowed = 1;
+  int pending_redirect_target = 0;
 
   if (line == NULL || out_stream == NULL || error == NULL || error_size == 0) {
     return 1;
@@ -396,6 +424,75 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
       continue;
     }
 
+    if (in_double_bracket) {
+      if (c == ']' && i + 1 < len && line[i + 1] == ']') {
+        if (push_token(out_stream, ARKSH_TOKEN_WORD, "]]", "]]", i) != 0) {
+          snprintf(error, error_size, "too many tokens");
+          return 1;
+        }
+        i += 2;
+        in_double_bracket = 0;
+        command_word_allowed = 0;
+        pending_redirect_target = 0;
+        continue;
+      }
+
+      if (c == '&' && i + 1 < len && line[i + 1] == '&') {
+        if (push_token(out_stream, ARKSH_TOKEN_WORD, "&&", "&&", i) != 0) {
+          snprintf(error, error_size, "too many tokens");
+          return 1;
+        }
+        i += 2;
+        continue;
+      }
+
+      if (c == '|' && i + 1 < len && line[i + 1] == '|') {
+        if (push_token(out_stream, ARKSH_TOKEN_WORD, "||", "||", i) != 0) {
+          snprintf(error, error_size, "too many tokens");
+          return 1;
+        }
+        i += 2;
+        continue;
+      }
+
+      if (c == '!' || c == '(' || c == ')') {
+        char op_text[2];
+        op_text[0] = c;
+        op_text[1] = '\0';
+        if (push_token(out_stream, ARKSH_TOKEN_WORD, op_text, op_text, i) != 0) {
+          snprintf(error, error_size, "too many tokens");
+          return 1;
+        }
+        i++;
+        continue;
+      }
+
+      if (out_stream->count >= ARKSH_MAX_LEXER_TOKENS) {
+        snprintf(error, error_size, "too many tokens");
+        return 1;
+      }
+
+      if (scan_word_token(line, &i, len, &out_stream->tokens[out_stream->count], error, error_size, 1) != 0) {
+        return 1;
+      }
+      out_stream->count++;
+      continue;
+    }
+
+    if (command_word_allowed &&
+        pending_redirect_target == 0 &&
+        c == '[' && i + 1 < len && line[i + 1] == '[' &&
+        (i + 2 == len || isspace((unsigned char) line[i + 2]) || line[i + 2] == '!' || line[i + 2] == '(')) {
+      if (push_token(out_stream, ARKSH_TOKEN_WORD, "[[", "[[", i) != 0) {
+        snprintf(error, error_size, "too many tokens");
+        return 1;
+      }
+      i += 2;
+      in_double_bracket = 1;
+      command_word_allowed = 0;
+      continue;
+    }
+
     if (match_fd_redirection_token(line, i, len, &fd_kind, &fd_length) == 0) {
       if (fd_length >= sizeof(fd_text)) {
         snprintf(error, error_size, "fd redirection token too long");
@@ -408,6 +505,7 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i += fd_length;
+      pending_redirect_target = 1;
       continue;
     }
 
@@ -417,6 +515,8 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i += 2;
+      command_word_allowed = 1;
+      pending_redirect_target = 0;
       continue;
     }
 
@@ -426,6 +526,8 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i += 2;
+      command_word_allowed = 1;
+      pending_redirect_target = 0;
       continue;
     }
 
@@ -444,6 +546,8 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i++;
+      command_word_allowed = 1;
+      pending_redirect_target = 0;
       continue;
     }
 
@@ -453,6 +557,8 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i += 2;
+      command_word_allowed = 1;
+      pending_redirect_target = 0;
       continue;
     }
 
@@ -462,6 +568,8 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i++;
+      command_word_allowed = 1;
+      pending_redirect_target = 0;
       continue;
     }
 
@@ -471,6 +579,8 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i++;
+      command_word_allowed = 1;
+      pending_redirect_target = 0;
       continue;
     }
 
@@ -480,6 +590,7 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i += 4;
+      pending_redirect_target = 0;
       continue;
     }
 
@@ -489,6 +600,7 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i += 3;
+      pending_redirect_target = 1;
       continue;
     }
 
@@ -498,6 +610,7 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i += 2;
+      pending_redirect_target = 1;
       continue;
     }
 
@@ -507,6 +620,7 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i += 3;
+      pending_redirect_target = 1;
       continue;
     }
 
@@ -516,6 +630,7 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i += 2;
+      pending_redirect_target = 1;
       continue;
     }
 
@@ -525,6 +640,7 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i += 2;
+      pending_redirect_target = 1;
       continue;
     }
 
@@ -534,6 +650,7 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i++;
+      pending_redirect_target = 1;
       continue;
     }
 
@@ -543,6 +660,7 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i++;
+      pending_redirect_target = 1;
       continue;
     }
 
@@ -552,6 +670,8 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i++;
+      command_word_allowed = 1;
+      pending_redirect_target = 0;
       continue;
     }
 
@@ -561,6 +681,8 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
         return 1;
       }
       i++;
+      command_word_allowed = 0;
+      pending_redirect_target = 0;
       continue;
     }
 
@@ -578,10 +700,20 @@ int arksh_lex_line(const char *line, ArkshTokenStream *out_stream, char *error, 
       return 1;
     }
 
-    if (scan_word_token(line, &i, len, &out_stream->tokens[out_stream->count], error, error_size) != 0) {
+    if (scan_word_token(line, &i, len, &out_stream->tokens[out_stream->count], error, error_size, 0) != 0) {
       return 1;
     }
+    if (pending_redirect_target > 0) {
+      pending_redirect_target = 0;
+    } else {
+      command_word_allowed = 0;
+    }
     out_stream->count++;
+  }
+
+  if (in_double_bracket) {
+    snprintf(error, error_size, "unterminated [[ conditional");
+    return 1;
   }
 
   if (push_token(out_stream, ARKSH_TOKEN_EOF, "", "", len) != 0) {
