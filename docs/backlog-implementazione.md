@@ -1086,16 +1086,16 @@ Stato story: `[x]`
 Questa è la priorità più alta se l'obiettivo resta usare `arksh` come shell di sistema.
 Le parti più chiaramente mancanti oggi sono:
 
-1. `E11-S1` — completare i mode flags rimasti aperti: `nounset`, `pipefail`, `xtrace` e golden test POSIX della story
-2. `E11-S3` — chiudere i primari POSIX mancanti di `[ ]`
-3. `E11-S2` — aritmetica `$(( ))`
-4. `E11-S5` — riallineare formalmente subshell e group command al backlog POSIX
-5. `E11-S7` — `local` in funzioni shell in forma POSIX-like
+1. `E11-S3` — chiudere i primari POSIX mancanti di `[ ]`
+2. `E11-S2` — aritmetica `$(( ))`
+3. `E11-S5` — riallineare formalmente subshell e group command al backlog POSIX
+4. `E11-S7` — `local` in funzioni shell in forma POSIX-like
 
 Nota operativa:
 
 - `E11-S4`, `E11-S6`, `E11-S8` e `E11-S9` sono chiuse e non sono piu blocchi attivi
-- `E11-S1`, `E11-S2`, `E11-S3`, `E11-S5` e `E11-S7` hanno copertura parziale o sostanziale nel codice e nella suite test, ma vanno chiuse story-per-story nel backlog prima di considerare completata l'epoca
+- `E11-S1` è chiusa
+- `E11-S2`, `E11-S3`, `E11-S5` e `E11-S7` hanno copertura parziale o sostanziale nel codice e nella suite test, ma vanno chiuse story-per-story nel backlog prima di considerare completata l'epoca
 
 ### Priorità 2 — portare il progetto a livello distribuzione (E9)
 
@@ -1115,19 +1115,15 @@ Dopo il POSIX core, il valore più alto è chiudere packaging e release:
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E11-S1-T3`
-2. `E11-S1-T4`
-3. `E11-S1-T5`
-4. `E11-S1-T6`
-5. `E11-S3`
-6. `E11-S2`
-7. audit/chiusura backlog su `E11-S5`
-8. audit/chiusura backlog su `E11-S7`
-9. `E9-S2`
-10. `E9-S3`
-11. `E9-S4`
-12. `E9-S5`
-13. `E10-S1`
+1. `E11-S3`
+2. `E11-S2`
+3. audit/chiusura backlog su `E11-S5`
+4. audit/chiusura backlog su `E11-S7`
+5. `E9-S2`
+6. `E9-S3`
+7. `E9-S4`
+8. `E9-S5`
+9. `E10-S1`
 
 ---
 

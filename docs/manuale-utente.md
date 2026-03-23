@@ -217,6 +217,37 @@ number(5) > number(3)
 bool(true) ? "yes" : "no"
 ```
 
+### 4.6 Flag di modalità shell
+
+ARKsh supporta i flag di esecuzione shell più comuni:
+
+```text
+set -e
+set -u
+set -x
+set -o pipefail
+set +e
+set +u
+set +x
+set +o pipefail
+```
+
+Note pratiche:
+
+- `set -e` interrompe l'esecuzione dopo un comando non-condizionale che fallisce
+- `set -u` genera errore su espansioni `$VAR` / `${VAR}` non definite, tranne le forme con default come `${VAR:-fallback}`
+- `set -x` stampa il comando già espanso su `stderr`, con prefisso `$PS4`
+- `set -o pipefail` fa fallire una pipeline shell se fallisce uno qualunque degli stage
+
+Esempio:
+
+```text
+set PS4 "TRACE: "
+set -x
+set -o pipefail
+/usr/bin/true | /usr/bin/false | /usr/bin/true
+```
+
 ## 5. Pipeline
 
 ### 5.1 Pipeline oggetti

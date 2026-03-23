@@ -35,6 +35,14 @@ umask
 umask 077
 umask "u=rwx,g=rx,o="
 ulimit -n
+set -e
+set -u
+set -x
+set -o pipefail
+set +e
+set +u
+set +x
+set +o pipefail
 extend directory property child_count = [:it | it -> children() |> count()]
 extend object method label = [:it :prefix | prefix]
 extend
@@ -155,6 +163,9 @@ Nota: la sostituzione di processo `<(...)` e `>(...)` è disponibile sul runtime
 pwd ; ls
 true && text("ok") -> print()
 false || text("fallback") -> print()
+set -u ; echo ${HOME:-/tmp}
+set PS4 "TRACE: " ; set -x ; echo "$HOME"
+set -o pipefail ; /usr/bin/true | /usr/bin/false | /usr/bin/true
 set s demo.txt ; [[ "$s" == *.txt ]] && text("match") -> print()
 set n 42 ; [[ "$n" =~ ^[0-9]+$ ]] && text("$BASH_REMATCH") -> print()
 sleep 5 &
