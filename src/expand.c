@@ -1010,6 +1010,55 @@ static void arith_skip_ws(ArithCtx *ctx) {
 
 /* Forward declaration. */
 static long long arith_expr(ArithCtx *ctx);
+static int evaluate_arith(ArkshShell *shell, const char *expr, long long *result, char *error, size_t error_size);
+
+static int arith_parse_nested_expansion(ArithCtx *ctx, char *out, size_t out_size) {
+  size_t start;
+  size_t cursor;
+  int depth = 1;
+
+  if (ctx == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  if (ctx->pos + 2 >= ctx->len || ctx->expr[ctx->pos] != '$' ||
+      ctx->expr[ctx->pos + 1] != '(' || ctx->expr[ctx->pos + 2] != '(') {
+    return 1;
+  }
+
+  start = ctx->pos + 3;
+  cursor = start;
+
+  while (cursor < ctx->len) {
+    if (ctx->expr[cursor] == '$' && cursor + 2 < ctx->len &&
+        ctx->expr[cursor + 1] == '(' && ctx->expr[cursor + 2] == '(') {
+      depth++;
+      cursor += 3;
+      continue;
+    }
+    if (ctx->expr[cursor] == ')' && cursor + 1 < ctx->len && ctx->expr[cursor + 1] == ')') {
+      depth--;
+      if (depth == 0) {
+        size_t copy_len = cursor - start;
+
+        if (copy_len >= out_size) {
+          copy_len = out_size - 1;
+        }
+        memcpy(out, ctx->expr + start, copy_len);
+        out[copy_len] = '\0';
+        ctx->pos = cursor + 2;
+        return 0;
+      }
+      cursor += 2;
+      continue;
+    }
+    cursor++;
+  }
+
+  snprintf(ctx->error, sizeof(ctx->error), "unterminated arithmetic expansion");
+  ctx->has_error = 1;
+  return 1;
+}
 
 static long long arith_primary(ArithCtx *ctx) {
   long long val = 0;
@@ -1037,6 +1086,23 @@ static long long arith_primary(ArithCtx *ctx) {
       snprintf(ctx->error, sizeof(ctx->error), "missing ')' in arithmetic expression");
     }
     return val;
+  }
+
+  if (ctx->expr[ctx->pos] == '$' &&
+      ctx->pos + 2 < ctx->len &&
+      ctx->expr[ctx->pos + 1] == '(' &&
+      ctx->expr[ctx->pos + 2] == '(') {
+    char nested_expr[ARKSH_MAX_OUTPUT];
+    long long nested_value;
+
+    if (arith_parse_nested_expansion(ctx, nested_expr, sizeof(nested_expr)) != 0) {
+      return 0;
+    }
+    if (evaluate_arith(ctx->shell, nested_expr, &nested_value, ctx->error, sizeof(ctx->error)) != 0) {
+      ctx->has_error = 1;
+      return 0;
+    }
+    return nested_value;
   }
 
   /* Variable reference: bare name (POSIX) or $name. */
@@ -1093,6 +1159,22 @@ static long long arith_primary(ArithCtx *ctx) {
   return 0;
 }
 
+static long long arith_pow_int(long long base, long long exponent, ArithCtx *ctx) {
+  long long result = 1;
+  long long i;
+
+  if (exponent < 0) {
+    ctx->has_error = 1;
+    snprintf(ctx->error, sizeof(ctx->error), "negative exponent not supported");
+    return 0;
+  }
+
+  for (i = 0; i < exponent; i++) {
+    result *= base;
+  }
+  return result;
+}
+
 static long long arith_unary(ArithCtx *ctx) {
   arith_skip_ws(ctx);
 
@@ -1105,8 +1187,30 @@ static long long arith_unary(ArithCtx *ctx) {
   return arith_primary(ctx);
 }
 
-static long long arith_multiplicative(ArithCtx *ctx) {
+static long long arith_power(ArithCtx *ctx) {
   long long left = arith_unary(ctx);
+
+  if (ctx->has_error) {
+    return 0;
+  }
+  arith_skip_ws(ctx);
+  if (ctx->pos + 1 < ctx->len &&
+      ctx->expr[ctx->pos] == '*' &&
+      ctx->expr[ctx->pos + 1] == '*') {
+    long long right;
+
+    ctx->pos += 2;
+    right = arith_power(ctx);
+    if (ctx->has_error) {
+      return 0;
+    }
+    return arith_pow_int(left, right, ctx);
+  }
+  return left;
+}
+
+static long long arith_multiplicative(ArithCtx *ctx) {
+  long long left = arith_power(ctx);
 
   for (;;) {
     char op;
@@ -1122,13 +1226,9 @@ static long long arith_multiplicative(ArithCtx *ctx) {
     if (op != '*' && op != '/' && op != '%') {
       break;
     }
-    /* Don't consume '**' (power) as '*' — leave it for later. */
-    if (op == '*' && ctx->pos + 1 < ctx->len && ctx->expr[ctx->pos + 1] == '*') {
-      break;
-    }
     ctx->pos++;
     {
-      long long right = arith_unary(ctx);
+      long long right = arith_power(ctx);
 
       if (ctx->has_error) {
         return 0;

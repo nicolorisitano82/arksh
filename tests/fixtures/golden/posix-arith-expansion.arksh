@@ -1,0 +1,12 @@
+set N 3
+
+echo $((3 + 4))
+echo $(( $(( 2 + 3 )) * 4 ))
+echo $((N * 7))
+echo $((2 ** 5))
+
+if [ $((N > 0)) -ne 0 ]; then
+  echo positive
+fi
+
+echo arith_done

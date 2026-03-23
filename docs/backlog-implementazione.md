@@ -79,7 +79,7 @@ Il backlog sotto copre **il rimanente** verso una shell completa e usabile.
 
 ## E1. Linguaggio shell completo
 
-Stato epoca: `[~]`
+Stato epoca: `[x]`
 
 ### E1-S1. Funzioni shell
 
@@ -159,7 +159,7 @@ la stragrande maggioranza degli script esistenti.
 
 - `[x]` `E1-S7-T1` `(posix-script)` `VAR=value` — assegnazione shell in stile POSIX: riconoscere `NOME=valore` in posizione di comando come assegnazione; supporto assegnazioni multiple consecutive (`A=1 B=2`), assegnazione vuota (`X=`), valore espanso (`X=$HOME`); rilevamento in `execute_simple_command` con `split_posix_assignment` senza modifiche al lexer
 - `[x]` `E1-S7-T2` `(posix-script)` `VAR=val cmd` — env-prefix inline: assegnazioni prefisso passate come variabili esportate temporaneamente al comando, ripristinate dopo l'esecuzione; funziona per built-in, funzioni e comandi esterni
-- `[ ]` `E1-S7-T3` `(posix-script)` `$((...))` — arithmetic expansion: funziona nell'object pipeline; non ancora supportata come espansione di argomenti shell standard (`echo $((3+4))`)
+- `[x]` `E1-S7-T3` `(posix-script)` `$((...))` — arithmetic expansion ora funziona anche come espansione di argomenti shell standard (`echo $((3+4))`), con nesting `$(( $((2+3)) * 4 ))` e integrazione nelle command line POSIX.
 - `[x]` `E1-S7-T4` `(posix-script)` `f() { ... }` — sintassi funzione POSIX: `parse_posix_function_command_tokens` nel parser; `param_count = -1` come sentinella POSIX (nessun controllo arity, argomenti come `$1`/`$2`/…); accetta qualsiasi numero di argomenti posizionali
 - `[x]` `E1-S7-T5` `(posix-script)` `case` — fix del pattern matching: `word)` senza spazio funziona; `(word)` funziona; `evaluate_switch_operand` usa `expand_single_word(COMMAND_NAME)` per bare words invece di `evaluate_expression_atom`
 - `[x]` `E1-S7-T6` `(posix-script)` `shift` e `set --` — `shift [n]` e `set -- arg...` implementati in `shell.c`; `$#` aggiornato
@@ -847,6 +847,8 @@ Stato story: `[ ]`
 
 ## E10. Plugin ufficiali HTTP
 
+Stato epoca: `[ ]`
+
 Integrazione HTTP/HTTPS come plugin opzionale (`ARKSH_HTTP=ON`), basato su libcurl.
 Permette di costruire richieste tipizzate, eseguirle e collegare la risposta alla pipeline
 (Dict se JSON, testo se testuale, file se salvato su disco).
@@ -919,12 +921,12 @@ Stato story: `[x]`
 
 ### E11-S2. Aritmetica `$(( ))`
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E11-S2-T1` **Lexer** — riconoscere `$((` come token `ARITH_OPEN` e `))` come `ARITH_CLOSE` con contatore di nesting per gestire parentesi interne; produrre il contenuto interno come token letterale.
-- `[ ]` `E11-S2-T2` **Parser** — nodo AST `ARITH_EXPANSION`; grammatica ricorsiva con precedenza operatori aritmetici standard: `+`, `-` (unario e binario), `*`, `/`, `%`, `**`; bitwise `<<`, `>>`, `&`, `|`, `^`, `~`; logici `!`, `&&`, `||`; confronti `<`, `>`, `<=`, `>=`, `==`, `!=`; ternario `?:`; riferimenti a variabile con `$VAR` o `VAR` nudo.
-- `[ ]` `E11-S2-T3` **Executor** — valutare il nodo `ARITH_EXPANSION` e restituire la rappresentazione stringa del risultato intero (long long); errore su divisione per zero; se `nounset` è attivo, variabili non definite hanno valore `0` (compatibile con bash).
-- `[ ]` `E11-S2-T4` **Test** — golden script: operazioni base `+`, `-`, `*`, `/`, `%`; nesting `$(( $(( 2+3 )) * 4 ))`; variabili; confronti usati in `if $(( n > 0 ))`.
+- `[x]` `E11-S2-T1` **Lexer** — il lexer tratta `$((...))` come parte di una word shell unica anche in command position, con nesting corretto di `$(( ... ))` annidati.
+- `[x]` `E11-S2-T2` **Parser** — il parser preserva l'espansione aritmetica come argomento raw/cooked valido nelle simple command POSIX, senza spezzarla in token `(` / `)`.
+- `[x]` `E11-S2-T3` **Executor** — l'expander valuta l'espressione intera con precedenza standard, supporto a `**`, nested arithmetic expansion, divisione/modulo per zero come errore e variabili non definite che valgono `0` anche con `nounset`.
+- `[x]` `E11-S2-T4` **Test** — aggiunti test shell standard (`echo $((...))`, nesting, `if [ $((n > 0)) -ne 0 ]`, `nounset`) e una fixture golden POSIX dedicata.
 
 ### E11-S3. Built-in `[ ]` completo
 
@@ -1086,15 +1088,14 @@ Stato story: `[x]`
 Questa è la priorità più alta se l'obiettivo resta usare `arksh` come shell di sistema.
 Le parti più chiaramente mancanti oggi sono:
 
-1. `E11-S2` — aritmetica `$(( ))`
-2. `E11-S5` — riallineare formalmente subshell e group command al backlog POSIX
-3. `E11-S7` — `local` in funzioni shell in forma POSIX-like
+1. `E11-S5` — riallineare formalmente subshell e group command al backlog POSIX
+2. `E11-S7` — `local` in funzioni shell in forma POSIX-like
 
 Nota operativa:
 
-- `E11-S3`, `E11-S4`, `E11-S6`, `E11-S8` e `E11-S9` sono chiuse e non sono piu blocchi attivi
+- `E11-S2`, `E11-S3`, `E11-S4`, `E11-S6`, `E11-S8` e `E11-S9` sono chiuse e non sono piu blocchi attivi
 - `E11-S1` è chiusa
-- `E11-S2`, `E11-S5` e `E11-S7` hanno copertura parziale o sostanziale nel codice e nella suite test, ma vanno chiuse story-per-story nel backlog prima di considerare completata l'epoca
+- `E11-S5` e `E11-S7` hanno copertura parziale o sostanziale nel codice e nella suite test, ma vanno chiuse story-per-story nel backlog prima di considerare completata l'epoca
 
 ### Priorità 2 — portare il progetto a livello distribuzione (E9)
 
@@ -1114,14 +1115,13 @@ Dopo il POSIX core, il valore più alto è chiudere packaging e release:
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E11-S2`
-2. audit/chiusura backlog su `E11-S5`
-3. audit/chiusura backlog su `E11-S7`
-4. `E9-S2`
-5. `E9-S3`
-6. `E9-S4`
-7. `E9-S5`
-8. `E10-S1`
+1. audit/chiusura backlog su `E11-S5`
+2. audit/chiusura backlog su `E11-S7`
+3. `E9-S2`
+4. `E9-S3`
+5. `E9-S4`
+6. `E9-S5`
+7. `E10-S1`
 
 ---
 

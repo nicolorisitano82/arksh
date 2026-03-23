@@ -137,6 +137,129 @@ static int is_special_token_start(const char *line, size_t index, size_t len) {
          line[index] == ',';
 }
 
+static int scan_arithmetic_expansion(
+  const char *line,
+  size_t *index,
+  size_t len,
+  char *cooked,
+  size_t cooked_size,
+  size_t *cooked_len,
+  char *raw,
+  size_t raw_size,
+  size_t *raw_len,
+  char *error,
+  size_t error_size
+) {
+  char quote = '\0';
+  int depth = 1;
+
+  if (line == NULL || index == NULL || cooked == NULL || cooked_len == NULL ||
+      raw == NULL || raw_len == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+
+  if (*index + 2 >= len || line[*index] != '$' || line[*index + 1] != '(' || line[*index + 2] != '(') {
+    snprintf(error, error_size, "invalid arithmetic expansion start");
+    return 1;
+  }
+
+  if (append_char(raw, raw_size, raw_len, '$', error, error_size, "raw token") != 0 ||
+      append_char(raw, raw_size, raw_len, '(', error, error_size, "raw token") != 0 ||
+      append_char(raw, raw_size, raw_len, '(', error, error_size, "raw token") != 0 ||
+      append_char(cooked, cooked_size, cooked_len, '$', error, error_size, "word token") != 0 ||
+      append_char(cooked, cooked_size, cooked_len, '(', error, error_size, "word token") != 0 ||
+      append_char(cooked, cooked_size, cooked_len, '(', error, error_size, "word token") != 0) {
+    return 1;
+  }
+
+  *index += 3;
+
+  while (*index < len) {
+    char c = line[*index];
+
+    if (quote == '\0') {
+      if (c == '\'' || c == '"') {
+        quote = c;
+      } else if (c == '\\') {
+        if (append_char(raw, raw_size, raw_len, c, error, error_size, "raw token") != 0 ||
+            append_char(cooked, cooked_size, cooked_len, c, error, error_size, "word token") != 0) {
+          return 1;
+        }
+        (*index)++;
+        if (*index >= len) {
+          snprintf(error, error_size, "dangling escape in arithmetic expansion");
+          return 1;
+        }
+        c = line[*index];
+        if (append_char(raw, raw_size, raw_len, c, error, error_size, "raw token") != 0 ||
+            append_char(cooked, cooked_size, cooked_len, c, error, error_size, "word token") != 0) {
+          return 1;
+        }
+        (*index)++;
+        continue;
+      } else if (c == '$' && *index + 2 < len && line[*index + 1] == '(' && line[*index + 2] == '(') {
+        if (append_char(raw, raw_size, raw_len, '$', error, error_size, "raw token") != 0 ||
+            append_char(raw, raw_size, raw_len, '(', error, error_size, "raw token") != 0 ||
+            append_char(raw, raw_size, raw_len, '(', error, error_size, "raw token") != 0 ||
+            append_char(cooked, cooked_size, cooked_len, '$', error, error_size, "word token") != 0 ||
+            append_char(cooked, cooked_size, cooked_len, '(', error, error_size, "word token") != 0 ||
+            append_char(cooked, cooked_size, cooked_len, '(', error, error_size, "word token") != 0) {
+          return 1;
+        }
+        *index += 3;
+        depth++;
+        continue;
+      } else if (c == ')' && *index + 1 < len && line[*index + 1] == ')') {
+        if (append_char(raw, raw_size, raw_len, ')', error, error_size, "raw token") != 0 ||
+            append_char(raw, raw_size, raw_len, ')', error, error_size, "raw token") != 0 ||
+            append_char(cooked, cooked_size, cooked_len, ')', error, error_size, "word token") != 0 ||
+            append_char(cooked, cooked_size, cooked_len, ')', error, error_size, "word token") != 0) {
+          return 1;
+        }
+        *index += 2;
+        depth--;
+        if (depth == 0) {
+          return 0;
+        }
+        continue;
+      }
+    } else if (quote == '\'' && c == '\'') {
+      quote = '\0';
+    } else if (quote == '"') {
+      if (c == '\\') {
+        if (append_char(raw, raw_size, raw_len, c, error, error_size, "raw token") != 0 ||
+            append_char(cooked, cooked_size, cooked_len, c, error, error_size, "word token") != 0) {
+          return 1;
+        }
+        (*index)++;
+        if (*index >= len) {
+          snprintf(error, error_size, "dangling escape in arithmetic expansion");
+          return 1;
+        }
+        c = line[*index];
+        if (append_char(raw, raw_size, raw_len, c, error, error_size, "raw token") != 0 ||
+            append_char(cooked, cooked_size, cooked_len, c, error, error_size, "word token") != 0) {
+          return 1;
+        }
+        (*index)++;
+        continue;
+      }
+      if (c == '"') {
+        quote = '\0';
+      }
+    }
+
+    if (append_char(raw, raw_size, raw_len, c, error, error_size, "raw token") != 0 ||
+        append_char(cooked, cooked_size, cooked_len, c, error, error_size, "word token") != 0) {
+      return 1;
+    }
+    (*index)++;
+  }
+
+  snprintf(error, error_size, "unterminated arithmetic expansion");
+  return 1;
+}
+
 static int scan_word_token(
   const char *line,
   size_t *index,
@@ -163,6 +286,17 @@ static int scan_word_token(
 
   while (*index < len) {
     char c = line[*index];
+
+    if (c == '$' && *index + 2 < len && line[*index + 1] == '(' && line[*index + 2] == '(') {
+      if (scan_arithmetic_expansion(line, index, len,
+                                    cooked, sizeof(cooked), &cooked_len,
+                                    raw, sizeof(raw), &raw_len,
+                                    error, error_size) != 0) {
+        return 1;
+      }
+      saw_any = 1;
+      continue;
+    }
 
     if (c == '$' && *index + 1 < len && line[*index + 1] == '(') {
       int depth = 1;

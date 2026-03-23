@@ -144,6 +144,22 @@ static void test_command_process_subst_redirection(void) {
          "proc subst redirect: raw target preserved");
 }
 
+static void test_command_arithmetic_expansion_argument(void) {
+  ArkshAst ast = parse_ok("echo $(( $((2+3)) * 4 ))");
+  EXPECT(ast.kind == ARKSH_AST_SIMPLE_COMMAND || ast.kind == ARKSH_AST_COMMAND_PIPELINE,
+         "arith arg: kind");
+  if (ast.kind == ARKSH_AST_SIMPLE_COMMAND) {
+    EXPECT(ast.as.command.argc == 2, "arith arg: simple argc == 2");
+    EXPECT(strcmp(ast.as.command.raw_argv[1], "$(( $((2+3)) * 4 ))") == 0,
+           "arith arg: simple raw preserved");
+  } else {
+    EXPECT(ast.as.command_pipeline.stage_count == 1, "arith arg: stage_count == 1");
+    EXPECT(ast.as.command_pipeline.stages[0].argc == 2, "arith arg: argc == 2");
+    EXPECT(strcmp(ast.as.command_pipeline.stages[0].raw_argv[1], "$(( $((2+3)) * 4 ))") == 0,
+           "arith arg: raw preserved");
+  }
+}
+
 /* ------------------------------------------------------------------ COMMAND_LIST */
 
 static void test_command_list_sequence(void) {
@@ -397,6 +413,7 @@ int main(void) {
   test_command_here_string_redirection();
   test_command_process_subst_arguments();
   test_command_process_subst_redirection();
+  test_command_arithmetic_expansion_argument();
 
   /* COMMAND_LIST */
   test_command_list_sequence();

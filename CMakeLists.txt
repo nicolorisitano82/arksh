@@ -511,6 +511,16 @@ if(BUILD_TESTING)
   add_test(NAME arksh_arith_var     COMMAND arksh -c "set X \"6\" ; text(\"%d\") -> print($((X * 7)))")
   add_test(NAME arksh_arith_prec    COMMAND arksh -c "text(\"%d\") -> print($((2 + 3 * 4)))")
   add_test(NAME arksh_arith_quoted  COMMAND arksh -c "text(\"%d\") -> print(\"$((10 - 3))\")")
+  add_test(NAME arksh_arith_shell_echo COMMAND arksh -c "echo $((3 + 4))")
+  add_test(NAME arksh_arith_shell_nested COMMAND arksh -c "echo $(( $(( 2 + 3 )) * 4 ))")
+  add_test(NAME arksh_arith_shell_if COMMAND arksh -c "set N 3 ; if [ $((N > 0)) -ne 0 ]; then echo yes; fi")
+  add_test(NAME arksh_arith_power COMMAND arksh -c "echo $((2 ** 5))")
+  add_test(NAME arksh_arith_nounset_zero COMMAND arksh -c "set -u ; echo $((UNSET + 2))")
+  add_test(NAME arksh_arith_divzero COMMAND arksh -c "echo $((7 / 0)) ; echo after")
+  add_test(NAME arksh_golden_posix_arith
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/posix-arith-expansion.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
 
   # E2-S5: binary arithmetic operators in value expression context
   add_test(NAME arksh_binop_add     COMMAND arksh -c "number(3) + number(4)")
@@ -920,6 +930,13 @@ if(BUILD_TESTING)
     PROPERTIES
       PASS_REGULAR_EXPRESSION "7"
   )
+  set_tests_properties(arksh_arith_shell_echo PROPERTIES PASS_REGULAR_EXPRESSION "7")
+  set_tests_properties(arksh_arith_shell_nested PROPERTIES PASS_REGULAR_EXPRESSION "20")
+  set_tests_properties(arksh_arith_shell_if PROPERTIES PASS_REGULAR_EXPRESSION "yes")
+  set_tests_properties(arksh_arith_power PROPERTIES PASS_REGULAR_EXPRESSION "32")
+  set_tests_properties(arksh_arith_nounset_zero PROPERTIES PASS_REGULAR_EXPRESSION "2")
+  set_tests_properties(arksh_arith_divzero PROPERTIES PASS_REGULAR_EXPRESSION "division by zero[\r\n]+after")
+  set_tests_properties(arksh_golden_posix_arith PROPERTIES PASS_REGULAR_EXPRESSION "arith_done")
   set_tests_properties(arksh_builtin_pipe_pwd     PROPERTIES PASS_REGULAR_EXPRESSION ".+")
   set_tests_properties(arksh_builtin_pipe_history PROPERTIES PASS_REGULAR_EXPRESSION ".+")
   set_tests_properties(arksh_builtin_pipe_mutant  PROPERTIES WILL_FAIL TRUE)

@@ -214,6 +214,14 @@ static void test_here_string(void) {
   EXPECT(found, "here-string: HERE_STRING present");
 }
 
+static void test_arithmetic_expansion_word(void) {
+  ArkshTokenStream s = lex_ok("echo $(( $((2+3)) * 4 ))");
+  EXPECT(s.count == 3, "arith word: count == 3");
+  EXPECT(s.tokens[1].kind == ARKSH_TOKEN_WORD, "arith word: second token WORD");
+  EXPECT(strcmp(s.tokens[1].raw, "$(( $((2+3)) * 4 ))") == 0, "arith word: raw preserved");
+  EXPECT(strcmp(s.tokens[1].text, "$(( $((2+3)) * 4 ))") == 0, "arith word: text preserved");
+}
+
 static void test_process_subst_in(void) {
   ArkshTokenStream s = lex_ok("diff <(printf \"a\\n\") other");
   int found = 0;
@@ -486,6 +494,7 @@ int main(void) {
   test_process_subst_in();
   test_process_subst_out();
   test_here_string();
+  test_arithmetic_expansion_word();
   test_heredoc();
   test_heredoc_strip();
   test_redirect_error();
