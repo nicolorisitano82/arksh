@@ -102,7 +102,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 | `eval`                                 | Si     | Si     | Si (limitato) | Si | Si | Si |
 | `exec`                                 | Si     | Si     | Si     | Parziale | Si | Si |
 | Heredoc (`<<`, `<<-`)                  | Si     | Si     | Si     | Si      | Si     | Si |
-| `set -e` / `-u` / `-x` / `-o`         | Si     | Si     | No     | No      | Si     | Parziale (`errexit`, `nounset`, `xtrace`; `pipefail` da chiudere) |
+| `set -e` / `-u` / `-x` / `-o`         | Si     | Si     | No     | No      | Si     | Si (`errexit`, `nounset`, `xtrace`, `pipefail`) |
 | `read` built-in                        | Si     | Si     | Si     | Si      | Si     | Si (`-r -p -t -n`, IFS splitting) |
 | `printf` built-in                      | Si     | Si     | Si     | Si      | Si     | Si (spec POSIX §2.2.3, padding, escape) |
 | `echo -e` / `-n`                       | Si     | Si     | Si     | Si      | Parziale | Si |

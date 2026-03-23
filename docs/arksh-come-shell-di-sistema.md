@@ -97,16 +97,10 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 
 **Obiettivo:** arksh può eseguire script POSIX di media complessità senza errori.
 
-1. `set -e` / `set -u` / `set -o pipefail` / `set -x` — implementare i flag di modalità in `ArkshShell` e rispettarli in executor e pipeline handler.
-2. Aritmetica `$(( espressione ))` — parser per espressioni aritmetiche intere; supporto operatori `+`, `-`, `*`, `/`, `%`, `**`, `<<`, `>>`, `&`, `|`, `^`, `!`, confronti.
-3. Test `[ ]` completo — coprire tutti i primari POSIX: `-f`, `-d`, `-r`, `-w`, `-x`, `-s`, `-e`, `-z`, `-n`, confronti stringa `=` `!=` `<` `>`, confronti numerici `-eq` `-ne` `-lt` `-le` `-gt` `-ge`.
-4. `[[ ]]` — doppio bracket con matching regex `=~` e glob `==`.
-5. Subshell `( cmds )` e gruppi `{ cmds; }`.
-6. `getopts` built-in.
-7. `local` nelle funzioni — scope isolato per le variabili dichiarate con `local`.
-8. `ulimit` e `umask` built-in.
-9. Here-string `<<<`.
-10. Sostituzione di processo `<(cmd)` / `>(cmd)`.
+1. Aritmetica `$(( espressione ))` — parser per espressioni aritmetiche intere; supporto operatori `+`, `-`, `*`, `/`, `%`, `**`, `<<`, `>>`, `&`, `|`, `^`, `!`, confronti.
+2. Test `[ ]` completo — coprire tutti i primari POSIX: `-f`, `-d`, `-r`, `-w`, `-x`, `-s`, `-e`, `-z`, `-n`, confronti stringa `=` `!=` `<` `>`, confronti numerici `-eq` `-ne` `-lt` `-le` `-gt` `-ge`.
+3. `local` nelle funzioni — scope isolato per le variabili dichiarate con `local`.
+4. Refinement finale su subshell, group command e test POSIX end-to-end.
 
 ---
 
@@ -172,7 +166,7 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 |-----|-------------|------|
 | Shell interattiva personale | Si (con limitazioni) | Mancano alcune feature avanzate, ma l'uso quotidiano base funziona |
 | Shell di sviluppo in progetti arksh | Si | E il caso d'uso primario del repository |
-| Scripting su sistemi POSIX | No | Mancano `$(( ))`, `set -e`, subshell, array completi |
+| Scripting su sistemi POSIX | Parziale | I flag `set -e/-u/-x/pipefail`, subshell, here-string e process substitution ci sono; restano da chiudere soprattutto `$(( ))`, `[ ]` completo e alcuni dettagli POSIX |
 | Shell di sistema (`/bin/sh` replacement) | No | Mancano conformità POSIX, signal handling completo, modalità login |
-| Shell in container / initrd | No | Mancano robustezza, startup performance verificata, `ulimit`, `umask` |
+| Shell in container / initrd | No | Mancano robustezza, startup performance verificata e un audit finale POSIX/login |
 | Default shell utente (`chsh`) | Parziale | Possibile su macOS/Linux per chi conosce le limitazioni; sconsigliato per uso generale |

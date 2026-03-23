@@ -908,14 +908,14 @@ Obiettivo: permettere ad arksh di eseguire script POSIX di media complessità se
 
 ### E11-S1. Flag di modalità shell
 
-Stato story: `[~]`
+Stato story: `[x]`
 
 - `[x]` `E11-S1-T1` **Struttura interna** — flag booleani `errexit`, `nounset`, `pipefail`, `xtrace` presenti in `ArkshShell`; `command_set` riconosce `-e`, `-u`, `-o pipefail`, `-x` e le forme di disabilitazione `+e`, `+u`, `+x`, `+o pipefail`; aggiunta `$PS4` con default `"+ "` e uso come prefisso di `xtrace`.
 - `[x]` `E11-S1-T2` **`set -e` (errexit)** — dopo ogni comando non-condizionale in `arksh_shell_execute_line` e nei loop di command list, se `errexit` è attivo e lo status è non-zero, uscire con quello status; esclusioni già coperte nella grammatica attuale: condizione di `if`/`while`/`until`, LHS di `&&`/`||`. Il caso `! cmd` verrà agganciato quando il parser introdurrà il bang command.
-- `[ ]` `E11-S1-T3` **`set -u` (nounset)** — in `expand.c` durante l'espansione di `$VAR` e `${VAR}`, se la variabile non è definita e `nounset` è attivo, restituire un errore descrittivo invece di stringa vuota; non applicare a `${VAR:-default}` e simili.
-- `[ ]` `E11-S1-T4` **`set -o pipefail`** — in `platform.c` per pipeline shell multi-stage, conservare l'exit status di ogni segmento; se `pipefail` è attivo, lo status dell'intera pipeline è il più alto status non-zero tra i segmenti (o zero se tutti sono zero).
-- `[ ]` `E11-S1-T5` **`set -x` (xtrace)** — prima di eseguire ogni comando, stampare su stderr `$PS4` seguìto dall'espansione del comando; le expansion vengono tracciate dopo la sostituzione, non prima.
-- `[ ]` `E11-S1-T6` **Test** — golden script che verifica: `set -e` interrompe su errore; `set -u` fallisce su variabile non definita; `set -x` produce output su stderr; `set -o pipefail` cattura il fallimento nel mezzo di una pipeline.
+- `[x]` `E11-S1-T3` **`set -u` (nounset)** — in `expand.c` durante l'espansione di `$VAR` e `${VAR}`, se la variabile non è definita e `nounset` è attivo, viene restituito un errore descrittivo invece di stringa vuota; le forme con default come `${VAR:-default}` restano escluse.
+- `[x]` `E11-S1-T4` **`set -o pipefail`** — in `platform.c` per pipeline shell multi-stage vengono conservati gli exit status dei segmenti; se `pipefail` è attivo, lo status dell'intera pipeline è il più alto status non-zero tra i segmenti (o zero se tutti sono zero).
+- `[x]` `E11-S1-T5` **`set -x` (xtrace)** — prima di eseguire ogni simple command viene stampato su stderr `$PS4` seguìto dalla forma già espansa del comando; le expansion sono tracciate dopo la sostituzione, non prima.
+- `[x]` `E11-S1-T6` **Test** — aggiunti test mirati per `set -e`, `set -u`, `set -x`, `set -o pipefail` e una fixture golden integrata della story.
 
 ### E11-S2. Aritmetica `$(( ))`
 

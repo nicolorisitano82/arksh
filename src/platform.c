@@ -1058,7 +1058,8 @@ int arksh_platform_run_process_pipeline(
   size_t out_size,
   int *out_exit_code,
   ArkshPlatformAsyncProcess *out_stopped,
-  int force_capture
+  int force_capture,
+  int use_pipefail
 ) {
   if (out == NULL || out_size == 0) {
     return 1;
@@ -1118,6 +1119,7 @@ int arksh_platform_run_process_pipeline(
   {
     SECURITY_ATTRIBUTES security_attributes;
     PROCESS_INFORMATION process_infos[ARKSH_MAX_PIPELINE_STAGES];
+    DWORD stage_exit_codes[ARKSH_MAX_PIPELINE_STAGES];
     HANDLE previous_read = INVALID_HANDLE_VALUE;
     HANDLE capture_read = INVALID_HANDLE_VALUE;
     size_t process_count = 0;
@@ -1135,6 +1137,7 @@ int arksh_platform_run_process_pipeline(
     security_attributes.nLength = sizeof(security_attributes);
     security_attributes.bInheritHandle = TRUE;
     memset(process_infos, 0, sizeof(process_infos));
+    memset(stage_exit_codes, 0, sizeof(stage_exit_codes));
 
     for (i = 0; i < spec_count; ++i) {
       STARTUPINFOA startup_info;
@@ -1396,9 +1399,13 @@ windows_stage_cleanup:
 
     for (i = 0; i < process_count; ++i) {
       if (process_infos[i].hProcess != NULL && process_infos[i].hProcess != INVALID_HANDLE_VALUE) {
+        DWORD process_exit_code = 0;
+
         WaitForSingleObject(process_infos[i].hProcess, INFINITE);
+        GetExitCodeProcess(process_infos[i].hProcess, &process_exit_code);
+        stage_exit_codes[i] = process_exit_code;
         if (i + 1 == process_count) {
-          GetExitCodeProcess(process_infos[i].hProcess, &exit_code);
+          exit_code = process_exit_code;
         }
         CloseHandle(process_infos[i].hProcess);
         process_infos[i].hProcess = NULL;
@@ -1410,13 +1417,25 @@ windows_stage_cleanup:
     }
 
     if (out_exit_code != NULL) {
-      *out_exit_code = (int) exit_code;
+      if (use_pipefail) {
+        DWORD aggregate = 0;
+
+        for (i = 0; i < process_count; ++i) {
+          if (stage_exit_codes[i] != 0 && stage_exit_codes[i] > aggregate) {
+            aggregate = stage_exit_codes[i];
+          }
+        }
+        *out_exit_code = (int) aggregate;
+      } else {
+        *out_exit_code = (int) exit_code;
+      }
     }
     return 0;
   }
 #else
   {
     pid_t pids[ARKSH_MAX_PIPELINE_STAGES];
+    int stage_exit_codes[ARKSH_MAX_PIPELINE_STAGES];
     size_t pid_count = 0;
     int previous_read = -1;
     int capture_read = -1;
@@ -1429,6 +1448,7 @@ windows_stage_cleanup:
      * interactive (so job control works), but we always create the
      * capture pipe so stdout is collected for the caller. */
     interactive = isatty(STDIN_FILENO);
+    memset(stage_exit_codes, 0, sizeof(stage_exit_codes));
 
     for (i = 0; i < spec_count; ++i) {
       int next_pipe[2] = {-1, -1};
@@ -1669,6 +1689,14 @@ windows_stage_cleanup:
           any_stopped = 1;
         }
 
+        if (WIFEXITED(wait_status)) {
+          stage_exit_codes[i] = WEXITSTATUS(wait_status);
+        } else if (WIFSIGNALED(wait_status)) {
+          stage_exit_codes[i] = 128 + WTERMSIG(wait_status);
+        } else {
+          stage_exit_codes[i] = 1;
+        }
+
         if (i + 1 == pid_count) {
           if (any_stopped) {
             if (out_stopped != NULL) {
@@ -1676,12 +1704,18 @@ windows_stage_cleanup:
               out_stopped->pgid = (long long) pgid_leader;
             }
           } else if (out_exit_code != NULL) {
-            if (WIFEXITED(wait_status)) {
-              *out_exit_code = WEXITSTATUS(wait_status);
-            } else if (WIFSIGNALED(wait_status)) {
-              *out_exit_code = 128 + WTERMSIG(wait_status);
+            if (use_pipefail) {
+              int aggregate = 0;
+              size_t stage_index;
+
+              for (stage_index = 0; stage_index < pid_count; ++stage_index) {
+                if (stage_exit_codes[stage_index] != 0 && stage_exit_codes[stage_index] > aggregate) {
+                  aggregate = stage_exit_codes[stage_index];
+                }
+              }
+              *out_exit_code = aggregate;
             } else {
-              *out_exit_code = 1;
+              *out_exit_code = stage_exit_codes[i];
             }
           }
         }

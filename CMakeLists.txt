@@ -1174,6 +1174,10 @@ if(BUILD_TESTING)
     COMMAND arksh -c "set -u; echo \${UNSET_VAR_12345:-ok}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_set_nounset_unbound
+    COMMAND arksh -c "if ( set -u; echo \$UNSET_VAR_12345 ); then echo bad; else echo unbound; fi"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   add_test(NAME arksh_ps4_default
     COMMAND arksh -c "text(\"%s\") -> print(\"$PS4\")"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -1184,6 +1188,14 @@ if(BUILD_TESTING)
   )
   add_test(NAME arksh_xtrace_uses_ps4
     COMMAND arksh -c "set PS4 'TRACE: '; set -x; echo hi"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_xtrace_expands_vars
+    COMMAND arksh -c "set sample world; set PS4 'TRACE: '; set -x; echo \$sample"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_test(NAME arksh_set_pipefail
+    COMMAND arksh -c "if ( set -o pipefail; /usr/bin/true | /usr/bin/false | /usr/bin/true ); then echo bad; else echo pipefail; fi"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
   add_test(NAME arksh_printf_basic
@@ -1229,7 +1241,9 @@ if(BUILD_TESTING)
   set_tests_properties(
     arksh_trap_posix_all arksh_trap_err arksh_set_errexit
     arksh_set_errexit_or_lhs arksh_set_errexit_and_or_chain
-    arksh_set_nounset arksh_ps4_default arksh_set_plus_e arksh_xtrace_uses_ps4
+    arksh_set_nounset arksh_set_nounset_unbound arksh_ps4_default
+    arksh_set_plus_e arksh_xtrace_uses_ps4 arksh_xtrace_expands_vars
+    arksh_set_pipefail
     arksh_printf_basic arksh_param_subst_single arksh_param_subst_global
     arksh_test_builtin_string arksh_test_bracket_numeric
     arksh_double_bracket_glob arksh_double_bracket_regex
@@ -1243,9 +1257,12 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_set_errexit_or_lhs PROPERTIES PASS_REGULAR_EXPRESSION "ok")
   set_tests_properties(arksh_set_errexit_and_or_chain PROPERTIES PASS_REGULAR_EXPRESSION "recovered[\r\n]+after")
   set_tests_properties(arksh_set_nounset       PROPERTIES PASS_REGULAR_EXPRESSION "ok")
+  set_tests_properties(arksh_set_nounset_unbound PROPERTIES PASS_REGULAR_EXPRESSION "unbound")
   set_tests_properties(arksh_ps4_default       PROPERTIES PASS_REGULAR_EXPRESSION "\\+ ")
   set_tests_properties(arksh_set_plus_e        PROPERTIES PASS_REGULAR_EXPRESSION "after")
   set_tests_properties(arksh_xtrace_uses_ps4   PROPERTIES PASS_REGULAR_EXPRESSION "TRACE: echo hi")
+  set_tests_properties(arksh_xtrace_expands_vars PROPERTIES PASS_REGULAR_EXPRESSION "TRACE: echo world")
+  set_tests_properties(arksh_set_pipefail      PROPERTIES PASS_REGULAR_EXPRESSION "pipefail")
   set_tests_properties(arksh_printf_basic      PROPERTIES PASS_REGULAR_EXPRESSION "hello 42")
   set_tests_properties(arksh_param_subst_single PROPERTIES PASS_REGULAR_EXPRESSION "hELLo")
   set_tests_properties(arksh_param_subst_global PROPERTIES PASS_REGULAR_EXPRESSION "aaXXcc")
@@ -1410,6 +1427,10 @@ if(BUILD_TESTING)
     COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/json-query-transform.arksh"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+  add_test(NAME arksh_golden_posix_flags
+    COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden/posix-flags.arksh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   set_tests_properties(
     arksh_golden_pipeline_chain
     arksh_golden_reduce_block
@@ -1422,6 +1443,7 @@ if(BUILD_TESTING)
     arksh_golden_matrix_types
     arksh_golden_json_edge_cases
     arksh_golden_json_query_transform
+    arksh_golden_posix_flags
     PROPERTIES TIMEOUT 15
   )
   # Each test checks a distinctive output string that only appears when the script ran fully.
@@ -1439,6 +1461,8 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_golden_json_edge_cases  PROPERTIES PASS_REGULAR_EXPRESSION "caf")
   # E7-S3: nested get_path/set_path, pluck and file round-trip
   set_tests_properties(arksh_golden_json_query_transform PROPERTIES PASS_REGULAR_EXPRESSION "e7s3_roundtrip_ok")
+  # E11-S1: integrated smoke for errexit, nounset, pipefail and xtrace
+  set_tests_properties(arksh_golden_posix_flags PROPERTIES PASS_REGULAR_EXPRESSION "posix_flags_done")
 
   # plugin autoload tests
   file(MAKE_DIRECTORY

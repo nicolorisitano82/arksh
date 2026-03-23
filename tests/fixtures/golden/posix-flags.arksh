@@ -1,0 +1,39 @@
+if ( set -e; /usr/bin/false; echo after_e )
+then
+set errexit_status bad
+else
+set errexit_status ok
+fi
+text("errexit=%s") -> print("$errexit_status")
+
+if ( set -u; echo $UNSET_VAR_12345 )
+then
+set nounset_status bad
+else
+set nounset_status ok
+fi
+text("nounset=%s") -> print("$nounset_status")
+
+if ( set -u; echo ${UNSET_VAR_12345:-ok} )
+then
+set nounset_default_status ok
+else
+set nounset_default_status bad
+fi
+text("nounset_default=%s") -> print("$nounset_default_status")
+
+if ( set -o pipefail; /usr/bin/true | /usr/bin/false | /usr/bin/true )
+then
+set pipefail_status bad
+else
+set pipefail_status ok
+fi
+text("pipefail=%s") -> print("$pipefail_status")
+
+set sample world
+set PS4 "TRACE: "
+set -x
+echo $sample
+set +x
+
+text("posix_flags_done") -> print()

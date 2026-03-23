@@ -89,7 +89,8 @@ int arksh_platform_run_process_pipeline(
   size_t out_size,
   int *out_exit_code,
   ArkshPlatformAsyncProcess *out_stopped,
-  int force_capture  /* 1 = capture stdout even when running interactively */
+  int force_capture, /* 1 = capture stdout even when running interactively */
+  int use_pipefail
 );
 int arksh_platform_glob(
   const char *pattern,

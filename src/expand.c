@@ -662,7 +662,6 @@ static int resolve_variable(ArkshShell *shell, const char *raw, size_t *index, c
   char name[128];
   size_t name_len = 0;
   size_t i;
-  const char *value = NULL;
 
   if (raw == NULL || index == NULL || out == NULL || out_size == 0 || error == NULL || error_size == 0) {
     return 1;
@@ -907,6 +906,8 @@ static int resolve_variable(ArkshShell *shell, const char *raw, size_t *index, c
       }
     }
   } else {
+    int is_set;
+
     if (!(isalpha((unsigned char) raw[i]) || raw[i] == '_')) {
       copy_string(out, out_size, "$");
       return 0;
@@ -920,11 +921,13 @@ static int resolve_variable(ArkshShell *shell, const char *raw, size_t *index, c
     }
     name[name_len] = '\0';
     *index = i - 1;
+    is_set = lookup_var_value(shell, name, out, out_size);
+    if (shell != NULL && shell->opt_nounset && !is_set) {
+      snprintf(error, error_size, "%s: unbound variable", name);
+      return 1;
+    }
+    return 0;
   }
-
-  value = arksh_shell_get_var(shell, name);
-  copy_string(out, out_size, value == NULL ? "" : value);
-  return 0;
 }
 
 /* ---- Arithmetic expansion $(( )) ---- */

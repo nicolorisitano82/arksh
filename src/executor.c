@@ -4868,7 +4868,9 @@ int arksh_execute_external_command(ArkshShell *shell, int argc, char **argv, cha
   }
 
   memset(&stopped_process, 0, sizeof(stopped_process));
-  status = arksh_platform_run_process_pipeline(shell->cwd, &spec, 1, out, out_size, &exit_code, &stopped_process, shell->force_capture);
+  status = arksh_platform_run_process_pipeline(
+    shell->cwd, &spec, 1, out, out_size, &exit_code, &stopped_process, shell->force_capture, shell->opt_pipefail
+  );
   if (status != 0) {
     if (out[0] == '\0') {
       snprintf(out, out_size, "unable to execute external command: %s", argv[0]);
@@ -5364,7 +5366,9 @@ static int execute_shell_pipeline(ArkshShell *shell, const ArkshCommandPipelineN
       return 1;
     }
     memset(&stopped_process, 0, sizeof(stopped_process));
-    if (arksh_platform_run_process_pipeline(shell->cwd, specs, 1, out, out_size, &exit_code, &stopped_process, shell->force_capture) != 0) {
+    if (arksh_platform_run_process_pipeline(
+          shell->cwd, specs, 1, out, out_size, &exit_code, &stopped_process, shell->force_capture, shell->opt_pipefail
+        ) != 0) {
       if (out[0] == '\0') snprintf(out, out_size, "failed to execute shell pipeline");
       return 1;
     }
@@ -5439,7 +5443,10 @@ static int execute_shell_pipeline(ArkshShell *shell, const ArkshCommandPipelineN
         }
 
         memset(&stopped_process, 0, sizeof(stopped_process));
-        if (arksh_platform_run_process_pipeline(shell->cwd, specs, pipeline->stage_count - 1, out, out_size, &exit_code, &stopped_process, shell->force_capture) != 0) {
+        if (arksh_platform_run_process_pipeline(
+              shell->cwd, specs, pipeline->stage_count - 1, out, out_size, &exit_code, &stopped_process,
+              shell->force_capture, shell->opt_pipefail
+            ) != 0) {
           if (out[0] == '\0') snprintf(out, out_size, "failed to execute shell pipeline");
           return 1;
         }
@@ -5481,7 +5488,10 @@ static int execute_shell_pipeline(ArkshShell *shell, const ArkshCommandPipelineN
   }
 
   memset(&stopped_process, 0, sizeof(stopped_process));
-  if (arksh_platform_run_process_pipeline(shell->cwd, specs, pipeline->stage_count, out, out_size, &exit_code, &stopped_process, shell->force_capture) != 0) {
+  if (arksh_platform_run_process_pipeline(
+        shell->cwd, specs, pipeline->stage_count, out, out_size, &exit_code, &stopped_process,
+        shell->force_capture, shell->opt_pipefail
+      ) != 0) {
     if (out[0] == '\0') {
       snprintf(out, out_size, "failed to execute shell pipeline");
     }
