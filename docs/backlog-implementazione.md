@@ -1215,6 +1215,7 @@ Stato story: `[ ]`
 - `[ ]` `E15-S1-T2` implementare `$BASHPID` — PID del processo corrente (uguale a `$PPID` nel processo padre, diverso nella subshell); necessario per script che usano `$$` nei contesti di subshell
 - `[ ]` `E15-S1-T3` implementare `nameref` (`declare -n` / `local -n`) — variabile che è un riferimento indiretto a un'altra; lettura e scrittura trasparenti; `unset -n` per rimuovere il riferimento senza toccare il target; errore su ciclo (nameref che punta a sé stesso)
 - `[ ]` `E15-S1-T4` aggiungere test di regressione su `$PPID`, `$BASHPID` in subshell e su `nameref` con lettura, scrittura, `unset`, ciclo e passaggio a funzione
+- `[ ]` `E15-S1-T5` estendere `nameref` al modello ad oggetti — una variabile `declare -n ref=obj` dove `obj` è un valore tipizzato (`ArkshValue`) deve permettere `$ref -> property`, `$ref -> method()` e `$ref |> stage()`; il deref avviene prima della member-access; `ref` rimane un riferimento al nome, non una copia del valore
 
 ### E15-S2. Startup audit per scenario `/bin/sh`
 
