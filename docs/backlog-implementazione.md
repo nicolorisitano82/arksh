@@ -75,7 +75,8 @@ Il backlog sotto copre **il rimanente** verso una shell completa e usabile.
 11. `E13` Segnali e gestione TTY come shell di sistema
 12. `E14` Modalità compatibilità `sh`
 13. `E9` Packaging, release e documentazione finale
-14. `E10` Plugin HTTP ufficiale
+14. `E15` Compatibilità bash avanzata e performance di sistema
+15. `E10` Plugin HTTP ufficiale
 
 ---
 
@@ -817,7 +818,7 @@ Stato story: `[x]`
 Stato story: `[ ]`
 
 - `[ ]` `E9-S2-T1` preparare formula Homebrew o equivalente
-- `[ ]` `E9-S2-T2` preparare pacchetto Linux iniziale
+- `[x]` `E9-S2-T2` preparare pacchetto Linux iniziale — CPack DEB+RPM+TGZ in `CMakeLists.txt` (solo su Linux, non-Apple); `cpack -G DEB|RPM|TGZ` da `build/`
 - `[ ]` `E9-S2-T3` preparare strategia Windows (`winget` o installer equivalente)
 
 ### E9-S3. ABI plugin e versioning
@@ -830,12 +831,13 @@ Stato story: `[x]`
 
 ### E9-S4. Documentazione finale e troubleshooting
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E9-S4-T1` scrivere guida installazione
-- `[ ]` `E9-S4-T2` scrivere guida scripting
-- `[ ]` `E9-S4-T3` scrivere guida plugin author
-- `[ ]` `E9-S4-T4` scrivere troubleshooting operativo
+- `[x]` `E9-S4-T1` scrivere guida installazione → `docs/guide-installation.md`
+- `[x]` `E9-S4-T2` scrivere guida scripting → `docs/guide-scripting.md`
+- `[x]` `E9-S4-T3` scrivere guida plugin author → `docs/guide-plugin-author.md`
+- `[x]` `E9-S4-T4` scrivere troubleshooting operativo → `docs/troubleshooting.md`
+- `[x]` `E9-S4-T5` scrivere man page `arksh(1)` → `docs/arksh.1`; installata da CMake in `${CMAKE_INSTALL_MANDIR}/man1`
 
 ### E9-S5. Release process
 
@@ -844,6 +846,24 @@ Stato story: `[ ]`
 - `[ ]` `E9-S5-T1` introdurre changelog
 - `[ ]` `E9-S5-T2` definire checklist release
 - `[ ]` `E9-S5-T3` preparare criteri per dichiarare la `1.0`
+
+### E9-S6. Sito di documentazione online (GitHub Pages)
+
+Stato story: `[ ]`
+
+- `[ ]` `E9-S6-T1` creare branch o cartella `docs/` pronta per GitHub Pages (Jekyll o MkDocs static site)
+- `[ ]` `E9-S6-T2` struttura minima: home con quick-start, reference sintassi, guida plugin, FAQ e link al changelog
+- `[ ]` `E9-S6-T3` collegare CI (GitHub Actions) per rebuild automatico su push a `main`
+- `[ ]` `E9-S6-T4` documentare la modalità `sh` con una pagina dedicata: differenze rispetto alla modalità arksh completa, esempi di script POSIX compatibili, variabile `ENV`
+
+### E9-S7. Shell integration per editor
+
+Stato story: `[ ]`
+
+- `[ ]` `E9-S7-T1` verificare che arksh funzioni come shell di terminale in VSCode (`terminal.integrated.shell.*`) e documentare la configurazione
+- `[ ]` `E9-S7-T2` verificare compatibilità con neovim `:terminal` e documentare eventuali workaround (es. TERM, COLORTERM)
+- `[ ]` `E9-S7-T3` aggiungere snippet di configurazione per starship, direnv, fzf e zoxide nella guida utente
+- `[ ]` `E9-S7-T4` aggiungere un test di smoke automatico che avvia arksh come shell non-interattiva in un ambiente senza TTY (CI-safe) e verifica exit 0 su uno script POSIX minimale
 
 ---
 
@@ -1083,28 +1103,35 @@ Stato story: `[x]`
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E11 `[x]`, E12 `[x]`, E13 `[x]`, E14-S1 `[x]`
 **In corso:** nessuna
-**Aperte:** E9 (release), E10 (HTTP plugin)
+**Aperte:** E9 (release), E10 (HTTP plugin), E15 (bash compat + startup)
 
 ### Priorità 1 — portare il progetto a livello distribuzione (E9)
 
 1. `E9-S2` — packaging target (`Homebrew`, pacchetto Linux, strategia Windows)
-2. `E9-S4` — documentazione finale e troubleshooting
+2. `E9-S4` — documentazione finale, troubleshooting e man page
 3. `E9-S5` — release process, changelog e criteri `1.0`
-4. `E10-S1` — plugin HTTP ufficiale
+4. `E9-S6` — sito documentazione online (GitHub Pages)
+5. `E9-S7` — shell integration per editor (VSCode, neovim, starship)
 
-### Priorità 2 — plugin HTTP ufficiale (E10)
+### Priorità 2 — compatibilità bash avanzata e startup (E15)
 
-`E10-S1` resta importante ma non blocca il core shell. Conviene affrontarla:
+1. `E15-S1` — `$PPID`, `$BASHPID`, `nameref`
+2. `E15-S2` — startup audit per scenario `/bin/sh`
 
-- dopo `E9-S4`, se vuoi una guida plugin author e troubleshooting già chiari prima di pubblicare un plugin ufficiale
-- oppure in parallelo al packaging, se il focus si sposta sulle integrazioni API
+### Priorità 3 — plugin HTTP ufficiale (E10)
+
+`E10-S1` non blocca il core shell. Conviene affrontarla dopo `E9-S4` (guida plugin author già pronta) o in parallelo al packaging.
 
 ### Ordine raccomandato dei prossimi sprint
 
 1. `E9-S2`
 2. `E9-S4`
 3. `E9-S5`
-4. `E10-S1`
+4. `E9-S6`
+5. `E9-S7`
+6. `E15-S1`
+7. `E15-S2`
+8. `E10-S1`
 
 ---
 
@@ -1169,6 +1196,34 @@ Stato story: `[x]`
 - `[x]` `E14-S1-T3` definire la policy di runtime in `sh_mode`: niente plugin/autoload/config arksh-specifica, prompt minimale e startup compatibile
 - `[x]` `E14-S1-T4` supportare startup compatibile `sh` tramite `ENV` e documentare chiaramente le differenze rispetto alla modalità arksh completa
 - `[x]` `E14-S1-T5` aggiungere test end-to-end su `arksh --sh`, su invocazione come `sh`, e su errori espliciti quando uno script usa estensioni non permesse
+
+---
+
+## E15. Compatibilità bash avanzata e performance di sistema
+
+Stato epoca: `[ ]`
+
+Copre i gap residui emersi dall'analisi di `arksh-come-shell-di-sistema.md` che
+non rientravano nelle epoche precedenti: variabili bash mancanti, `nameref`,
+e l'audit di startup per lo scenario `/bin/sh`.
+
+### E15-S1. Variabili speciali bash mancanti e `nameref`
+
+Stato story: `[ ]`
+
+- `[ ]` `E15-S1-T1` implementare `$PPID` — PID del processo padre, calcolato una volta al momento dell'init e esposto come variabile read-only di sola lettura
+- `[ ]` `E15-S1-T2` implementare `$BASHPID` — PID del processo corrente (uguale a `$PPID` nel processo padre, diverso nella subshell); necessario per script che usano `$$` nei contesti di subshell
+- `[ ]` `E15-S1-T3` implementare `nameref` (`declare -n` / `local -n`) — variabile che è un riferimento indiretto a un'altra; lettura e scrittura trasparenti; `unset -n` per rimuovere il riferimento senza toccare il target; errore su ciclo (nameref che punta a sé stesso)
+- `[ ]` `E15-S1-T4` aggiungere test di regressione su `$PPID`, `$BASHPID` in subshell e su `nameref` con lettura, scrittura, `unset`, ciclo e passaggio a funzione
+
+### E15-S2. Startup audit per scenario `/bin/sh`
+
+Stato story: `[ ]`
+
+- `[ ]` `E15-S2-T1` misurare il tempo di startup a freddo con `hyperfine` o equivalente per i casi: `arksh -c true`, `arksh --sh -c true`, symlink `sh -c true`; stabilire una baseline e un target (< 10ms su Linux moderno)
+- `[ ]` `E15-S2-T2` profilare le fasi di init (`register_builtin_*`, `try_load_*`, `rebuild_all_lookup_indices`) per identificare i colli di bottiglia nel path di startup non-interattivo
+- `[ ]` `E15-S2-T3` ottimizzare il path non-interattivo: evitare allocazioni/registrazioni non necessarie quando non c'è TTY (es. history load, prompt config, completion generation)
+- `[ ]` `E15-S2-T4` aggiungere un test CTest di benchmark non-regressivo che fallisce se il tempo di startup supera la soglia stabilita in T1; documentare i risultati in `docs/benchmarks-baseline.md`
 
 ---
 

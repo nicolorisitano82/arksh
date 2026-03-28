@@ -1,0 +1,449 @@
+.\" arksh(1) — ARKsh man page
+.\" Generated for ARKsh (Archetype Shell)
+.TH ARKSH 1 "2026" "ARKsh" "User Commands"
+.SH NAME
+arksh \- Archetype Shell: typed object-aware shell and scripting language
+.SH SYNOPSIS
+.B arksh
+[\fIOPTIONS\fR] [\fISCRIPT\fR [\fIARG\fR ...]]
+.br
+.B arksh
+\fB\-c\fR \fICOMMAND\fR
+.br
+.B sh
+[\fIOPTIONS\fR] [\fISCRIPT\fR [\fIARG\fR ...]]
+.SH DESCRIPTION
+.B arksh
+is an interactive shell and scripting language.
+It provides classic POSIX-compatible shell execution while adding a typed,
+object-aware runtime: filesystem resources, processes, numbers, strings,
+lists, dictionaries, and command output are all first-class typed values
+queryable through member-access chains
+.RB ( \-> )
+and object pipelines
+.RB ( |> ).
+.PP
+When invoked as
+.B sh
+or with the
+.B \-\-sh
+flag,
+.B arksh
+operates in POSIX sh-compatibility mode: all non-POSIX syntax extensions are
+disabled and the shell behaves as a POSIX-conformant
+.BR sh (1)
+substitute.
+.SH OPTIONS
+.TP
+.B \-c \fICOMMAND\fR
+Execute
+.I COMMAND
+as a single line and exit.
+.TP
+.B \-\-sh
+Activate POSIX sh-compatibility mode.
+Non-POSIX syntax (\fB\->\fR, \fB|>\fR, \fBlet\fR, \fBextend\fR,
+\fBclass\fR, \fBswitch\fR, \fB[[\fR, \fB<<<\fR,
+\fB<(\fR, \fB>(\fR, block literals) is rejected.
+Plugin autoload and arksh-specific config are skipped.
+The
+.B ENV
+environment variable is read as the startup file.
+.TP
+.BR \-\-login ", " \-l
+Start as a login shell.
+Reads the global profile and user profile in addition to the RC file.
+See
+.B STARTUP FILES
+below.
+.TP
+.B \-\-help
+Print a summary of built-in commands, value resolvers, pipeline stages
+and types, then exit.
+.SH OPERANDS
+If a
+.I SCRIPT
+argument is given (and it does not begin with
+.BR \- ),
+.B arksh
+sources that file with the remaining arguments available as
+.BR $1 ,
+.BR $2 ,
+etc.
+Without any argument,
+.B arksh
+starts an interactive REPL.
+.SH INVOCATION AS sh
+When
+.B argv[0]
+is
+.B sh
+(or
+.BR -sh ),
+.B arksh
+automatically activates POSIX sh-compatibility mode.
+Creating a symlink is sufficient:
+.PP
+.RS
+ln -s "$(which arksh)" /usr/local/bin/sh
+.RE
+.PP
+Scripts with
+.B #!/bin/sh
+or
+.B #!/usr/bin/env sh
+shebangs will then use
+.B arksh
+in sh mode.
+.SH STARTUP FILES
+Startup files are loaded in the following order.
+Files that do not exist are silently skipped.
+.SS Normal (non-login) interactive shell
+.TP
+.B $ARKSH_RC
+If set, only this file is sourced.
+.TP
+.B $ARKSH_CONFIG_DIR/arkshrc
+Standard config directory RC.
+.TP
+.B ~/.arkshrc
+Legacy fallback.
+.SS Login shell (\fB\-\-login\fR or \fIargv[0]\fR starts with \fB\-\fR)
+In addition to the RC file, login shells source:
+.TP
+.B $ARKSH_GLOBAL_PROFILE
+If set, sourced as the system-wide profile (replaces
+.BR /etc/arksh/profile ).
+.TP
+.B /etc/arksh/profile
+System-wide profile (POSIX platforms only).
+.TP
+.B $ARKSH_LOGIN_PROFILE
+If set, sourced as the user login profile.
+.TP
+.B $ARKSH_CONFIG_DIR/profile
+User login profile.
+.TP
+.B ~/.arksh_profile
+Legacy user login profile.
+.SS sh-compatibility mode (\fB\-\-sh\fR or invoked as \fBsh\fR)
+Only the file named by
+.B ENV
+is sourced (POSIX sh convention).
+No arksh-specific files are read.
+.SS Prompt configuration
+.TP
+.B $ARKSH_CONFIG
+If set, loaded as the prompt configuration file.
+.TP
+.B arksh.conf
+In the current working directory.
+.TP
+.B $ARKSH_CONFIG_DIR/prompt.conf
+User prompt configuration.
+.SH ENVIRONMENT
+.TP
+.B ARKSH_CONFIG_HOME
+Override the configuration directory (default:
+.BR $XDG_CONFIG_HOME/arksh ,
+fallback
+.BR ~/.config/arksh ).
+.TP
+.B ARKSH_CACHE_HOME
+Override the cache directory (default:
+.BR $XDG_CACHE_HOME/arksh ,
+fallback
+.BR ~/.cache/arksh ).
+.TP
+.B ARKSH_STATE_HOME
+Override the state directory (default:
+.BR $XDG_STATE_HOME/arksh ,
+fallback
+.BR ~/.local/state/arksh ).
+.TP
+.B ARKSH_DATA_HOME
+Override the data directory (default:
+.BR $XDG_DATA_HOME/arksh ,
+fallback
+.BR ~/.local/share/arksh ).
+.TP
+.B ARKSH_PLUGIN_HOME
+Override the plugin directory (default:
+.BR $ARKSH_DATA_HOME/plugins ).
+.TP
+.B ARKSH_RC
+Override the startup RC file path.
+.TP
+.B ARKSH_CONFIG
+Override the prompt configuration file path.
+.TP
+.B ARKSH_HISTORY
+Override the history file path (default: in
+.BR $ARKSH_STATE_HOME ).
+.TP
+.B ARKSH_GLOBAL_PROFILE
+Override the system-wide login profile path.
+.TP
+.B ARKSH_LOGIN_PROFILE
+Override the user login profile path.
+.TP
+.B ARKSH_PERF
+If set to a non-empty value other than
+.BR 0 ,
+enable internal performance counters.
+.TP
+.B ENV
+Startup file loaded in sh-compatibility mode (POSIX sh convention).
+.SH LANGUAGE OVERVIEW
+.SS POSIX shell syntax
+All standard POSIX sh constructs are supported:
+variable assignment
+.RB ( VAR=value ),
+command substitution
+.RB ( $(\|cmd\|) ),
+arithmetic expansion
+.RB ( $((\|expr\|)) ),
+pipelines
+.RB ( | ),
+redirections
+.RB ( > ,
+.BR < ,
+.BR >> ,
+.BR 2> ,
+.BR 2>&1 ),
+heredoc
+.RB ( <<EOF ),
+control flow
+.RB ( if / while / for / until / case ),
+functions
+.RB ( f()\| {\| \.\.\.\| } ),
+and job control
+.RB ( & ,
+.BR fg ,
+.BR bg ,
+.BR wait ).
+.SS arksh extensions (disabled in sh mode)
+.TP
+.B Object member access
+.RS
+.nf
+\fIexpr\fR \fB\->\fR \fIproperty\fR
+\fIexpr\fR \fB\->\fR \fImethod\fR(\fIargs\fR)
+.fi
+.RE
+.TP
+.B Object pipeline
+.RS
+.nf
+\fIexpr\fR \fB|>\fR \fIstage\fR(\fIargs\fR) \fB|>\fR \fIstage\fR ...
+.fi
+.RE
+.TP
+.B Typed value bindings
+.RS
+.nf
+\fBlet\fR \fIname\fR = \fIexpr\fR
+.fi
+.RE
+.TP
+.B Block literals
+.RS
+.nf
+[:\fIparam\fR | \fIbody\fR]
+.fi
+.RE
+.TP
+.B Class definitions
+.RS
+.nf
+\fBclass\fR \fIName\fR \fBdo\fR ... \fBendclass\fR
+.fi
+.RE
+.TP
+.B Object extension
+.RS
+.nf
+\fBextend\fR \fItarget\fR \fBproperty\fR \fIname\fR = \fIexpr\fR
+.fi
+.RE
+.TP
+.B Extended conditional
+.RS
+.nf
+\fB[[\fR \fIcondition\fR \fB]]\fR
+.fi
+.RE
+.TP
+.B Switch statement
+.RS
+.nf
+\fBswitch\fR \fIexpr\fR ; \fBcase\fR \fIval\fR ; \fBthen\fR ... \fBendswitch\fR
+.fi
+.RE
+.TP
+.B Here-string
+.RS
+\fBcmd\fR \fB<<<\fR \fIword\fR
+.RE
+.TP
+.B Process substitution
+.RS
+.nf
+<(\fIcmd\fR)    >(\fIcmd\fR)
+.fi
+.RE
+.SH BUILT-IN COMMANDS
+A selection of notable built-ins.
+Run
+.B help
+for the full list.
+.TP
+.BR cd " [" \fIdir\fR "]"
+Change working directory.
+.TP
+.BI echo " [args]"
+Write arguments to standard output.
+.TP
+.BI printf " format [args]"
+Formatted output (POSIX).
+.TP
+.BI read " [-r] [-p prompt] [-t timeout] [var...]"
+Read a line from standard input.
+.TP
+.BR set " [" \fB\-e\fR | \fB\-u\fR | \fB\-x\fR | \fB\-o\fR " option]"
+Set shell options.
+.TP
+.BI export " [VAR[=value]]"
+Mark variable for export to child processes.
+.TP
+.BI source " path"
+Execute file in the current shell context.
+.TP
+.BI eval " string"
+Parse and execute string as a shell command.
+.TP
+.BI exec " [cmd [args]]"
+Replace the shell process with
+.IR cmd .
+.TP
+.BI trap " [action signal...]"
+Register signal handlers.
+.TP
+.BI getopts " optstring name [args]"
+Parse option flags (POSIX).
+.TP
+.BI plugin " subcommand"
+Manage plugins:
+.BR load ,
+.BR list ,
+.BR info ,
+.BR enable ,
+.BR disable ,
+.B autoload
+.BR list .
+.TP
+.BI prompt " subcommand"
+Manage the prompt:
+.BR load ,
+.BR render .
+.SH FILES
+.TP
+.B ~/.config/arksh/arkshrc
+Default interactive startup file.
+.TP
+.B ~/.config/arksh/prompt.conf
+Default prompt configuration.
+.TP
+.B ~/.config/arksh/profile
+Default login shell profile.
+.TP
+.B ~/.config/arksh/plugin-autoload.conf
+List of plugins to load automatically on startup.
+.TP
+.B ~/.local/share/arksh/plugins/
+Default plugin directory.
+.TP
+.B ~/.local/state/arksh/history
+Command history file.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+General error or command failure.
+.PP
+In interactive mode, the exit status of the last executed command is available
+as
+.BR $? .
+.SH EXAMPLES
+Interactive use:
+.PP
+.RS
+.nf
+arksh
+.fi
+.RE
+.PP
+Run a single command:
+.PP
+.RS
+.nf
+arksh -c '. -> type'
+.fi
+.RE
+.PP
+Run a script:
+.PP
+.RS
+.nf
+arksh my_script.arksh arg1 arg2
+.fi
+.RE
+.PP
+POSIX sh-compatible:
+.PP
+.RS
+.nf
+arksh --sh my_script.sh
+.fi
+.RE
+.PP
+Login shell:
+.PP
+.RS
+.nf
+arksh --login
+.fi
+.RE
+.PP
+Query the current directory:
+.PP
+.RS
+.nf
+arksh -c '. -> children() |> where(type == "file") |> sort(size desc)'
+.fi
+.RE
+.SH SEE ALSO
+.BR sh (1),
+.BR bash (1),
+.BR dash (1)
+.PP
+Full documentation:
+.I docs/user-manual.md
+.br
+Installation guide:
+.I docs/guide-installation.md
+.br
+Scripting guide:
+.I docs/guide-scripting.md
+.br
+Plugin author guide:
+.I docs/guide-plugin-author.md
+.br
+Troubleshooting:
+.I docs/troubleshooting.md
+.SH BUGS
+Report issues at the project repository.
+.SH AUTHORS
+ARKsh contributors.

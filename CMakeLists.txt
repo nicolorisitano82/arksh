@@ -198,6 +198,12 @@ install(DIRECTORY
   DESTINATION ${CMAKE_INSTALL_DATADIR}/arksh/examples
 )
 
+# E9-S4-T5: man page
+install(FILES
+  docs/arksh.1
+  DESTINATION ${CMAKE_INSTALL_MANDIR}/man1
+)
+
 include(CTest)
 
 if(BUILD_TESTING)
@@ -1871,4 +1877,63 @@ if(BUILD_TESTING)
     PASS_REGULAR_EXPRESSION "\\[stage\\]"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+endif()
+
+# ────────────────────────────────────────────────────────────────────────────
+# E9-S2-T2: Linux package (DEB + RPM) via CPack
+# ────────────────────────────────────────────────────────────────────────────
+#
+# Build a DEB (Debian/Ubuntu) or RPM (Fedora/RHEL) package:
+#
+#   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+#   cmake --build build
+#   cd build && cpack -G DEB       # → arksh_0.1.0_amd64.deb
+#   cd build && cpack -G RPM       # → arksh-0.1.0-1.x86_64.rpm
+#   cd build && cpack -G TGZ       # → arksh-0.1.0-Linux.tar.gz
+#
+# The produced package installs to the same prefix as cmake --install.
+# Default prefix: /usr/local.  Override at cmake configure time:
+#   cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr
+#
+if(NOT WIN32 AND NOT APPLE)
+  set(CPACK_PACKAGE_NAME            "arksh")
+  set(CPACK_PACKAGE_VENDOR          "ARKsh contributors")
+  set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
+      "ARKsh — Archetype Shell: typed object-aware shell")
+  set(CPACK_PACKAGE_DESCRIPTION
+      "arksh is an interactive shell and scripting language.\n"
+      "It provides classic POSIX-compatible shell execution while adding a typed,\n"
+      "object-aware runtime: filesystem resources, processes, numbers, strings,\n"
+      "lists, dictionaries and command output are first-class typed values\n"
+      "queryable through member-access chains (->) and object pipelines (|>).")
+  set(CPACK_PACKAGE_VERSION_MAJOR "${PROJECT_VERSION_MAJOR}")
+  set(CPACK_PACKAGE_VERSION_MINOR "${PROJECT_VERSION_MINOR}")
+  set(CPACK_PACKAGE_VERSION_PATCH "${PROJECT_VERSION_PATCH}")
+  set(CPACK_PACKAGE_VERSION       "${PROJECT_VERSION}")
+  set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+
+  # ── DEB (Debian / Ubuntu) ──────────────────────────────────────────────
+  set(CPACK_DEBIAN_PACKAGE_MAINTAINER "ARKsh contributors")
+  set(CPACK_DEBIAN_PACKAGE_SECTION    "shells")
+  set(CPACK_DEBIAN_PACKAGE_PRIORITY   "optional")
+  # libdl is part of libc on modern Debian/Ubuntu; no additional depends needed.
+  set(CPACK_DEBIAN_PACKAGE_DEPENDS    "libc6 (>= 2.17)")
+  set(CPACK_DEBIAN_PACKAGE_SUGGESTS   "git")
+  set(CPACK_DEBIAN_FILE_NAME          "DEB-DEFAULT")
+
+  # ── RPM (Fedora / RHEL / openSUSE) ────────────────────────────────────
+  set(CPACK_RPM_PACKAGE_LICENSE       "MIT")
+  set(CPACK_RPM_PACKAGE_GROUP         "System Environment/Shells")
+  set(CPACK_RPM_PACKAGE_REQUIRES      "glibc >= 2.17")
+  set(CPACK_RPM_PACKAGE_SUGGESTS      "git")
+  set(CPACK_RPM_FILE_NAME             "RPM-DEFAULT")
+  set(CPACK_RPM_PACKAGE_RELOCATABLE   OFF)
+
+  # ── Source tarball (TGZ) ──────────────────────────────────────────────
+  # Binary TGZ for manual install when no package manager is available.
+  set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
+
+  set(CPACK_GENERATOR "TGZ;DEB;RPM")
+
+  include(CPack)
 endif()
