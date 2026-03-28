@@ -1212,6 +1212,7 @@ e l'audit di startup per lo scenario `/bin/sh`.
 Stato story: `[ ]`
 
 - `[ ]` `E15-S1-T1` implementare `$PPID` — PID del processo padre, calcolato una volta al momento dell'init e esposto come variabile read-only di sola lettura
+- `[ ]` `E15-S1-T6` esporre `$PPID` nel modello ad oggetti — `proc($PPID)` restituisce un oggetto di tipo `process` con le stesse proprietà di `proc($$)` (pid, pgid, status, ecc.); utile per ispezionare il processo chiamante da script arksh-native
 - `[ ]` `E15-S1-T2` implementare `$BASHPID` — PID del processo corrente (uguale a `$PPID` nel processo padre, diverso nella subshell); necessario per script che usano `$$` nei contesti di subshell
 - `[ ]` `E15-S1-T3` implementare `nameref` (`declare -n` / `local -n`) — variabile che è un riferimento indiretto a un'altra; lettura e scrittura trasparenti; `unset -n` per rimuovere il riferimento senza toccare il target; errore su ciclo (nameref che punta a sé stesso)
 - `[ ]` `E15-S1-T4` aggiungere test di regressione su `$PPID`, `$BASHPID` in subshell e su `nameref` con lettura, scrittura, `unset`, ciclo e passaggio a funzione
