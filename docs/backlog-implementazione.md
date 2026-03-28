@@ -1101,7 +1101,7 @@ Stato story: `[x]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E11 `[x]`, E12 `[x]`, E13 `[x]`, E14-S1 `[x]`
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E11 `[x]`, E12 `[x]`, E13 `[x]`, E14 `[x]`
 **In corso:** E9-S2 `[~]` (T2 fatto, T1 e T3 aperti)
 **Aperte:** E9 (release), E10 (HTTP plugin), E15 (bash compat + startup)
 
@@ -1181,7 +1181,7 @@ Stato story: `[x]`
 
 ## E14. Modalità compatibilità `sh`
 
-Stato epoca: `[ ]`
+Stato epoca: `[x]`
 
 Questa epoca traduce il gap "manca una modalità `sh`" in un blocco
 implementabile senza confonderlo con il packaging o con la compatibilità POSIX
