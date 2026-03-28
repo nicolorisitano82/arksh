@@ -815,7 +815,7 @@ Stato story: `[x]`
 
 ### E9-S2. Packaging per sistemi target
 
-Stato story: `[ ]`
+Stato story: `[~]`
 
 - `[ ]` `E9-S2-T1` preparare formula Homebrew o equivalente
 - `[x]` `E9-S2-T2` preparare pacchetto Linux iniziale — CPack DEB+RPM+TGZ in `CMakeLists.txt` (solo su Linux, non-Apple); `cpack -G DEB|RPM|TGZ` da `build/`
@@ -1102,16 +1102,17 @@ Stato story: `[x]`
 ## Prossimi punti consigliati
 
 **Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E11 `[x]`, E12 `[x]`, E13 `[x]`, E14-S1 `[x]`
-**In corso:** nessuna
+**In corso:** E9-S2 `[~]` (T2 fatto, T1 e T3 aperti)
 **Aperte:** E9 (release), E10 (HTTP plugin), E15 (bash compat + startup)
+
+**Story completate in E9:** E9-S1 `[x]`, E9-S3 `[x]`, E9-S4 `[x]`
 
 ### Priorità 1 — portare il progetto a livello distribuzione (E9)
 
-1. `E9-S2` — packaging target (`Homebrew`, pacchetto Linux, strategia Windows)
-2. `E9-S4` — documentazione finale, troubleshooting e man page
-3. `E9-S5` — release process, changelog e criteri `1.0`
-4. `E9-S6` — sito documentazione online (GitHub Pages)
-5. `E9-S7` — shell integration per editor (VSCode, neovim, starship)
+1. `E9-S2` — completare packaging (`Homebrew` per macOS, strategia Windows); Linux già fatto con CPack
+2. `E9-S5` — release process, changelog e criteri `1.0`
+3. `E9-S6` — sito documentazione online (GitHub Pages)
+4. `E9-S7` — shell integration per editor (VSCode, neovim, starship)
 
 ### Priorità 2 — compatibilità bash avanzata e startup (E15)
 
@@ -1120,18 +1121,17 @@ Stato story: `[x]`
 
 ### Priorità 3 — plugin HTTP ufficiale (E10)
 
-`E10-S1` non blocca il core shell. Conviene affrontarla dopo `E9-S4` (guida plugin author già pronta) o in parallelo al packaging.
+`E10-S1` non blocca il core shell. Conviene affrontarla dopo aver completato E9.
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E9-S2`
-2. `E9-S4`
-3. `E9-S5`
-4. `E9-S6`
-5. `E9-S7`
-6. `E15-S1`
-7. `E15-S2`
-8. `E10-S1`
+1. `E9-S2` (T1 Homebrew + T3 Windows)
+2. `E9-S5`
+3. `E9-S6`
+4. `E9-S7`
+5. `E15-S1`
+6. `E15-S2`
+7. `E10-S1`
 
 ---
 
