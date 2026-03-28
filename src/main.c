@@ -28,6 +28,7 @@ int main(int argc, char **argv) {
   int trap_status = 0;
   int arg_index = 1;
   int login_mode = 0;
+  int sh_mode = 0;
   int status;
 
   perf_env = getenv("ARKSH_PERF");
@@ -44,16 +45,34 @@ int main(int argc, char **argv) {
     login_mode = 1;
   }
 
+  /* Detect sh-compatibility mode from argv[0] basename. */
+  if (argc > 0 && argv[0] != NULL) {
+    const char *base = strrchr(argv[0], '/');
+    base = (base != NULL) ? base + 1 : argv[0];
+    /* Strip leading '-' (login shell indicator) before comparing. */
+    if (base[0] == '-') {
+      base++;
+    }
+    if (strcmp(base, "sh") == 0) {
+      sh_mode = 1;
+    }
+  }
+
   while (arg_index < argc) {
     if (strcmp(argv[arg_index], "--login") == 0 || strcmp(argv[arg_index], "-l") == 0) {
       login_mode = 1;
       arg_index++;
       continue;
     }
+    if (strcmp(argv[arg_index], "--sh") == 0) {
+      sh_mode = 1;
+      arg_index++;
+      continue;
+    }
     break;
   }
 
-  if (arksh_shell_init_with_options(shell, program_path, login_mode) != 0) {
+  if (arksh_shell_init_with_options(shell, program_path, login_mode, sh_mode) != 0) {
     fputs("failed to initialize shell\n", stderr);
     free(shell);
     return 1;

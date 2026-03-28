@@ -390,6 +390,7 @@ typedef struct ArkshShell {
   int tty_raw_active;
   int interactive_shell;
   int login_mode;
+  int sh_mode; /* 1 when running as sh-compatible shell (--sh or argv[0]=="sh") */
   int force_capture; /* 1 inside capture()/capture_lines()/bridge — always capture stdout */
   ArkshScratchArena scratch;
   ArkshTypeDescriptor *type_descriptors;
@@ -402,7 +403,7 @@ typedef struct ArkshShell {
 extern volatile sig_atomic_t arksh_terminal_resize_pending;
 
 int arksh_shell_init(ArkshShell *shell);
-int arksh_shell_init_with_options(ArkshShell *shell, const char *program_path, int login_mode);
+int arksh_shell_init_with_options(ArkshShell *shell, const char *program_path, int login_mode, int sh_mode);
 void arksh_shell_destroy(ArkshShell *shell);
 int arksh_shell_enter_raw_mode(ArkshShell *shell);
 void arksh_shell_leave_raw_mode(ArkshShell *shell);

@@ -13432,7 +13432,7 @@ static int try_load_default_rc(ArkshShell *shell) {
   return 0;
 }
 
-int arksh_shell_init_with_options(ArkshShell *shell, const char *program_path, int login_mode) {
+int arksh_shell_init_with_options(ArkshShell *shell, const char *program_path, int login_mode, int sh_mode) {
   const char *perf_env;
 
   if (shell == NULL) {
@@ -13448,6 +13448,7 @@ int arksh_shell_init_with_options(ArkshShell *shell, const char *program_path, i
   shell->loading_plugin_index = -1;
   shell->last_bg_pid = -1;
   shell->login_mode = login_mode ? 1 : 0;
+  shell->sh_mode = sh_mode ? 1 : 0;
   shell->completion_generation = s_next_shell_generation++;
   if (shell->completion_generation == 0) {
     shell->completion_generation = s_next_shell_generation++;
@@ -13520,27 +13521,50 @@ int arksh_shell_init_with_options(ArkshShell *shell, const char *program_path, i
     return 1;
   }
 
-  if (try_load_default_config(shell) != 0) {
-    return 1;
-  }
+  if (!shell->sh_mode) {
+    if (try_load_default_config(shell) != 0) {
+      return 1;
+    }
 
-  if (try_load_plugin_autoload(shell) != 0) {
-    return 1;
+    if (try_load_plugin_autoload(shell) != 0) {
+      return 1;
+    }
   }
 
   if (rebuild_all_lookup_indices(shell) != 0) {
     return 1;
   }
 
+  if (!shell->sh_mode) {
+    if (try_load_login_profiles(shell) != 0) {
+      return 1;
+    }
+
+    return try_load_default_rc(shell);
+  }
+
+  /* sh_mode: load login profiles only when --login, then load ENV if set. */
   if (try_load_login_profiles(shell) != 0) {
     return 1;
   }
 
-  return try_load_default_rc(shell);
+  {
+    const char *env_file = getenv("ENV");
+    if (env_file != NULL && env_file[0] != '\0') {
+      char output[ARKSH_MAX_OUTPUT];
+      output[0] = '\0';
+      if (arksh_shell_source_file(shell, env_file, 0, NULL, output, sizeof(output)) != 0 &&
+          strstr(output, "unable to open source file") == NULL) {
+        fprintf(stderr, "sh: %s\n", output);
+      }
+    }
+  }
+
+  return 0;
 }
 
 int arksh_shell_init(ArkshShell *shell) {
-  return arksh_shell_init_with_options(shell, NULL, 0);
+  return arksh_shell_init_with_options(shell, NULL, 0, 0);
 }
 
 void arksh_shell_destroy(ArkshShell *shell) {
@@ -13892,6 +13916,104 @@ int arksh_shell_load_config(ArkshShell *shell, const char *path, char *out, size
   return 0;
 }
 
+/* E14-S1-T2: reject non-POSIX syntax when shell->sh_mode is active.
+ * Returns 0 if the line is acceptable, 1 and fills out/out_size if rejected. */
+static int sh_mode_check_line(const char *trimmed, char *out, size_t out_size) {
+  ArkshTokenStream stream;
+  char lex_error[ARKSH_MAX_OUTPUT];
+  size_t i;
+
+  /* Quick scan for block literal prefix [: outside of quotes. */
+  {
+    const char *p = trimmed;
+    int in_sq = 0, in_dq = 0;
+    while (*p != '\0') {
+      if (*p == '\'' && !in_dq) {
+        in_sq = !in_sq;
+      } else if (*p == '"' && !in_sq) {
+        in_dq = !in_dq;
+      } else if (!in_sq && !in_dq && p[0] == '[' && p[1] == ':') {
+        snprintf(out, out_size, "sh: block literal not supported in sh mode");
+        return 1;
+      }
+      p++;
+    }
+  }
+
+  lex_error[0] = '\0';
+  if (arksh_lex_line(trimmed, &stream, lex_error, sizeof(lex_error)) != 0) {
+    return 0; /* let the parser produce the real error */
+  }
+
+  for (i = 0; i < stream.count; ++i) {
+    ArkshTokenKind k = stream.tokens[i].kind;
+    if (k == ARKSH_TOKEN_ARROW) {
+      snprintf(out, out_size, "sh: -> not supported in sh mode");
+      return 1;
+    }
+    if (k == ARKSH_TOKEN_OBJECT_PIPE) {
+      snprintf(out, out_size, "sh: |> not supported in sh mode");
+      return 1;
+    }
+    if (k == ARKSH_TOKEN_HERE_STRING) {
+      snprintf(out, out_size, "sh: <<< not supported in sh mode");
+      return 1;
+    }
+    if (k == ARKSH_TOKEN_PROC_SUBST_IN) {
+      snprintf(out, out_size, "sh: <(...) not supported in sh mode");
+      return 1;
+    }
+    if (k == ARKSH_TOKEN_PROC_SUBST_OUT) {
+      snprintf(out, out_size, "sh: >(...) not supported in sh mode");
+      return 1;
+    }
+    if (k == ARKSH_TOKEN_WORD) {
+      const char *w = stream.tokens[i].text;
+      if (strcmp(w, "[[") == 0) {
+        snprintf(out, out_size, "sh: [[ not supported in sh mode");
+        return 1;
+      }
+      /* Catch class/switch/extend even when parser handles them first. */
+      if (i == 0) {
+        if (strcmp(w, "class") == 0) {
+          snprintf(out, out_size, "sh: class not supported in sh mode");
+          return 1;
+        }
+        if (strcmp(w, "switch") == 0) {
+          snprintf(out, out_size, "sh: switch not supported in sh mode");
+          return 1;
+        }
+        if (strcmp(w, "extend") == 0) {
+          snprintf(out, out_size, "sh: extend not supported in sh mode");
+          return 1;
+        }
+      }
+    }
+  }
+
+  return 0;
+}
+
+/* E14-S1-T2: reject non-POSIX AST kinds produced by the parser. */
+static int sh_mode_check_ast(const ArkshAst *ast, char *out, size_t out_size) {
+  switch (ast->kind) {
+    case ARKSH_AST_OBJECT_EXPRESSION:
+      snprintf(out, out_size, "sh: object expression not supported in sh mode");
+      return 1;
+    case ARKSH_AST_OBJECT_PIPELINE:
+      snprintf(out, out_size, "sh: |> pipeline not supported in sh mode");
+      return 1;
+    case ARKSH_AST_SWITCH_COMMAND:
+      snprintf(out, out_size, "sh: switch not supported in sh mode");
+      return 1;
+    case ARKSH_AST_CLASS_COMMAND:
+      snprintf(out, out_size, "sh: class not supported in sh mode");
+      return 1;
+    default:
+      return 0;
+  }
+}
+
 int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, size_t out_size) {
   ArkshAst *ast;
   char expanded_line[ARKSH_MAX_LINE];
@@ -13924,15 +14046,36 @@ int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, siz
 
     trim_copy(expanded_line, trimmed_line, sizeof(trimmed_line));
     has_newline = strchr(trimmed_line, '\n') != NULL || strchr(trimmed_line, '\r') != NULL;
-    if (!has_newline && !contains_top_level_list_operator(trimmed_line)) {
+
+    /* E14-S1-T2: reject non-POSIX keyword/token syntax before parsing. */
+    if (shell->sh_mode) {
       if (strcmp(trimmed_line, "let") == 0 ||
           (strncmp(trimmed_line, "let", 3) == 0 && isspace((unsigned char) trimmed_line[3]))) {
+        snprintf(out, out_size, "sh: let not supported in sh mode");
+        shell->last_status = 1;
+        return 1;
+      }
+      if (strcmp(trimmed_line, "extend") == 0 ||
+          (strncmp(trimmed_line, "extend", 6) == 0 && isspace((unsigned char) trimmed_line[6]))) {
+        snprintf(out, out_size, "sh: extend not supported in sh mode");
+        shell->last_status = 1;
+        return 1;
+      }
+      if (sh_mode_check_line(trimmed_line, out, out_size) != 0) {
+        shell->last_status = 1;
+        return 1;
+      }
+    }
+
+    if (!has_newline && !contains_top_level_list_operator(trimmed_line)) {
+      if (!shell->sh_mode && (strcmp(trimmed_line, "let") == 0 ||
+          (strncmp(trimmed_line, "let", 3) == 0 && isspace((unsigned char) trimmed_line[3])))) {
         status = handle_let_line(shell, trimmed_line, out, out_size);
         shell->last_status = status;
         return status;
       }
-      if (strcmp(trimmed_line, "extend") == 0 ||
-          (strncmp(trimmed_line, "extend", 6) == 0 && isspace((unsigned char) trimmed_line[6]))) {
+      if (!shell->sh_mode && (strcmp(trimmed_line, "extend") == 0 ||
+          (strncmp(trimmed_line, "extend", 6) == 0 && isspace((unsigned char) trimmed_line[6])))) {
         status = handle_extend_line(shell, trimmed_line, out, out_size);
         shell->last_status = status;
         return status;
@@ -13969,6 +14112,13 @@ int arksh_shell_execute_line(ArkshShell *shell, const char *line, char *out, siz
   if (arksh_parse_line(expanded_line, ast, parse_error, sizeof(parse_error)) != 0) {
     free(ast);
     snprintf(out, out_size, "%s", parse_error[0] == '\0' ? "parse error" : parse_error);
+    shell->last_status = 1;
+    return 1;
+  }
+
+  /* E14-S1-T2: secondary AST-level check for non-POSIX constructs. */
+  if (shell->sh_mode && sh_mode_check_ast(ast, out, out_size) != 0) {
+    free(ast);
     shell->last_status = 1;
     return 1;
   }

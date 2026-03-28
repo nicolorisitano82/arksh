@@ -219,6 +219,9 @@ if(BUILD_TESTING)
   target_link_libraries(arksh_unit_object PRIVATE arksh_core m)
   add_executable(arksh_unit_arena tests/unit_arena.c)
   target_link_libraries(arksh_unit_arena PRIVATE arksh_core)
+  # E14-S1-T5: sh-mode unit tests
+  add_executable(arksh_unit_sh_mode tests/unit_sh_mode.c)
+  target_link_libraries(arksh_unit_sh_mode PRIVATE arksh_core)
 
   # E8-S3-T3: libFuzzer target — built only when ARKSH_FUZZ=ON
   if(ARKSH_FUZZ)
@@ -1571,6 +1574,71 @@ if(BUILD_TESTING)
   set_tests_properties(arksh_unit_object PROPERTIES
     PASS_REGULAR_EXPRESSION "all tests passed"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    TIMEOUT 10
+  )
+
+  # E14-S1-T5: sh-mode unit tests
+  add_test(NAME arksh_unit_sh_mode COMMAND arksh_unit_sh_mode)
+  set_tests_properties(arksh_unit_sh_mode PROPERTIES
+    PASS_REGULAR_EXPRESSION "all tests passed"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    TIMEOUT 30
+  )
+
+  # E14-S1-T5: end-to-end --sh flag and rejection tests
+  add_test(NAME arksh_sh_flag_echo COMMAND arksh --sh -c "echo posix")
+  set_tests_properties(arksh_sh_flag_echo PROPERTIES
+    PASS_REGULAR_EXPRESSION "posix"
+    TIMEOUT 10
+  )
+  add_test(NAME arksh_sh_flag_reject_arrow COMMAND arksh --sh -c "echo x -> upper")
+  set_tests_properties(arksh_sh_flag_reject_arrow PROPERTIES
+    WILL_FAIL TRUE
+    TIMEOUT 10
+  )
+  add_test(NAME arksh_sh_flag_reject_object_pipe COMMAND arksh --sh -c "ls |> count()")
+  set_tests_properties(arksh_sh_flag_reject_object_pipe PROPERTIES
+    WILL_FAIL TRUE
+    TIMEOUT 10
+  )
+  add_test(NAME arksh_sh_flag_reject_switch COMMAND arksh --sh -c "switch foo ; case foo ; then echo ok ; endswitch")
+  set_tests_properties(arksh_sh_flag_reject_switch PROPERTIES
+    WILL_FAIL TRUE
+    TIMEOUT 10
+  )
+  add_test(NAME arksh_sh_flag_reject_let COMMAND arksh --sh -c "let x = 1")
+  set_tests_properties(arksh_sh_flag_reject_let PROPERTIES
+    WILL_FAIL TRUE
+    TIMEOUT 10
+  )
+  add_test(NAME arksh_sh_flag_reject_class COMMAND arksh --sh -c "class Foo ; endclass")
+  set_tests_properties(arksh_sh_flag_reject_class PROPERTIES
+    WILL_FAIL TRUE
+    TIMEOUT 10
+  )
+  add_test(NAME arksh_sh_flag_reject_here_string COMMAND arksh --sh -c "cat <<< hello")
+  set_tests_properties(arksh_sh_flag_reject_here_string PROPERTIES
+    WILL_FAIL TRUE
+    TIMEOUT 10
+  )
+  add_test(NAME arksh_sh_flag_reject_double_bracket COMMAND arksh --sh -c "[[ -n hello ]]")
+  set_tests_properties(arksh_sh_flag_reject_double_bracket PROPERTIES
+    WILL_FAIL TRUE
+    TIMEOUT 10
+  )
+  add_test(NAME arksh_sh_flag_posix_if COMMAND arksh --sh -c "if true ; then echo ok ; fi")
+  set_tests_properties(arksh_sh_flag_posix_if PROPERTIES
+    PASS_REGULAR_EXPRESSION "ok"
+    TIMEOUT 10
+  )
+  add_test(NAME arksh_sh_flag_posix_case COMMAND arksh --sh -c "case yes in yes) echo matched ;; esac")
+  set_tests_properties(arksh_sh_flag_posix_case PROPERTIES
+    PASS_REGULAR_EXPRESSION "matched"
+    TIMEOUT 10
+  )
+  add_test(NAME arksh_sh_flag_posix_arithmetic COMMAND arksh --sh -c "echo $((3+4))")
+  set_tests_properties(arksh_sh_flag_posix_arithmetic PROPERTIES
+    PASS_REGULAR_EXPRESSION "7"
     TIMEOUT 10
   )
 

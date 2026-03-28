@@ -1081,28 +1081,18 @@ Stato story: `[x]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E11 `[x]`, E12 `[x]`, E13 `[x]`
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E11 `[x]`, E12 `[x]`, E13 `[x]`, E14-S1 `[x]`
 **In corso:** nessuna
-**Aperte:** E14 (`sh` mode), E9 (release), E10 (HTTP plugin)
+**Aperte:** E9 (release), E10 (HTTP plugin)
 
-### Priorità 1 — modalità compatibilità `sh` (E14)
-
-Il gap tecnico più visibile per avvicinarsi davvero al ruolo di shell di sistema
-è una modalità `sh` esplicita che disabiliti le estensioni arksh e renda il
-comportamento prevedibile per script e shebang classici:
-
-1. `E14-S1` — flag `--sh`, runtime `sh_mode`, disattivazione delle estensioni non-POSIX e test dedicati
-
-### Priorità 2 — portare il progetto a livello distribuzione (E9)
-
-Una volta chiuso `E13`, il valore più alto torna su packaging e release:
+### Priorità 1 — portare il progetto a livello distribuzione (E9)
 
 1. `E9-S2` — packaging target (`Homebrew`, pacchetto Linux, strategia Windows)
 2. `E9-S4` — documentazione finale e troubleshooting
 3. `E9-S5` — release process, changelog e criteri `1.0`
 4. `E10-S1` — plugin HTTP ufficiale
 
-### Priorità 3 — plugin HTTP ufficiale (E10)
+### Priorità 2 — plugin HTTP ufficiale (E10)
 
 `E10-S1` resta importante ma non blocca il core shell. Conviene affrontarla:
 
@@ -1111,12 +1101,10 @@ Una volta chiuso `E13`, il valore più alto torna su packaging e release:
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E14-S1`
-2. `E9-S2`
-3. `E9-S4`
-4. `E9-S5`
-5. `E10-S1`
-6. `E14-S1`
+1. `E9-S2`
+2. `E9-S4`
+3. `E9-S5`
+4. `E10-S1`
 
 ---
 
@@ -1174,13 +1162,13 @@ già raggiunta nel core.
 
 ### E14-S1. Runtime e parser in modalità `sh`
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E14-S1-T1` introdurre un flag runtime `sh_mode`, attivabile con `--sh` e anche quando `argv[0]` è `sh`
-- `[ ]` `E14-S1-T2` far rifiutare al lexer/parser le sintassi non-POSIX in `sh_mode`, almeno: `->`, `|>`, block literal, `let`, `extend`, `class`, `[[ ]]`, `<<<`, `<(...)`, `>(...)`, `switch`
-- `[ ]` `E14-S1-T3` definire la policy di runtime in `sh_mode`: niente plugin/autoload/config arksh-specifica, prompt minimale e startup compatibile
-- `[ ]` `E14-S1-T4` supportare startup compatibile `sh` tramite `ENV` e documentare chiaramente le differenze rispetto alla modalità arksh completa
-- `[ ]` `E14-S1-T5` aggiungere test end-to-end su `arksh --sh`, su invocazione come `sh`, e su errori espliciti quando uno script usa estensioni non permesse
+- `[x]` `E14-S1-T1` introdurre un flag runtime `sh_mode`, attivabile con `--sh` e anche quando `argv[0]` è `sh`
+- `[x]` `E14-S1-T2` far rifiutare al lexer/parser le sintassi non-POSIX in `sh_mode`, almeno: `->`, `|>`, block literal, `let`, `extend`, `class`, `[[ ]]`, `<<<`, `<(...)`, `>(...)`, `switch`
+- `[x]` `E14-S1-T3` definire la policy di runtime in `sh_mode`: niente plugin/autoload/config arksh-specifica, prompt minimale e startup compatibile
+- `[x]` `E14-S1-T4` supportare startup compatibile `sh` tramite `ENV` e documentare chiaramente le differenze rispetto alla modalità arksh completa
+- `[x]` `E14-S1-T5` aggiungere test end-to-end su `arksh --sh`, su invocazione come `sh`, e su errori espliciti quando uno script usa estensioni non permesse
 
 ---
 

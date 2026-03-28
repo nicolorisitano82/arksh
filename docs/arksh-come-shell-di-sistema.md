@@ -50,12 +50,13 @@ Una shell di sistema deve soddisfare requisiti molto precisi: deve poter sostitu
 
 ### 1.3 Script di compatibilità
 
-Quasi tutti gli script di sistema e gli strumenti (Docker entrypoint, systemd service, initrd, CI runners) assumono `sh` o `bash`. arksh oggi copre una parte molto più ampia della sintassi POSIX, ma non è ancora un sostituto drop-in per questi script perché:
+Quasi tutti gli script di sistema e gli strumenti (Docker entrypoint, systemd service, initrd, CI runners) assumono `sh` o `bash`. arksh oggi copre una parte molto più ampia della sintassi POSIX. Con il completamento di E14-S1 è ora disponibile una modalità `sh` esplicita:
 
-- La sintassi object-pipeline (`|>`, `->`) non è POSIX e nessuno strumento la conosce.
-- Manca ancora una modalità di compatibilità `sh` che disabiliti esplicitamente le estensioni non-POSIX.
+- `arksh --sh` o l'invocazione tramite un symlink con nome `sh` attivano la modalità di compatibilità.
+- La sintassi non-POSIX (`|>`, `->`, `let`, `extend`, `class`, `switch`, `[[ ]]`, `<<<`, `<(...)`, `>(...)`, block literal) viene rifiutata con un errore esplicito.
+- Plugin autoload, config arksh-specifica e prompt avanzato vengono saltati; la variabile `ENV` viene letta come startup file (compatibilità POSIX sh).
 - Il parsing di shebang multi-riga o di script complessi non è stato testato su corpora reali.
-- Restano scoperte diverse aree tipiche da shell di sistema: mode `sh`, array indicizzati e alcune variabili/feature bash aggiuntive (`$PPID`, `$BASHPID`, `nameref`), oltre alla validazione su corpora reali di script di sistema.
+- Restano scoperte diverse aree tipiche da shell di sistema: array indicizzati e alcune variabili/feature bash aggiuntive (`$PPID`, `$BASHPID`, `nameref`), oltre alla validazione su corpora reali di script di sistema.
 
 ---
 
@@ -130,7 +131,7 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 6. `printf` completo con tutti i formati POSIX e estensioni bash comuni.
 7. `mapfile` / `readarray`.
 8. Coroutine / coprocess `coproc`.
-9. Modalità di compatibilità `sh` — flag `--sh` o shebang `#!/bin/sh` che disabilita sintassi non-POSIX (object pipeline, tipi, block literal).
+9. Modalità di compatibilità `sh` — completata: `--sh` e rilevamento automatico da `argv[0]`; disabilita sintassi non-POSIX (object pipeline, tipi, block literal, `let`, `extend`, `class`, `switch`, `[[ ]]`, `<<<`, `<(...)`, `>(...)`); salta config/plugin autoload arksh-specifica; carica `ENV` come startup file.
 
 ---
 
@@ -167,7 +168,7 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 |-----|-------------|------|
 | Shell interattiva personale | Si (con limitazioni) | Mancano alcune feature avanzate, ma l'uso quotidiano base funziona |
 | Shell di sviluppo in progetti arksh | Si | E il caso d'uso primario del repository |
-| Scripting su sistemi POSIX | Si, con limiti | Il core POSIX del progetto e chiuso; restano fuori soprattutto modalita `sh`, segnali completi, `exec` con redirection e alcune variabili/feature stile bash |
-| Shell di sistema (`/bin/sh` replacement) | No | Mancano ancora modalità `sh` e packaging/release |
+| Scripting su sistemi POSIX | Si, con limiti | Il core POSIX del progetto e chiuso; modalità `sh` implementata; restano fuori soprattutto `exec` con redirection e alcune variabili/feature stile bash |
+| Shell di sistema (`/bin/sh` replacement) | No | Modalità `sh` implementata; mancano ancora packaging/release e validazione su corpora reali |
 | Shell in container / initrd | No | Mancano robustezza finale, startup audit dedicato e packaging minimale |
 | Default shell utente (`chsh`) | Parziale | Possibile su macOS/Linux per chi conosce le limitazioni; sconsigliato per uso generale |
