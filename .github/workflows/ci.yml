@@ -13,10 +13,7 @@
 name: CI
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+  workflow_dispatch:  # manuale: disabilitato su push/PR
 
 jobs:
   # ------------------------------------------------------------------ Linux ASan+UBSan
