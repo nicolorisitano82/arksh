@@ -1,0 +1,132 @@
+# Release workflow: triggered by a v* tag push or manual dispatch.
+# Builds arksh on Linux (x86_64) and macOS (arm64 + x86_64),
+# then publishes a GitHub Release with the resulting tarballs.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.9.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  # ------------------------------------------------------------------ build matrix
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux-x86_64
+            artifact: arksh-linux-x86_64
+
+          - os: macos-13
+            label: macos-x86_64
+            artifact: arksh-macos-x86_64
+
+          - os: macos-latest
+            label: macos-arm64
+            artifact: arksh-macos-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y cmake gcc
+
+      - name: Configure
+        run: cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build-rel --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build-rel --build-config Release --output-on-failure --timeout 60
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp build-rel/arksh dist/arksh
+          chmod +x dist/arksh
+          tar -czf ${{ matrix.artifact }}.tar.gz -C dist arksh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.tar.gz
+
+  # ------------------------------------------------------------------ publish release
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        run: |
+          VERSION="${{ steps.tag.outputs.name }}"
+          gh release create "${VERSION}" \
+            --title "arksh ${VERSION}" \
+            --notes "## arksh ${VERSION}
+
+          Pre-built binaries for Linux and macOS.
+
+          ### Installation
+
+          **Linux (x86_64)**
+          \`\`\`sh
+          tar -xzf arksh-linux-x86_64.tar.gz
+          sudo mv arksh /usr/local/bin/
+          \`\`\`
+
+          **macOS (Apple Silicon / arm64)**
+          \`\`\`sh
+          tar -xzf arksh-macos-arm64.tar.gz
+          sudo mv arksh /usr/local/bin/
+          \`\`\`
+
+          **macOS (Intel / x86_64)**
+          \`\`\`sh
+          tar -xzf arksh-macos-x86_64.tar.gz
+          sudo mv arksh /usr/local/bin/
+          \`\`\`
+
+          See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details." \
+            artifacts/arksh-linux-x86_64/arksh-linux-x86_64.tar.gz \
+            artifacts/arksh-macos-arm64/arksh-macos-arm64.tar.gz \
+            artifacts/arksh-macos-x86_64/arksh-macos-x86_64.tar.gz
+        env:
+          GH_TOKEN: ${{ github.token }}
