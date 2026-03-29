@@ -56,13 +56,23 @@ Quasi tutti gli script di sistema e gli strumenti (Docker entrypoint, systemd se
 - La sintassi non-POSIX (`|>`, `->`, `let`, `extend`, `class`, `switch`, `[[ ]]`, `<<<`, `<(...)`, `>(...)`, block literal) viene rifiutata con un errore esplicito.
 - Plugin autoload, config arksh-specifica e prompt avanzato vengono saltati; la variabile `ENV` viene letta come startup file (compatibilità POSIX sh).
 - Il parsing di shebang multi-riga o di script complessi non è stato testato su corpora reali.
-- Restano scoperte diverse aree tipiche da shell di sistema: array indicizzati e alcune variabili/feature bash aggiuntive (`$PPID`, `$BASHPID`, `nameref`), oltre alla validazione su corpora reali di script di sistema.
+- Restano scoperte alcune aree tipiche da shell di sistema: array indicizzati,
+`mapfile`/`readarray`, `coproc`, e la validazione su corpora reali di script di sistema.
+Le variabili `$PPID`, `$BASHPID` e `nameref` (`declare/local -n`) sono state implementate in E15-S1.
 
 ---
 
 ### 1.4 Performance di avvio
 
-Le shell di sistema vengono avviate migliaia di volte al giorno (ogni `$(cmd)`, ogni pipeline, ogni script di build). Il tempo di startup deve essere nell'ordine dei millisecondi. arksh ora ha benchmark dedicati e un percorso esplicito di ottimizzazione (`docs/benchmarks-baseline.md` e `docs/studio-cpu-memoria.md`), ma non ha ancora un audit finale mirato allo scenario `/bin/sh` o login shell.
+Le shell di sistema vengono avviate migliaia di volte al giorno (ogni `$(cmd)`,
+ogni pipeline, ogni script di build). Il tempo di startup deve essere nell'ordine
+dei millisecondi.
+
+**Stato E15-S2 (completata):** arksh ha un audit dedicato allo scenario di startup
+non-interattivo. Baseline misurata: ~3–5 ms su macOS (target: < 10 ms su Linux moderno).
+La history non viene piu caricata in modalita non-interattiva (`-c`, script, pipe).
+Un test CTest (`arksh_perf_startup_wall_drop`) garantisce la regressione a 50 ms.
+Dettagli in `docs/benchmarks-baseline.md` (sezione E15-S2).
 
 ---
 
@@ -126,8 +136,8 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 1. Array indicizzati `a=(v1 v2)` e accesso `${a[0]}`, `${#a[@]}`, iterazione.
 2. Array associativi `declare -A` — completati e mappati sui `Dict`.
 3. Espansioni di parametro complete: `${var#pattern}`, `${var##pattern}`, `${var%pattern}`, `${var%%pattern}`, `${var/pat/rep}`, `${var//pat/rep}`, `${var^}`, `${var^^}`, `${var,}`, `${var,,}`, `${#var}`, `${var:offset:len}`.
-4. `$LINENO`, `$FUNCNAME`, `$BASH_SOURCE`, `$PPID`, `$BASHPID` — i primi tre sono implementati; restano `$PPID` e `$BASHPID`.
-5. `declare`, `typeset`, `readonly`, `nameref` — `declare/typeset -A` sono implementati; restano `nameref` e semantica bash completa.
+4. `$LINENO`, `$FUNCNAME`, `$BASH_SOURCE`, `$PPID`, `$BASHPID` — tutti implementati (E15-S1).
+5. `declare`, `typeset`, `readonly`, `nameref` — `declare/typeset -A` implementati; `declare/local -n` (nameref) implementato in E15-S1; resta la semantica bash completa per `declare -i`, `-x`, `-r` su array.
 6. `printf` completo con tutti i formati POSIX e estensioni bash comuni.
 7. `mapfile` / `readarray`.
 8. Coroutine / coprocess `coproc`.
@@ -168,7 +178,7 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 |-----|-------------|------|
 | Shell interattiva personale | Si (con limitazioni) | Mancano alcune feature avanzate, ma l'uso quotidiano base funziona |
 | Shell di sviluppo in progetti arksh | Si | E il caso d'uso primario del repository |
-| Scripting su sistemi POSIX | Si, con limiti | Il core POSIX del progetto e chiuso; modalità `sh` implementata; restano fuori soprattutto `exec` con redirection e alcune variabili/feature stile bash |
+| Scripting su sistemi POSIX | Si, con limiti | Il core POSIX del progetto e chiuso; modalita `sh` implementata; `$PPID`, `$BASHPID`, nameref implementati; restano `mapfile`, `readarray`, `coproc` e alcune estensioni bash avanzate |
 | Shell di sistema (`/bin/sh` replacement) | No | Modalità `sh` implementata; mancano ancora packaging/release e validazione su corpora reali |
 | Shell in container / initrd | No | Mancano robustezza finale, startup audit dedicato e packaging minimale |
 | Default shell utente (`chsh`) | Parziale | Possibile su macOS/Linux per chi conosce le limitazioni; sconsigliato per uso generale |

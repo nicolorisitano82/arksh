@@ -1,5 +1,7 @@
 # Scelte implementative di arksh
 
+Ultimo aggiornamento: `2026-03-29` (stato post E15-S2; epoche E1–E15-S2 completate).
+
 ## Obiettivo
 
 Costruire una shell in C, portabile tra Linux, macOS e Windows, in cui ogni elemento del sistema sia modellato come oggetto con:
@@ -9,15 +11,11 @@ Costruire una shell in C, portabile tra Linux, macOS e Windows, in cui ogni elem
 - metodi
 - capability estendibili via plugin
 
-L'MVP presente in questo repository non pretende di essere una shell completa come `bash`, `zsh` o `pwsh`. E invece una base implementabile e leggibile che dimostra:
-
-- modello oggetti
-- lexer, AST ed executor base
-- esecuzione nativa dei processi esterni con pipe e redirection di base
-- quoting shell e modulo di espansione
-- prompt configurabile
-- ABI plugin
-- struttura modulare
+Il progetto ha superato la fase prototipale: le epoche E1–E15-S2 sono completate.
+Il core shell copre POSIX di media complessita, il modello ad oggetti e completo,
+la pipeline tipizzata e stabile e il sistema di plugin e versionato (ABI v5).
+Restano aperti packaging/release (E9), il plugin HTTP (E10) e alcune feature
+avanzate (E15-S3, E16+).
 
 ## Assunzioni architetturali
 
@@ -206,7 +204,7 @@ Carica librerie dinamiche e invoca l'entry point ABI:
 
 Il principio e: ogni entita osservabile dal sistema diventa un oggetto risolvibile.
 
-Nell'MVP, lato utente, la forma consigliata e `receiver -> member`.
+Lato utente, la forma consigliata e `receiver -> member`.
 Internamente la risoluzione supporta sia path sia namespace logici:
 
 - `env("PATH")`
@@ -285,7 +283,10 @@ Esempio di evoluzione futura:
 /tmp -> children() |> where(type == "file") |> sort(size desc)
 ```
 
-L'MVP ora implementa una pipeline oggetti/valori con operatori `where`, `sort`, `take`, `first`, `count`, `render`, `lines` ed `each`.
+La pipeline oggetti/valori e completa: 28 stage (`where`, `filter`, `grep`, `sort`,
+`take`, `first`, `count`, `sum`, `min`, `max`, `reduce`, `each`, `pluck`, `map`,
+`flat_map`, `group_by`, `lines`, `trim`, `split`, `join`, `to_json`, `from_json`,
+`base64_encode`, `base64_decode`, `transpose`, `fill_na`, `render`).
 
 ## Prompt stile oh-my-zsh
 
@@ -371,7 +372,7 @@ L'ABI v5 resta piccola per tre ragioni:
 
 Le estensioni registrate entrano in un registry runtime comune usato anche dal linguaggio `extend ...`.
 
-Regola di dispatch dell'MVP:
+Regola di dispatch:
 
 1. il core prova prima proprieta e metodi built-in
 2. se il membro non esiste, il runtime consulta il registry delle estensioni
@@ -492,68 +493,38 @@ Linee guida:
 
 ## Scelte dati
 
-Nell'MVP si usano array statici e buffer fixed-size.
+I registri sono diventati contenitori dinamici a partire da E12-S4. I buffer
+interni usano fixed-size per semplificare il debug e l'ownership, mentre le
+strutture a crescita dinamica (arene, slice) sono state introdotte
+progressivamente nelle epoche E12–E15 dove il profilo di allocazione lo
+richiedeva. Un arena allocator (scratch arena) e presente nel runtime per
+ridurre la pressione sull'allocatore di sistema nelle path calde.
 
-Motivazione:
+## Stato dell'implementazione
 
-- facilita debug
-- evita ownership complessa
-- rende il codice piu semplice da leggere da un'altra AI o da una persona
+### Completato (E1–E15-S2)
 
-Trade-off:
+- Linguaggio shell: funzioni (POSIX e parametri nominali), classi con ereditarieta multipla,
+  estensioni `extend`, heredoc, `case/esac`, `break/continue [n]`, `until`, `coproc`-stub
+- Object model: `env()`, `proc(pid?)`, `shell()`, `path()`, `fs()`, `user()`, `sys()`,
+  `time()`, `Integer`, `Float`, `Double`, `Imaginary`, `Dict`, `Matrix`, 28 pipeline stage
+- Compatibilita shell: `set -e/-u/-x/-o pipefail`, `$((...))`, `[[ ]]`, here-string,
+  process substitution, fd arbitrari, `getopts`, `umask`, `ulimit`, `stty`,
+  `declare -A`, `declare/local -n` (nameref), `$PPID`, `$BASHPID`
+- Modalita `sh`: `--sh`, rilevamento automatico da `argv[0]`, skip di sintassi
+  non-POSIX, caricamento `ENV`
+- Job control POSIX: process group, `tcsetpgrp`, `SIGWINCH`, `SIGCHLD`, ripristino TTY
+- Plugin ABI v5: query/init separati, capability flags, binary search index
+- Performance: scratch arena, indici binari, guard di regressione CTest
+- Test: 333 CTest, PTY REPL, job control smoke, ASan/UBSan CI
+- Startup audit: history load skippa in modalita non-interattiva; guard `wall_ms<=50ms`
 
-- meno elasticita
-- limiti duri su numero di comandi, plugin e argomenti
+### Aperti
 
-Per una versione piu avanzata si puo passare a:
-
-- vettori dinamici
-- arena allocator
-- string builder dedicato
-
-## Sintassi: cosa e implementato e cosa no
-
-Implementato nel codice:
-
-- `inspect <path>`
-- `get <path> <property>`
-- `call <path> <method> [args...]`
-- `path -> property`
-- `path -> method(...)`
-- `path -> children() |> where(...) |> sort(...)`
-- `obj("...").property`
-- `obj("...").method(...)`
-- `obj("...").children() |> where(...) |> sort(...)`
-- `take(n)`, `first()`, `count()`, `render()`
-- `prompt show`
-- `prompt load <path>`
-- `plugin load <path>`
-- `plugin list`
-
-Definito come direzione futura, ma non ancora implementato:
-
-- filtri declarativi
-- nuovi resolver di oggetto filesystem-specifici oltre a `env()`, `proc()` e `shell()`
-- registrazione di nuovi tipi object-aware completi via plugin
-
-## Roadmap suggerita per una implementazione piena
-
-Elementi gia realizzati (non ripetere):
-
-- linguaggio shell: funzioni, classi, estensioni, heredoc, case/esac, break/continue con argomento numerico, until
-- object model: `env()`, `proc()`, `shell()`, `path()`, pipeline oggetti completa con tutti gli stage (where, sort, take, first, count, lines, trim, split, join, reduce, each, render, from_json, to_json, grep, map, filter)
-- tab completion: contestuale, redirection-aware, filtrata per comando, flag, doppio Tab, fuzzy/sottostringa
-- testing: golden test, PTY test REPL, job control smoke test, unit test lexer/parser/executor/object model, sanitizers, fuzzing
-- CI: Linux + macOS + Windows in GitHub Actions
-
-Elementi aperti per una versione piu avanzata:
-
-1. Tipi numerici espliciti (`Integer`, `Float`, `Double`) con regole di promozione (E6-S5)
-2. Tipo `Dict` nativo con bridge JSON completo (E6-S6)
-3. Stage di encoding (`base64_encode`, `base64_decode`) (E6-S7)
-4. JSON parser robusto: posizione errori, unicode, pretty-print (E7)
-5. Plugin HTTP/HTTPS con libcurl: resolver `http()`, request builder, response typed-map (E10)
-6. Packaging: installazione standard, formula Homebrew, tarball release (E9)
+1. Packaging/release: formula Homebrew, tarball firmato, sito docs (E9)
+2. Plugin HTTP/HTTPS con libcurl (E10)
+3. `sudo` come oggetto e blocchi privilegiati `with sudo do` (E15-S3)
+4. Validazione su corpora reali POSIX/bash (script di sistema)
 
 ## Contratto da preservare se un'altra AI continua il lavoro
 

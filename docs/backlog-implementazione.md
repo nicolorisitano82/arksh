@@ -922,6 +922,24 @@ Stato story: `[ ]`
   atteso), `save_to` scrive file; test condizionali su disponibilità rete marcati
   `SKIP_IF_OFFLINE`.
 
+### E10-S2. Plugin `claude-nl` — linguaggio naturale via Claude API
+
+Stato story: `[ ]`
+
+Design di riferimento: `docs/plugin-claude-nl.md` (documento esplorativo).
+
+Il plugin traduce comandi in linguaggio naturale in comandi arksh tramite la
+Claude API. Scala sulla stessa ABI v5 usata dal plugin HTTP.
+
+- `[ ]` `E10-S2-T1` dipendenza opzionale dall'API Claude: opzione CMake
+  `ARKSH_CLAUDE_NL=ON`; richiede libcurl (condiviso con E10-S1) e una chiave
+  `ANTHROPIC_API_KEY` nel runtime
+- `[ ]` `E10-S2-T2` resolver `nl("linguaggio naturale")` — invia il testo
+  al modello, riceve il comando arksh generato, lo esegue nel contesto corrente
+- `[ ]` `E10-S2-T3` output trasparente: mostra il comando generato prima di
+  eseguirlo (modalita `--dry-run`), permette all'utente di accettare/rifiutare
+- `[ ]` `E10-S2-T4` test con mock dell'API (payload fisso) per CI offline
+
 ---
 
 ## E11. POSIX core — completamento per uso come shell di sistema

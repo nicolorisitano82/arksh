@@ -1,13 +1,16 @@
-# Sintassi proposta per arksh
+# Sintassi di arksh — riferimento aggiornato
 
-Questo documento separa due livelli:
+Stato: aggiornato al `2026-03-29` (epoche E1–E15-S2 completate).
 
-- sintassi gia supportata dall'MVP
-- sintassi consigliata per la shell completa
+Questo documento descrive la sintassi correntemente implementata e stabile.
+Le sezioni storiche "sintassi proposta" sono state rimosse: tutte le funzionalità
+elencate sono operative e coperte da test di regressione.
 
-## 1. Sintassi gia supportata
+Per una reference completa di comandi, resolver e stage vedere `docs/reference.md`.
 
-### 1.1 Comandi espliciti
+## 1. Sintassi supportata
+
+### 1.1 Comandi e variabili speciali
 
 ```text
 set PROJECT arksh
@@ -76,6 +79,13 @@ plugin disable arksh_sample_plugin
 plugin autoload set /usr/local/lib/arksh/arksh_trash_plugin.dylib
 plugin autoload unset /usr/local/lib/arksh/arksh_trash_plugin.dylib
 plugin autoload list
+
+# variabili speciali (E15)
+echo $PPID       # PID del processo padre (fisso all'init della shell)
+echo $BASHPID    # PID del processo corrente (dinamico; diverso nelle subshell)
+declare -n ref=target   # nameref: lettura/scrittura trasparente su target
+local -n lref=x         # nameref locale a funzione
+unset -n ref            # rimuove il nameref senza toccare il target
 ```
 
 ### 1.2 Espressioni oggetto
@@ -100,7 +110,7 @@ Note pratiche:
 - il receiver puo essere a sua volta il risultato di una chain precedente, senza passare da un `let` intermedio
 - l'executor puo quindi evitare round-trip ripetuti `value -> text -> parse -> value` sui member successivi
 
-### 1.3 Pipeline oggetti supportata
+### 1.3 Pipeline oggetti
 
 ```text
 . -> children() |> where(type == "file")
@@ -136,7 +146,7 @@ Named() -> isa("Named")
 Named -> methods
 ```
 
-### 1.4 Pipeline shell e redirection supportate
+### 1.4 Pipeline shell e redirection
 
 ```text
 ls -1 | wc -l
@@ -287,7 +297,7 @@ Regole pratiche:
 - la lookup di proprieta e metodi segue la classe corrente e poi le basi da sinistra verso destra
 - in caso di ereditarieta multipla, le basi piu a sinistra hanno precedenza sulle basi a destra
 
-### 1.5 Quoting ed espansioni supportate
+### 1.5 Quoting ed espansioni
 
 ```text
 cd ~
@@ -339,9 +349,9 @@ $ARKSH_RC
 
 Se `ARKSH_RC` e impostata, ha precedenza sul file home.
 
-### 1.7 Convenzioni interattive supportate
+### 1.7 Convenzioni interattive
 
-In REPL l'MVP supporta:
+In REPL sono supportate:
 
 - frecce per muovere il cursore e navigare la history
 - `Tab` per completion base
@@ -350,108 +360,10 @@ In REPL l'MVP supporta:
 - `Ctrl-C` per interrompere il foreground
 - sui build POSIX, `Ctrl-Z` per fermare un job in `fg`
 
-## 2. Sintassi target raccomandata
+## 2. Variabili e binding tipizzati
 
-### 2.1 Principio
-
-Ogni selettore o sorgente produce un valore object-aware oppure una lista di valori.
-
-Accessi:
-
-- `selector.property`
-- `selector.method(args)`
-
-### 2.2 Selettori
-
-#### File system
-
-```text
-"./src" -> children()
-"/etc/hosts" -> read_text(128)
-. -> type
-README.md -> size
-mount("/")
-device("/dev/tty")
-```
-
-#### Sistema e shell
-
-```text
-shell()
-env("PATH")
-proc()
-```
-
-### 2.3 Proprieta
-
-```text
-. -> type
-/tmp -> exists
-/tmp -> name
-proc() -> pid
-proc() -> pgid
-proc() -> sid
-proc() -> tty_cols
-proc() -> tty_rows
-env("PATH")
-shell() -> cwd
-shell() -> login_mode
-shell() -> has_tty
-shell() -> tty_cols
-shell() -> tty_rows
-```
-
-### 2.4 Metodi
-
-```text
-. -> children()
-/etc/hosts -> read_text(256)
-/etc/hosts -> parent()
-shell() -> keys()
-env() -> keys()
-```
-
-## 3. Pipeline oggetti
-
-Per restare coerente con il modello object-oriented, la pipeline dovrebbe passare oggetti e non solo stringhe.
-
-Sintassi proposta:
-
-```text
-/tmp -> children() |> where(type == "file") |> sort(size desc)
-```
-
-Oppure in forma piu verbosa:
-
-```text
-/tmp -> children() |> filter(type == "file") |> map(name, size)
-```
-
-Operatori attualmente implementati nell'MVP:
-
-- `where(property == value)`
-- `where(block)`
-- `sort(property asc|desc)`
-- `take(n)`
-- `first()`
-- `count()`
-- `lines()`
-- `trim()`
-- `split(separator?)`
-- `join(separator?)`
-- `reduce(block)`
-- `reduce(init, block)`
-- `from_json()`
-- `to_json()`
-- `each(selector)`
-- `each(block)`
-- `render()`
-
-## 4. Variabili e binding tipizzati
-
-Oggi `set NAME value` crea una variabile shell testuale, mentre `export NAME value` la rende visibile ai processi figli.
-
-Per binding semantici piu ricchi, ad esempio oggetti, liste o block assegnati a nomi locali, la sintassi supportata e:
+`set NAME value` crea una variabile shell testuale; `export NAME value` la rende
+visibile ai processi figli. Per binding semanticamente ricchi (oggetti, liste, block):
 
 ```text
 let tmp = . -> children()
@@ -466,29 +378,22 @@ is_file -> source
 
 `let` senza argomenti elenca i binding tipizzati correnti.
 
-`set` resta la sintassi giusta quando vuoi invece una variabile shell testuale:
-
-```text
-set LIMIT=128
-export LIMIT
-```
-
 In questo modello:
 
 - `set` e `export` lavorano su testo ed espansione shell
 - `let` lavora su valori object-aware
-- `unset nome` rimuove sia la variabile shell sia il binding tipizzato omonimo, se presenti
+- `unset nome` rimuove sia la variabile shell sia il binding tipizzato omonimo
+- `declare -n ref=target` / `local -n ref=target` crea un nameref (E15)
+- `unset -n ref` rimuove il nameref senza toccare il target
 
-## 4.1 Estensioni di oggetti
-
-L'MVP supporta estensioni dichiarative nel linguaggio:
+## 2.1 Estensioni di oggetti
 
 ```text
 extend <target> property <name> = <block>
 extend <target> method <name> = <block>
 ```
 
-Esempi:
+Esempio:
 
 ```text
 extend directory property child_count = [:it | it -> children() |> count()]
@@ -497,11 +402,12 @@ extend directory property child_count = [:it | it -> children() |> count()]
 Regole:
 
 - `property`: block a un solo parametro, il receiver
-- `method`: primo parametro = receiver, parametri successivi = argomenti del metodo
-- il target puo essere `any`, un value kind (`string`, `number`, `bool`, `object`, `block`, `list`) oppure un object kind (`path`, `file`, `directory`, `device`, `mount`)
-- le estensioni vengono usate come fallback dopo i membri built-in del core
+- `method`: primo parametro = receiver, successivi = argomenti del metodo
+- target: `any`, value kind (`string`, `number`, `bool`, `object`, `block`, `list`)
+  oppure object kind (`path`, `file`, `directory`, `device`, `mount`)
+- le estensioni fanno fallback dopo i membri built-in del core
 
-## 5. Grammatica EBNF consigliata
+## 3. Grammatica EBNF
 
 ```ebnf
 line            = command_list | object_pipeline | shell_pipeline | value_expression | object_expression | command ;
@@ -581,144 +487,37 @@ number          = digit , { digit } ;
 token           = string | identifier | number ;
 ```
 
-## 6. Proprieta e metodi minimi consigliati per tipo
+## 4. Prompt — configurazione
 
-### `file`
+Il prompt usa un file `key=value`. Formato attuale:
 
-Proprieta:
-
-- `name`
-- `path`
-- `size`
-- `extension`
-- `exists`
-- `readable`
-- `writable`
-
-Metodi:
-
-- `read_text(limit)`
-- `read_json()`
-- `write_json(binding)`
-- `get_path(path)`
-- `has_path(path)`
-- `set_path(path, value)`
-- `pick(key1, key2, ...)`
-- `merge(other)`
-- `read_bytes(limit)`
-- `parent()`
-- `describe()`
-
-### `directory`
-
-Proprieta:
-
-- `name`
-- `path`
-- `exists`
-- `readable`
-- `writable`
-
-Metodi:
-
-- `children()`
-- `walk(depth)`
-- `parent()`
-- `describe()`
-
-### `mount`
-
-Proprieta:
-
-- `path`
-- `fs_type`
-- `capacity`
-- `used`
-- `available`
-
-Metodi:
-
-- `children()`
-- `stats()`
-
-### `device`
-
-Proprieta:
-
-- `name`
-- `path`
-- `device_type`
-- `exists`
-
-Metodi:
-
-- `open(mode)`
-- `describe()`
-
-## 7. Prompt DSL consigliata
-
-L'MVP usa un file `key=value`, ma la sintassi consigliata per una versione piu ricca e:
-
-```text
-theme "aurora" {
-  left  = [userhost, cwd, git]
-  right = [status, os, time]
-  separator = " :: "
-  colors {
-    userhost = green
-    cwd      = cyan
-    status   = yellow
-    git      = red
-  }
-}
-
-plugin "git"
-plugin "docker"
+```ini
+theme=aurora
+left=userhost,cwd,plugins
+right=status,os,date,time
+separator= ::
+use_color=1
+color.userhost=green
+color.cwd=cyan
+color.status=yellow
+color.date=blue
+color.time=yellow
+plugin=./build/arksh_sample_plugin.so
 ```
 
-Motivazione:
+Segmenti built-in: `user`, `host`, `userhost`, `cwd`, `status`, `os`,
+`plugins`, `theme`, `date`, `time`, `datetime`.
 
-- leggibile
-- facilmente parsabile
-- abbastanza vicina ai theme engine conosciuti
+## 5. Regole di compatibilita
 
-## 8. Plugin DSL consigliata
-
-Se in futuro si vuole supportare plugin dichiarativi oltre a quelli binari:
-
-```text
-plugin "git" from "~/.arksh/plugins/git-plugin.so"
-plugin "docker" from "/usr/local/lib/arksh/docker-plugin.so"
-```
-
-## 9. Regole di compatibilita consigliate
-
-1. `path -> member` e la sintassi consigliata, ma `obj("path").member` deve restare sempre valido.
-2. I nomi di proprieta base non vanno rinominati.
+1. `path -> member` e la sintassi consigliata; `obj("path").member` resta valido come forma legacy.
+2. I nomi di proprieta base (`type`, `name`, `path`, `size`, `exists`, `readable`, `writable`) non vanno rinominati.
 3. I plugin non devono introdurre parole chiave che rompano le espressioni esistenti.
-4. La pipeline `|>` va riservata alle trasformazioni object-aware.
+4. La pipeline `|>` va riservata alle trasformazioni object-aware; `|` resta per le pipeline shell testuali.
 
-## 10. Esempi di uso finale desiderato
+## 6. Riferimenti
 
-```text
-let logs = obj("/var/log")
-logs.children() |> where(name ~= ".log") |> sort(size desc)
-```
-
-```text
-mount("/").stats()
-```
-
-```text
-shell() -> cwd
-```
-
-```text
-env("PATH")
-```
-
-```text
-proc() -> pid
-```
-
-Questa sintassi rende il progetto estendibile e abbastanza rigoroso da essere implementato sia da una persona sia da un'altra AI.
+- Tutti i comandi, resolver, stage e la reference ABI plugin: `docs/reference.md`
+- Guida all'installazione: `docs/guide-installation.md`
+- Guida allo scripting: `docs/guide-scripting.md`
+- Guida autore plugin: `docs/guide-plugin-author.md`
