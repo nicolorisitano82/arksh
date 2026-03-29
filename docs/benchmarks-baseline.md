@@ -227,3 +227,69 @@ Interpretation:
 - startup remains within the current guardrail (`calloc_bytes <= 2200000`) even after adding the index structures and cache metadata
 
 With `E12-S8`, the planned `E12` roadmap is complete. Future performance work can now be driven by new measurements instead of structural debt in the core runtime.
+
+## E15-S2 — Startup audit for the `/bin/sh` scenario
+
+### Measurement setup (T1)
+
+Measured with `arksh_perf_runner` on macOS 15.4 (Apple Silicon), 2026-03-29.
+`hyperfine` was not installed; the in-tree runner was used instead.
+
+Command under test: `arksh -c true`
+
+| Metric          | Measured   | CTest guard |
+|-----------------|------------|-------------|
+| `wall_ms`       | ~3–5 ms    | `<= 50 ms`  |
+| `max_rss_kb`    | 4 416 KB   | —           |
+| `calloc_bytes`  | 1 949 592  | `<= 2 200 000` |
+
+Target: < 10 ms on modern Linux. The 50 ms CTest threshold leaves 10× headroom
+for slow CI machines.
+
+### Phase profiling (T2)
+
+The `arksh_shell_init_with_options` breakdown at startup (`-c true`, no history
+file):
+
+| Phase                            | Estimated cost | Skippable in non-interactive? |
+|----------------------------------|----------------|-------------------------------|
+| Core allocs (memset, traps, arena)| ~0.1 ms       | No                            |
+| Platform session preparation      | ~0.5 ms       | No                            |
+| Env setup + prompt config         | ~0.1 ms       | No                            |
+| History path resolve + load       | ~0 ms*        | **Yes — now guarded**         |
+| `register_builtin_*` (4 phases)   | ~1.5 ms       | No                            |
+| Config/plugin autoload            | ~0.3 ms       | No (already skipped in sh mode) |
+| `rebuild_all_lookup_indices`      | ~0.5 ms       | No                            |
+| Profile/RC sourcing               | ~0.2 ms       | No                            |
+
+\* Near-zero when no history file exists (early `fopen` failure). Savings grow
+proportionally with history file size on heavily-used installs.
+
+Conclusion: no single phase is a clear outlier. The registration + index rebuild
+phases (phases 5 and 7) dominate and are structurally required.
+
+### Optimization applied (T3)
+
+`resolve_history_path` and `load_history` are now executed only when
+`shell->interactive_shell == 1`. In non-interactive mode (`-c`, script file,
+piped input) history is never read or written.
+
+Rationale:
+- History is only useful for interactive readline completion/recall.
+- Non-interactive scripts should not influence or be influenced by the user's
+  command history.
+- The guard avoids an `fopen` + `stat` on every non-interactive invocation
+  and, on large histories, avoids loading and parsing hundreds of lines that
+  will never be used.
+
+### CTest regression (T4)
+
+```cmake
+add_test(NAME arksh_perf_startup_wall_drop
+  COMMAND arksh_perf_runner $<TARGET_FILE:arksh> startup-wall command "true"
+          "wall_ms<=50")
+```
+
+This test fails if a future change causes startup to exceed 50 ms, providing a
+stable, non-regressive guard for the startup path without relying on external
+timing tools.

@@ -35,6 +35,10 @@ static int lookup_metric_value(const PerfRunSummary *summary, const char *name, 
     *out_value = (unsigned long long) summary->max_rss_kb;
     return 0;
   }
+  if (strcmp(name, "wall_ms") == 0) {
+    *out_value = (unsigned long long) summary->wall_ms;
+    return 0;
+  }
   if (strcmp(name, "malloc_calls") == 0) {
     *out_value = summary->counters.malloc_calls;
     return 0;

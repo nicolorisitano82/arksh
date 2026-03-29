@@ -505,6 +505,9 @@ if(BUILD_TESTING)
   )
   add_test(NAME arksh_perf_startup_base_drop
     COMMAND arksh_perf_runner $<TARGET_FILE:arksh> startup command "perf show" "calloc_bytes<=2200000")
+  # E15-S2-T4: startup wall-time regression guard (50ms generous for CI)
+  add_test(NAME arksh_perf_startup_wall_drop
+    COMMAND arksh_perf_runner $<TARGET_FILE:arksh> startup-wall command "true" "wall_ms<=50")
   add_test(NAME arksh_perf_object_pipeline_footprint_drop
     COMMAND arksh_perf_runner $<TARGET_FILE:arksh> object-pipeline script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/object-pipeline.arksh" "max_rss_kb<=42000")
   add_test(NAME arksh_perf_object_chain_render_drop
@@ -519,6 +522,7 @@ if(BUILD_TESTING)
     COMMAND arksh_perf_runner $<TARGET_FILE:arksh> command-substitution script "${CMAKE_CURRENT_SOURCE_DIR}/tests/perf/command-substitution.arksh" "calloc_calls<=90")
   set_tests_properties(
     arksh_perf_startup_base_drop
+    arksh_perf_startup_wall_drop
     arksh_perf_object_pipeline_footprint_drop
     arksh_perf_object_chain_render_drop
     arksh_perf_json_structured_footprint_drop

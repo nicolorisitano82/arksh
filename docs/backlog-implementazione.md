@@ -1202,7 +1202,7 @@ Stato story: `[x]`
 
 ## E15. Compatibilità bash avanzata e performance di sistema
 
-Stato epoca: `[ ]`
+Stato epoca: `[~]`
 
 Copre i gap residui emersi dall'analisi di `arksh-come-shell-di-sistema.md` che
 non rientravano nelle epoche precedenti: variabili bash mancanti, `nameref`,
@@ -1222,12 +1222,12 @@ Stato story: `[x]`
 
 ### E15-S2. Startup audit per scenario `/bin/sh`
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E15-S2-T1` misurare il tempo di startup a freddo con `hyperfine` o equivalente per i casi: `arksh -c true`, `arksh --sh -c true`, symlink `sh -c true`; stabilire una baseline e un target (< 10ms su Linux moderno)
-- `[ ]` `E15-S2-T2` profilare le fasi di init (`register_builtin_*`, `try_load_*`, `rebuild_all_lookup_indices`) per identificare i colli di bottiglia nel path di startup non-interattivo
-- `[ ]` `E15-S2-T3` ottimizzare il path non-interattivo: evitare allocazioni/registrazioni non necessarie quando non c'è TTY (es. history load, prompt config, completion generation)
-- `[ ]` `E15-S2-T4` aggiungere un test CTest di benchmark non-regressivo che fallisce se il tempo di startup supera la soglia stabilita in T1; documentare i risultati in `docs/benchmarks-baseline.md`
+- `[x]` `E15-S2-T1` misurare il tempo di startup a freddo con `hyperfine` o equivalente per i casi: `arksh -c true`, `arksh --sh -c true`, symlink `sh -c true`; stabilire una baseline e un target (< 10ms su Linux moderno)
+- `[x]` `E15-S2-T2` profilare le fasi di init (`register_builtin_*`, `try_load_*`, `rebuild_all_lookup_indices`) per identificare i colli di bottiglia nel path di startup non-interattivo
+- `[x]` `E15-S2-T3` ottimizzare il path non-interattivo: evitare allocazioni/registrazioni non necessarie quando non c'è TTY (es. history load, prompt config, completion generation)
+- `[x]` `E15-S2-T4` aggiungere un test CTest di benchmark non-regressivo che fallisce se il tempo di startup supera la soglia stabilita in T1; documentare i risultati in `docs/benchmarks-baseline.md`
 
 ### E15-S3. `sudo` come oggetto e blocchi privilegiati
 

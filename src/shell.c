@@ -13659,7 +13659,9 @@ int arksh_shell_init_with_options(ArkshShell *shell, const char *program_path, i
   initialize_default_variables(shell);
   resolve_runtime_directories(shell);
   resolve_history_path(shell);
-  load_history(shell);
+  if (shell->interactive_shell) {
+    load_history(shell);
+  }
 
   if (register_builtin_commands(shell) != 0) {
     return 1;
