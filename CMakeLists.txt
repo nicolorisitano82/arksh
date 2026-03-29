@@ -1936,6 +1936,19 @@ set_tests_properties(arksh_local_nameref PROPERTIES
 )
 
 # ────────────────────────────────────────────────────────────────────────────
+# E9-S7-T4: non-interactive smoke test (no TTY, CI-safe)
+# ────────────────────────────────────────────────────────────────────────────
+add_test(NAME arksh_smoke_notty
+  COMMAND ${CMAKE_COMMAND} -E env
+    sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke_notty.sh"
+    $<TARGET_FILE:arksh>
+)
+set_tests_properties(arksh_smoke_notty PROPERTIES
+  PASS_REGULAR_EXPRESSION "All smoke tests passed"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+# ────────────────────────────────────────────────────────────────────────────
 # E9-S2-T2: Linux package (DEB + RPM) via CPack
 # ────────────────────────────────────────────────────────────────────────────
 #

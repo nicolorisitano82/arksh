@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.4.0.schema.json
+
+PackageIdentifier: Arksh.Arksh
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: ARKsh contributors
+PublisherUrl: https://github.com/nicolorisitano82/arksh
+PublisherSupportUrl: https://github.com/nicolorisitano82/arksh/issues
+Author: ARKsh contributors
+PackageName: arksh
+PackageUrl: https://github.com/nicolorisitano82/arksh
+License: MIT
+LicenseUrl: https://github.com/nicolorisitano82/arksh/blob/main/LICENSE
+Copyright: Copyright (c) ARKsh contributors
+ShortDescription: ARKsh — Archetype Shell, typed object-aware shell
+Description: >
+  arksh is an interactive shell and scripting language for Linux, macOS and
+  Windows. It provides classic POSIX-compatible shell execution while adding
+  a typed, object-aware runtime: filesystem resources, processes, numbers,
+  strings, lists, dictionaries and command output are first-class typed
+  values queryable through member-access chains (->) and object pipelines (|>).
+Moniker: arksh
+Tags:
+  - shell
+  - terminal
+  - posix
+  - scripting
+ReleaseNotesUrl: https://github.com/nicolorisitano82/arksh/blob/main/CHANGELOG.md
+ManifestType: defaultLocale
+ManifestVersion: 1.4.0

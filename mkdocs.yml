@@ -1,0 +1,76 @@
+site_name: arksh
+site_description: ARKsh — Archetype Shell, typed object-aware shell
+site_url: https://nicolorisitano82.github.io/arksh/
+repo_url: https://github.com/nicolorisitano82/arksh
+repo_name: nicolorisitano82/arksh
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.action.edit
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: guide-installation.md
+      - Quick Start: quick-start.md
+  - Language:
+      - Syntax Reference: sintassi-arksh.md
+      - Full Reference: reference.md
+      - Scripting Guide: guide-scripting.md
+      - sh Mode: sh-mode.md
+  - Plugins:
+      - Plugin Author Guide: guide-plugin-author.md
+  - Operations:
+      - Troubleshooting: troubleshooting.md
+      - Benchmarks: benchmarks-baseline.md
+      - Release Checklist: release-checklist.md
+      - Release Criteria (1.0): release-criteria.md
+  - Project:
+      - Backlog: backlog-implementazione.md
+      - Changelog: ../CHANGELOG.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/nicolorisitano82/arksh

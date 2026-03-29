@@ -223,6 +223,147 @@ arksh --sh -c 'echo POSIX works'        # sh-mode
 
 ---
 
+## Editor and Terminal Integration
+
+### VSCode — integrated terminal
+
+To use arksh as the default terminal shell in VSCode, add one of the following snippets
+to your `settings.json` (`Cmd+Shift+P` → **Open User Settings (JSON)**):
+
+**macOS / Linux:**
+```json
+{
+  "terminal.integrated.defaultProfile.osx": "arksh",
+  "terminal.integrated.profiles.osx": {
+    "arksh": {
+      "path": "/usr/local/bin/arksh",
+      "args": [],
+      "icon": "terminal"
+    }
+  }
+}
+```
+
+**Linux:**
+```json
+{
+  "terminal.integrated.defaultProfile.linux": "arksh",
+  "terminal.integrated.profiles.linux": {
+    "arksh": {
+      "path": "/usr/local/bin/arksh",
+      "args": [],
+      "icon": "terminal"
+    }
+  }
+}
+```
+
+**Windows:**
+```json
+{
+  "terminal.integrated.defaultProfile.windows": "arksh",
+  "terminal.integrated.profiles.windows": {
+    "arksh": {
+      "path": "C:\\Program Files\\arksh\\arksh.exe",
+      "args": [],
+      "icon": "terminal"
+    }
+  }
+}
+```
+
+Verify the integration:
+
+```sh
+# Inside the VSCode terminal, check that arksh is running
+echo $ARKSH_VERSION
+. -> type   # should print "directory"
+```
+
+### Neovim — `:terminal`
+
+Neovim's `:terminal` works with arksh without any special configuration.
+Set it as the default shell in your `init.lua` or `init.vim`:
+
+**init.lua:**
+```lua
+vim.opt.shell = "/usr/local/bin/arksh"
+```
+
+**init.vim:**
+```vim
+set shell=/usr/local/bin/arksh
+```
+
+If you prefer to keep bash as the Vim shell (for compatibility with plugins that depend on
+POSIX `sh` output), you can instead just open an arksh terminal buffer on demand:
+
+```vim
+:terminal /usr/local/bin/arksh
+```
+
+**TERM and COLORTERM:** arksh honours `$TERM` and `$COLORTERM` from the parent environment.
+Inside Neovim the terminal emulator sets these automatically; no extra configuration is needed.
+
+**Known issue:** if a Neovim plugin sends a command to `&shell` and expects POSIX output,
+switch to `arksh --sh` as the shell value or use `set shell=arksh\ --sh`.
+
+### starship prompt
+
+arksh is compatible with [starship](https://starship.rs/).
+Add this to your `~/.config/arksh/arkshrc`:
+
+```sh
+# Initialize starship (run once after installing starship)
+eval "$(starship init arksh)"
+```
+
+> **Note:** use `arksh` as the shell name when calling `starship init`.
+> If starship doesn't recognise `arksh`, use `bash` — the generated eval output is
+> POSIX-compatible and works in arksh.
+
+```sh
+# Fallback: initialize as bash, works in arksh too
+eval "$(starship init bash)"
+```
+
+### direnv
+
+[direnv](https://direnv.net/) hooks into the shell's `cd` command. Add to `~/.config/arksh/arkshrc`:
+
+```sh
+eval "$(direnv hook bash)"   # direnv treats arksh like bash for hook generation
+```
+
+### fzf
+
+[fzf](https://github.com/junegunn/fzf) shell integration provides `Ctrl-R` history search,
+`Ctrl-T` file finder, and `Alt-C` directory jump.
+
+```sh
+# Add to ~/.config/arksh/arkshrc
+eval "$(fzf --bash)"   # fzf >= 0.48 supports --bash for POSIX-compatible init
+```
+
+For older fzf versions, source the bash integration script directly:
+
+```sh
+source /usr/share/fzf/key-bindings.bash
+source /usr/share/fzf/completion.bash
+```
+
+### zoxide
+
+[zoxide](https://github.com/ajeetdsouza/zoxide) is a smarter `cd`. Add to `~/.config/arksh/arkshrc`:
+
+```sh
+eval "$(zoxide init bash)"   # POSIX-compatible output works in arksh
+```
+
+After sourcing, use `z <partial-dir>` to jump to directories.
+
+---
+
 ## Uninstall
 
 ```bash

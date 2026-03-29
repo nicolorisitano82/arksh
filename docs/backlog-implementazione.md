@@ -803,7 +803,7 @@ Stato story: `[x]`
 
 ## E9. Packaging, release e documentazione finale
 
-Stato epoca: `[~]`
+Stato epoca: `[x]`
 
 ### E9-S1. Installazione standard
 
@@ -815,11 +815,11 @@ Stato story: `[x]`
 
 ### E9-S2. Packaging per sistemi target
 
-Stato story: `[~]`
+Stato story: `[x]`
 
-- `[ ]` `E9-S2-T1` preparare formula Homebrew o equivalente
+- `[x]` `E9-S2-T1` preparare formula Homebrew — `Formula/arksh.rb` con HEAD e placeholder stable; `brew install --HEAD` funzionante
 - `[x]` `E9-S2-T2` preparare pacchetto Linux iniziale — CPack DEB+RPM+TGZ in `CMakeLists.txt` (solo su Linux, non-Apple); `cpack -G DEB|RPM|TGZ` da `build/`
-- `[ ]` `E9-S2-T3` preparare strategia Windows (`winget` o installer equivalente)
+- `[x]` `E9-S2-T3` preparare strategia Windows — manifest winget in `packaging/winget/manifests/A/Arksh/Arksh/0.1.0/`; README con istruzioni per `microsoft/winget-pkgs`
 
 ### E9-S3. ABI plugin e versioning
 
@@ -841,29 +841,29 @@ Stato story: `[x]`
 
 ### E9-S5. Release process
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E9-S5-T1` introdurre changelog
-- `[ ]` `E9-S5-T2` definire checklist release
-- `[ ]` `E9-S5-T3` preparare criteri per dichiarare la `1.0`
+- `[x]` `E9-S5-T1` introdurre changelog — `CHANGELOG.md` nella root; documenta E1–E15-S2 come v0.1.0
+- `[x]` `E9-S5-T2` definire checklist release — `docs/release-checklist.md` con 10 step dalla build agli artefatti
+- `[x]` `E9-S5-T3` preparare criteri per dichiarare la `1.0` — `docs/release-criteria.md` con 10 aree e stato attuale
 
 ### E9-S6. Sito di documentazione online (GitHub Pages)
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E9-S6-T1` creare branch o cartella `docs/` pronta per GitHub Pages (Jekyll o MkDocs static site)
-- `[ ]` `E9-S6-T2` struttura minima: home con quick-start, reference sintassi, guida plugin, FAQ e link al changelog
-- `[ ]` `E9-S6-T3` collegare CI (GitHub Actions) per rebuild automatico su push a `main`
-- `[ ]` `E9-S6-T4` documentare la modalità `sh` con una pagina dedicata: differenze rispetto alla modalità arksh completa, esempi di script POSIX compatibili, variabile `ENV`
+- `[x]` `E9-S6-T1` creare `mkdocs.yml` — MkDocs Material theme; navigazione in tab; `docs/` come cartella sorgente
+- `[x]` `E9-S6-T2` struttura minima — `docs/index.md` (home), `docs/quick-start.md`; link a reference, guide, changelog
+- `[x]` `E9-S6-T3` collegare CI — `.github/workflows/pages.yml`; deploy su push a `main` su path `docs/**` o `mkdocs.yml`
+- `[x]` `E9-S6-T4` documentare la modalità `sh` — `docs/sh-mode.md` con tabella feature disabilitati, startup files, esempi, compliance notes
 
 ### E9-S7. Shell integration per editor
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E9-S7-T1` verificare che arksh funzioni come shell di terminale in VSCode (`terminal.integrated.shell.*`) e documentare la configurazione
-- `[ ]` `E9-S7-T2` verificare compatibilità con neovim `:terminal` e documentare eventuali workaround (es. TERM, COLORTERM)
-- `[ ]` `E9-S7-T3` aggiungere snippet di configurazione per starship, direnv, fzf e zoxide nella guida utente
-- `[ ]` `E9-S7-T4` aggiungere un test di smoke automatico che avvia arksh come shell non-interattiva in un ambiente senza TTY (CI-safe) e verifica exit 0 su uno script POSIX minimale
+- `[x]` `E9-S7-T1` VSCode terminal integration — sezione "Editor and Terminal Integration" in `docs/guide-installation.md` con `settings.json` per macOS, Linux, Windows
+- `[x]` `E9-S7-T2` Neovim `:terminal` — stessa sezione; `vim.opt.shell`, workaround `arksh --sh`, note su TERM/COLORTERM
+- `[x]` `E9-S7-T3` starship, direnv, fzf, zoxide — snippet in `docs/guide-installation.md` con eval hook e fallback bash-compat
+- `[x]` `E9-S7-T4` smoke test non-interattivo — `tests/smoke_notty.sh` (13 check POSIX); CTest `arksh_smoke_notty`
 
 ---
 
@@ -1119,38 +1119,27 @@ Stato story: `[x]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E11 `[x]`, E12 `[x]`, E13 `[x]`, E14 `[x]`
-**In corso:** E9-S2 `[~]` (T2 fatto, T1 e T3 aperti)
-**Aperte:** E9 (release), E10 (HTTP plugin), E15 (bash compat + startup)
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E9 `[x]`, E11 `[x]`, E12 `[x]`, E13 `[x]`, E14 `[x]`
+**In corso:** E15 `[~]` (S1 e S2 completati, S3 aperta)
+**Aperte:** E10 (HTTP plugin), E15-S3 (sudo come oggetto)
 
-**Story completate in E9:** E9-S1 `[x]`, E9-S3 `[x]`, E9-S4 `[x]`
+**Story completate in E9:** E9-S1 `[x]`, E9-S2 `[x]`, E9-S3 `[x]`, E9-S4 `[x]`, E9-S5 `[x]`, E9-S6 `[x]`, E9-S7 `[x]`
 
-### Priorità 1 — portare il progetto a livello distribuzione (E9)
+### Priorità 1 — compatibilità bash avanzata (E15)
 
-1. `E9-S2` — completare packaging (`Homebrew` per macOS, strategia Windows); Linux già fatto con CPack
-2. `E9-S5` — release process, changelog e criteri `1.0`
-3. `E9-S6` — sito documentazione online (GitHub Pages)
-4. `E9-S7` — shell integration per editor (VSCode, neovim, starship)
+1. ~~`E15-S1`~~ `[x]` — `$PPID`, `$BASHPID`, `nameref` (completato)
+2. ~~`E15-S2`~~ `[x]` — startup audit per scenario `/bin/sh` (completato)
+3. `E15-S3` — `sudo` come oggetto / blocchi privilegiati (aperto)
 
-### Priorità 2 — compatibilità bash avanzata e startup (E15)
+### Priorità 2 — plugin HTTP ufficiale (E10)
 
-1. `E15-S1` — `$PPID`, `$BASHPID`, `nameref`
-2. `E15-S2` — startup audit per scenario `/bin/sh`
-
-### Priorità 3 — plugin HTTP ufficiale (E10)
-
-`E10-S1` non blocca il core shell. Conviene affrontarla dopo aver completato E9.
+`E10-S1` non blocca il core shell. Conviene affrontarla dopo E15-S3.
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E9-S2` (T1 Homebrew + T3 Windows)
-2. `E9-S5`
-3. `E9-S6`
-4. `E9-S7`
-5. ~~`E15-S1`~~ `[x]` già completato
-6. `E15-S2`
-7. `E10-S1`
-8. `E15-S3` — `sudo` come oggetto / blocchi privilegiati
+1. `E15-S3` — `sudo` come oggetto / `with sudo do` blocks
+2. `E10-S1` — plugin HTTP ufficiale
+3. Audit di sicurezza per `v1.0` (vedi `docs/release-criteria.md`)
 
 ---
 
