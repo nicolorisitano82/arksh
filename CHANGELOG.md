@@ -8,6 +8,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning fol
 
 ## [Unreleased]
 
+### Added
+
+#### sudo as an object (E15-S3)
+- `sudo()` value resolver: returns a typed `sudo_context` map; `sudo("cmd")` stores the target command
+- Member-access chain `sudo("service") -> start()` dispatches as `sudo service start`
+- `with sudo do ... endwith` compound block: sets `ctx_sudo` flag so all external commands inside are prefixed with `sudo`; multi-line form supported in both source files and REPL
+- Windows: `sudo` member calls return an unsupported warning; `with sudo do` is a no-op
+- 3 new CTests (335–337): resolver context, resolver with cmd, with-sudo block
+
 ---
 
 ## [0.1.0] — 2026-03-29

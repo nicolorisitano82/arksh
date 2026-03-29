@@ -2120,6 +2120,56 @@ static int call_bound_value(
     return 1;
   }
 
+  /* E15-S3-T2: sudo context map — method calls translate to: sudo <cmd> <method> [args...] */
+  if (bound_value->kind == ARKSH_VALUE_MAP) {
+    const ArkshValueItem *type_entry = arksh_value_map_get_item(bound_value, "__type__");
+    if (type_entry != NULL &&
+        type_entry->kind == ARKSH_VALUE_STRING &&
+        strcmp(arksh_value_item_text_cstr(type_entry), "sudo_context") == 0) {
+      const ArkshValueItem *cmd_entry = arksh_value_map_get_item(bound_value, "__cmd__");
+#ifdef _WIN32
+      snprintf(out, out_size, "sudo context: sudo is not available on Windows");
+      return 1;
+#else
+      {
+        char expanded_args[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
+        char *argv_ptrs[ARKSH_MAX_ARGS + 3];
+        int expanded_argc = 0;
+        int j;
+        int total_argc;
+
+        for (j = 0; j < member->argc && j < ARKSH_MAX_ARGS; ++j) {
+          if (evaluate_parsed_arg_text(shell, &member->parsed_args[j], member->raw_argv[j],
+                expanded_args[j], sizeof(expanded_args[j]), out, out_size) != 0) {
+            return 1;
+          }
+          expanded_argc++;
+        }
+
+        argv_ptrs[0] = "sudo";
+        if (cmd_entry != NULL && cmd_entry->kind == ARKSH_VALUE_STRING) {
+          argv_ptrs[1] = (char *) arksh_value_item_text_cstr(cmd_entry);
+          argv_ptrs[2] = (char *) member->member;
+          for (j = 0; j < expanded_argc; ++j) {
+            argv_ptrs[3 + j] = expanded_args[j];
+          }
+          total_argc = 3 + expanded_argc;
+        } else {
+          /* sudo() called without cmd: sudo <method> [args...] */
+          argv_ptrs[1] = (char *) member->member;
+          for (j = 0; j < expanded_argc; ++j) {
+            argv_ptrs[2 + j] = expanded_args[j];
+          }
+          total_argc = 2 + expanded_argc;
+        }
+
+        arksh_value_init(out_value);
+        return arksh_execute_external_command(shell, total_argc, argv_ptrs, out, out_size);
+      }
+#endif
+    }
+  }
+
   if (strcmp(member->member, "call") == 0 && bound_value->kind == ARKSH_VALUE_BLOCK) {
     args = (ArkshValue *) allocate_temp_buffer((size_t) member->argc, sizeof(*args), "bound value arguments", out, out_size);
     if (member->argc > 0 && args == NULL) {
@@ -4899,6 +4949,19 @@ int arksh_execute_external_command(ArkshShell *shell, int argc, char **argv, cha
   for (i = 0; i < argc && i < ARKSH_MAX_ARGS; ++i) {
     copy_string(spec.argv[i], sizeof(spec.argv[i]), argv[i]);
   }
+
+  /* E15-S3-T3: inside "with sudo do" context — prepend sudo to external commands */
+#ifndef _WIN32
+  if (shell->ctx_sudo > 0 && spec.argc < ARKSH_MAX_ARGS) {
+    int j;
+    for (j = spec.argc; j > 0; --j) {
+      copy_string(spec.argv[j], sizeof(spec.argv[j]), spec.argv[j - 1]);
+    }
+    copy_string(spec.argv[0], sizeof(spec.argv[0]), "sudo");
+    spec.argc++;
+  }
+#endif
+
   if (apply_inherited_input_redirection(shell, &spec, out, out_size) != 0) {
     return 1;
   }
@@ -7667,6 +7730,34 @@ static int execute_case_command(ArkshShell *shell, const ArkshCaseCommandNode *c
   return 0;
 }
 
+/* E15-S3-T3: execute "with sudo do … endwith" — elevates all external commands inside the body */
+static int execute_with_sudo_command(
+  ArkshShell *shell,
+  const ArkshWithSudoCommandNode *command,
+  char *out,
+  size_t out_size
+) {
+  int status;
+
+  if (shell == NULL || command == NULL || out == NULL || out_size == 0) {
+    return 1;
+  }
+
+  out[0] = '\0';
+
+#ifdef _WIN32
+  /* Windows: sudo is not available — warn and execute the body without elevation */
+  snprintf(out, out_size, "warning: sudo is not available on Windows; executing body without elevation");
+  (void) shell; (void) command;
+  return 1;
+#else
+  shell->ctx_sudo++;
+  status = arksh_shell_execute_line(shell, command->body, out, out_size);
+  shell->ctx_sudo--;
+  return status;
+#endif
+}
+
 int arksh_execute_ast(ArkshShell *shell, const ArkshAst *ast, char *out, size_t out_size) {
   ArkshScratchFrame scratch_frame;
   int status;
@@ -7729,6 +7820,9 @@ int arksh_execute_ast(ArkshShell *shell, const ArkshAst *ast, char *out, size_t 
       break;
     case ARKSH_AST_CLASS_COMMAND:
       status = execute_class_definition(shell, &ast->as.class_command, out, out_size);
+      break;
+    case ARKSH_AST_WITH_SUDO_COMMAND: /* E15-S3 */
+      status = execute_with_sudo_command(shell, &ast->as.with_sudo_command, out, out_size);
       break;
     default:
       snprintf(out, out_size, "unsupported AST node kind");

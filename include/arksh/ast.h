@@ -34,7 +34,8 @@ typedef enum {
   ARKSH_AST_CASE_COMMAND,
   ARKSH_AST_SWITCH_COMMAND,
   ARKSH_AST_FUNCTION_COMMAND,
-  ARKSH_AST_CLASS_COMMAND
+  ARKSH_AST_CLASS_COMMAND,
+  ARKSH_AST_WITH_SUDO_COMMAND  /* E15-S3: with sudo do … endwith */
 } ArkshAstKind;
 
 typedef enum {
@@ -190,6 +191,11 @@ typedef struct {
   char source[ARKSH_MAX_LINE];
 } ArkshClassCommandNode;
 
+/* E15-S3: with sudo do … endwith */
+typedef struct {
+  char body[ARKSH_MAX_LINE];
+} ArkshWithSudoCommandNode;
+
 typedef struct {
   char member[ARKSH_MAX_NAME];
   char argv[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
@@ -282,6 +288,7 @@ typedef struct {
     ArkshSwitchCommandNode switch_command;
     ArkshFunctionCommandNode function_command;
     ArkshClassCommandNode class_command;
+    ArkshWithSudoCommandNode with_sudo_command; /* E15-S3 */
   } as;
 } ArkshAst;
 

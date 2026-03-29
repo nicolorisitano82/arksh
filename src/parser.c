@@ -2689,7 +2689,8 @@ static int keyword_is_compound_open(const char *word) {
           strcmp(word, "case") == 0 ||
           strcmp(word, "switch") == 0 ||
           strcmp(word, "function") == 0 ||
-          strcmp(word, "class") == 0);
+          strcmp(word, "class") == 0 ||
+          strcmp(word, "with") == 0); /* E15-S3 */
 }
 
 static int keyword_is_compound_close(const char *word) {
@@ -2699,7 +2700,8 @@ static int keyword_is_compound_close(const char *word) {
           strcmp(word, "esac") == 0 ||
           strcmp(word, "endswitch") == 0 ||
           strcmp(word, "endfunction") == 0 ||
-          strcmp(word, "endclass") == 0);
+          strcmp(word, "endclass") == 0 ||
+          strcmp(word, "endwith") == 0); /* E15-S3 */
 }
 
 static int text_range_contains_newline(const char *text, size_t start, size_t end) {
@@ -4036,6 +4038,109 @@ static int parse_class_command_tokens(
   return 0;
 }
 
+/* E15-S3-T3: parse "with sudo do … endwith" compound command */
+static int parse_with_sudo_command_tokens(
+  const char *line,
+  const ArkshTokenStream *stream,
+  ArkshWithSudoCommandNode *out_with,
+  char *error,
+  size_t error_size
+) {
+  size_t do_index = stream->count;
+  size_t endwith_index = stream->count;
+  size_t i;
+  int nested_depth = 0;
+
+  if (line == NULL || stream == NULL || out_with == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+
+  /* Syntax: with sudo do ... endwith */
+  if (!token_is_word_value(stream, 0, "with")) {
+    return 1;
+  }
+  if (stream->count < 2 || !token_is_word_value(stream, 1, "sudo")) {
+    snprintf(error, error_size, "with: expected 'sudo' after 'with'");
+    return 1;
+  }
+
+  memset(out_with, 0, sizeof(*out_with));
+
+  /* Find 'do' keyword.
+   * NOTE: unlike while/for, "with sudo do" has no separator between "sudo" and "do",
+   * so token_starts_command() would reject "do" at index 2.  We accept "do" as a bare
+   * WORD token at any position after "sudo" (depth-0), relying on nesting counters for
+   * correctness in nested compound commands. */
+  for (i = 2; i < stream->count; ++i) {
+    const ArkshToken *token = &stream->tokens[i];
+
+    if (token->kind != ARKSH_TOKEN_WORD) {
+      continue;
+    }
+
+    if (nested_depth == 0 && strcmp(token->text, "do") == 0) {
+      do_index = i;
+      break;
+    }
+
+    if (keyword_is_compound_open(token->text)) {
+      nested_depth++;
+    } else if (keyword_is_compound_close(token->text) && nested_depth > 0) {
+      nested_depth--;
+    }
+  }
+
+  if (do_index >= stream->count) {
+    snprintf(error, error_size, "unterminated with sudo command: missing do");
+    return 1;
+  }
+
+  /* Find 'endwith' keyword.
+   * Use token_starts_command for nested compound keywords, but accept 'endwith'
+   * as any WORD token at depth 0. */
+  nested_depth = 0;
+  for (i = do_index + 1; i < stream->count; ++i) {
+    const ArkshToken *token = &stream->tokens[i];
+
+    if (token->kind != ARKSH_TOKEN_WORD) {
+      continue;
+    }
+
+    if (nested_depth == 0 && strcmp(token->text, "endwith") == 0) {
+      endwith_index = i;
+      break;
+    }
+
+    if (token_starts_command(line, stream, i)) {
+      if (keyword_is_compound_open(token->text)) {
+        nested_depth++;
+      } else if (keyword_is_compound_close(token->text) && nested_depth > 0) {
+        nested_depth--;
+      }
+    }
+  }
+
+  if (endwith_index >= stream->count) {
+    snprintf(error, error_size, "unterminated with sudo command: missing endwith");
+    return 1;
+  }
+
+  trim_compound_segment(
+    line,
+    stream->tokens[do_index].position + strlen(stream->tokens[do_index].raw),
+    stream->tokens[endwith_index].position,
+    out_with->body,
+    sizeof(out_with->body)
+  );
+
+  if (out_with->body[0] == '\0') {
+    snprintf(error, error_size, "with sudo: empty body");
+    return 1;
+  }
+
+  return 0;
+}
+
 void arksh_ast_init(ArkshAst *ast) {
   if (ast == NULL) {
     return;
@@ -4185,6 +4290,15 @@ int arksh_parse_line(const char *line, ArkshAst *out_ast, char *error, size_t er
     return 0;
   }
   if (token_is_word_value(&stream, 0, "class") && error[0] != '\0') {
+    return 1;
+  }
+
+  /* E15-S3-T3: with sudo do … endwith */
+  if (parse_with_sudo_command_tokens(trimmed, &stream, &out_ast->as.with_sudo_command, error, error_size) == 0) {
+    out_ast->kind = ARKSH_AST_WITH_SUDO_COMMAND;
+    return 0;
+  }
+  if (token_is_word_value(&stream, 0, "with") && error[0] != '\0') {
     return 1;
   }
 

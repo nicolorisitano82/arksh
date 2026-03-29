@@ -1,0 +1,5 @@
+# E15-S3-T3: with sudo do ... endwith block test
+# Uses PATH override to intercept "sudo" calls with mock-sudo.sh
+with sudo do
+  echo hello_from_sudo_block
+endwith

@@ -1949,6 +1949,40 @@ set_tests_properties(arksh_smoke_notty PROPERTIES
 )
 
 # ────────────────────────────────────────────────────────────────────────────
+# E15-S3: sudo as object / with sudo do … endwith
+# ────────────────────────────────────────────────────────────────────────────
+
+# T1: sudo() resolver returns a sudo_context map
+add_test(NAME arksh_sudo_resolver_context
+  COMMAND $<TARGET_FILE:arksh>
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sudo/sudo-resolver-context.arksh"
+)
+set_tests_properties(arksh_sudo_resolver_context PROPERTIES
+  PASS_REGULAR_EXPRESSION "sudo_context"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+# T2: sudo("cmd") resolver returns map with __type__ and __cmd__
+add_test(NAME arksh_sudo_resolver_cmd
+  COMMAND $<TARGET_FILE:arksh>
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sudo/sudo-resolver-cmd.arksh"
+)
+set_tests_properties(arksh_sudo_resolver_cmd PROPERTIES
+  PASS_REGULAR_EXPRESSION "service"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+# T3: with sudo do … endwith block syntax (echo is built-in; verifies parse + execute)
+add_test(NAME arksh_sudo_with_block
+  COMMAND $<TARGET_FILE:arksh>
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sudo/with-sudo-block.arksh"
+)
+set_tests_properties(arksh_sudo_with_block PROPERTIES
+  PASS_REGULAR_EXPRESSION "hello_from_sudo_block"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+# ────────────────────────────────────────────────────────────────────────────
 # E9-S2-T2: Linux package (DEB + RPM) via CPack
 # ────────────────────────────────────────────────────────────────────────────
 #

@@ -15,7 +15,7 @@ Il progetto ha superato la fase prototipale: le epoche E1–E9, E11–E15-S2 son
 Il core shell copre POSIX di media complessita, il modello ad oggetti e completo,
 la pipeline tipizzata e stabile, il sistema di plugin e versionato (ABI v5), il packaging
 e il processo di release sono in produzione (Homebrew, winget, CPack, GitHub Pages).
-Restano aperti il plugin HTTP (E10) e alcune feature avanzate (E15-S3, E16+).
+Resta aperto il plugin HTTP (E10) e la validazione su corpora reali POSIX/bash.
 
 ## Assunzioni architetturali
 
@@ -502,7 +502,7 @@ ridurre la pressione sull'allocatore di sistema nelle path calde.
 
 ## Stato dell'implementazione
 
-### Completato (E1–E9, E11–E15-S2)
+### Completato (E1–E9, E11–E15)
 
 - Linguaggio shell: funzioni (POSIX e parametri nominali), classi con ereditarieta multipla,
   estensioni `extend`, heredoc, `case/esac`, `break/continue [n]`, `until`, `coproc`-stub
@@ -516,7 +516,9 @@ ridurre la pressione sull'allocatore di sistema nelle path calde.
 - Job control POSIX: process group, `tcsetpgrp`, `SIGWINCH`, `SIGCHLD`, ripristino TTY
 - Plugin ABI v5: query/init separati, capability flags, binary search index
 - Performance: scratch arena, indici binari, guard di regressione CTest
-- Test: 334 CTest (incl. smoke no-TTY), PTY REPL, job control smoke, ASan/UBSan CI
+- `sudo` come oggetto: resolver `sudo()`, catena member-access `sudo(cmd) -> method()`,
+  blocco `with sudo do ... endwith`; su Windows no-op con warning
+- Test: 337 CTest (incl. smoke no-TTY, E15-S3 sudo), PTY REPL, job control smoke, ASan/UBSan CI
 - Startup audit: history load skippa in modalita non-interattiva; guard `wall_ms<=50ms`
 - Packaging: formula Homebrew (`Formula/arksh.rb`), manifest winget (`packaging/winget/`),
   pacchetti CPack DEB+RPM+TGZ (Linux), man page `arksh(1)` installata da CMake
@@ -529,8 +531,7 @@ ridurre la pressione sull'allocatore di sistema nelle path calde.
 ### Aperti
 
 1. Plugin HTTP/HTTPS con libcurl (E10)
-2. `sudo` come oggetto e blocchi privilegiati `with sudo do` (E15-S3)
-3. Validazione su corpora reali POSIX/bash (script di sistema)
+2. Validazione su corpora reali POSIX/bash (script di sistema)
 
 ## Contratto da preservare se un'altra AI continua il lavoro
 

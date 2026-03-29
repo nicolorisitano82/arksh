@@ -929,7 +929,8 @@ static int parse_error_is_incomplete_compound(const char *error) {
           strncmp(error, "unterminated function command", 29) == 0 ||
           strncmp(error, "unterminated class command", 26) == 0 ||
           strncmp(error, "unterminated group command", 26) == 0 ||
-          strncmp(error, "unterminated subshell command", 29) == 0);
+          strncmp(error, "unterminated subshell command", 29) == 0 ||
+          strncmp(error, "unterminated with sudo command", 30) == 0);
 }
 
 static int parse_error_is_unterminated_heredoc(const char *error) {
@@ -5063,6 +5064,99 @@ static int resolver_proc(
   return 0;
 }
 
+/* E15-S3-T1/T2: sudo() resolver
+ *
+ *   sudo()                  — returns a sudo_context map (useful with member access)
+ *   sudo("cmd")             — returns sudo_context for "cmd"; supports -> method() chains
+ *   sudo("cmd", "arg1",...) — executes "sudo cmd arg1 ..." immediately, returns process map
+ *
+ * On Windows: always returns an error (sudo is not available).
+ */
+static int resolver_sudo(
+  ArkshShell *shell,
+  int argc,
+  const ArkshValue *args,
+  ArkshValue *out_value,
+  char *error,
+  size_t error_size
+) {
+  if (shell == NULL || out_value == NULL || error == NULL || error_size == 0) {
+    return 1;
+  }
+
+#ifdef _WIN32
+  snprintf(error, error_size, "sudo() is not available on Windows");
+  return 1;
+#else
+  if (argc == 0) {
+    /* sudo() with no args — return a bare sudo_context map */
+    arksh_value_set_map(out_value);
+    if (map_add_string_entry(out_value, "__type__", "sudo_context") != 0) {
+      snprintf(error, error_size, "sudo(): unable to build context map");
+      return 1;
+    }
+    return 0;
+  }
+
+  {
+    char cmd[ARKSH_MAX_TOKEN];
+    /* First arg must be a string (command name or path) */
+    if (args[0].kind != ARKSH_VALUE_STRING) {
+      snprintf(error, error_size, "sudo(): first argument must be a string command name");
+      return 1;
+    }
+    copy_string(cmd, sizeof(cmd), arksh_value_text_cstr(&args[0]));
+
+    if (argc == 1) {
+      /* sudo("cmd") — return sudo_context for member-access chains */
+      arksh_value_set_map(out_value);
+      if (map_add_string_entry(out_value, "__type__", "sudo_context") != 0 ||
+          map_add_string_entry(out_value, "__cmd__",  cmd) != 0) {
+        snprintf(error, error_size, "sudo(): unable to build context map");
+        return 1;
+      }
+      return 0;
+    }
+
+    /* argc >= 2: execute "sudo cmd arg1 arg2 ..." immediately */
+    {
+      char argv_storage[ARKSH_MAX_ARGS][ARKSH_MAX_TOKEN];
+      char *argv_ptrs[ARKSH_MAX_ARGS + 1];
+      int total_argc = 0;
+      int i;
+      char exec_out[ARKSH_MAX_OUTPUT];
+      int status;
+
+      copy_string(argv_storage[0], sizeof(argv_storage[0]), "sudo");
+      argv_ptrs[0] = argv_storage[0];
+      total_argc++;
+
+      for (i = 0; i < argc && total_argc < ARKSH_MAX_ARGS; ++i) {
+        if (args[i].kind != ARKSH_VALUE_STRING) {
+          snprintf(error, error_size, "sudo(): argument %d must be a string", i + 1);
+          return 1;
+        }
+        copy_string(argv_storage[total_argc], sizeof(argv_storage[total_argc]), arksh_value_text_cstr(&args[i]));
+        argv_ptrs[total_argc] = argv_storage[total_argc];
+        total_argc++;
+      }
+
+      exec_out[0] = '\0';
+      status = arksh_execute_external_command(shell, total_argc, argv_ptrs, exec_out, sizeof(exec_out));
+
+      arksh_value_set_map(out_value);
+      if (map_add_string_entry(out_value, "__type__", "sudo_result") != 0 ||
+          map_add_string_entry(out_value, "cmd", cmd) != 0 ||
+          map_add_number_entry(out_value, "exit_code", (double) status) != 0) {
+        snprintf(error, error_size, "sudo(): unable to build result map");
+        return 1;
+      }
+      return status;
+    }
+  }
+#endif
+}
+
 static int resolver_shell_namespace(
   ArkshShell *shell,
   int argc,
@@ -6490,6 +6584,10 @@ static int register_builtin_value_resolvers(ArkshShell *shell) {
     return 1;
   }
   if (arksh_shell_register_value_resolver(shell, "shell", "arksh runtime introspection (vars, functions, plugins, …)", resolver_shell_namespace, 0) != 0) {
+    return 1;
+  }
+  /* E15-S3: sudo() resolver */
+  if (arksh_shell_register_value_resolver(shell, "sudo", "run command with sudo / build sudo context for member-access chains", resolver_sudo, 0) != 0) {
     return 1;
   }
   /* E6-S1 namespaces */

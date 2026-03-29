@@ -1119,27 +1119,27 @@ Stato story: `[x]`
 
 ## Prossimi punti consigliati
 
-**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E9 `[x]`, E11 `[x]`, E12 `[x]`, E13 `[x]`, E14 `[x]`
-**In corso:** E15 `[~]` (S1 e S2 completati, S3 aperta)
-**Aperte:** E10 (HTTP plugin), E15-S3 (sudo come oggetto)
+**Epoche completate:** E1 `[x]`, E2 `[x]`, E3 `[x]`, E4 `[x]`, E5 `[x]`, E6 `[x]`, E7 `[x]`, E8 `[x]`, E9 `[x]`, E11 `[x]`, E12 `[x]`, E13 `[x]`, E14 `[x]`, E15 `[x]`
+**In corso:** —
+**Aperte:** E10 (HTTP plugin)
 
 **Story completate in E9:** E9-S1 `[x]`, E9-S2 `[x]`, E9-S3 `[x]`, E9-S4 `[x]`, E9-S5 `[x]`, E9-S6 `[x]`, E9-S7 `[x]`
+**Story completate in E15:** E15-S1 `[x]`, E15-S2 `[x]`, E15-S3 `[x]`
 
-### Priorità 1 — compatibilità bash avanzata (E15)
+### Priorità 1 — plugin HTTP ufficiale (E10)
 
-1. ~~`E15-S1`~~ `[x]` — `$PPID`, `$BASHPID`, `nameref` (completato)
-2. ~~`E15-S2`~~ `[x]` — startup audit per scenario `/bin/sh` (completato)
-3. `E15-S3` — `sudo` come oggetto / blocchi privilegiati (aperto)
+`E10-S1` non blocca il core shell. È la prossima priorità ora che E15 è completata.
 
-### Priorità 2 — plugin HTTP ufficiale (E10)
+### Compatibilità bash avanzata (E15) — COMPLETATA
 
-`E10-S1` non blocca il core shell. Conviene affrontarla dopo E15-S3.
+1. ~~`E15-S1`~~ `[x]` — `$PPID`, `$BASHPID`, `nameref`
+2. ~~`E15-S2`~~ `[x]` — startup audit per scenario `/bin/sh`
+3. ~~`E15-S3`~~ `[x]` — `sudo` come oggetto / `with sudo do` blocks
 
 ### Ordine raccomandato dei prossimi sprint
 
-1. `E15-S3` — `sudo` come oggetto / `with sudo do` blocks
-2. `E10-S1` — plugin HTTP ufficiale
-3. Audit di sicurezza per `v1.0` (vedi `docs/release-criteria.md`)
+1. `E10-S1` — plugin HTTP ufficiale
+2. Audit di sicurezza per `v1.0` (vedi `docs/release-criteria.md`)
 
 ---
 
@@ -1273,20 +1273,20 @@ privilegiato; ogni comando nel blocco viene prefissato con `sudo`.
 **Raccomandazione**: implementare entrambe, iniziando da A (resolver `sudo()`
 come thin wrapper) poi B (blocco `with sudo do`).
 
-- `[ ]` `E15-S3-T1` aggiungere resolver `sudo(cmd_args...)` — esegue il
+- `[x]` `E15-S3-T1` aggiungere resolver `sudo(cmd_args...)` — esegue il
   processo dato con `sudo`; restituisce un oggetto `process`; su Windows è
   un no-op con warning
-- `[ ]` `E15-S3-T2` integrare `sudo()` nella catena member-access —
+- `[x]` `E15-S3-T2` integrare `sudo()` nella catena member-access —
   `sudo(service) -> start()` deve tradursi in `sudo service start`; il
   resolver intercetta la chiamata e riscrive l'argv
-- `[ ]` `E15-S3-T3` aggiungere sintassi `with sudo do ... endwith` al parser
+- `[x]` `E15-S3-T3` aggiungere sintassi `with sudo do ... endwith` al parser
   — il blocco imposta un flag `ctx_sudo` nel runtime; ogni `exec_command`
   controlla il flag e prepende `sudo` all'argv
-- `[ ]` `E15-S3-T4` gestire correttamente TTY/pty per `sudo` interattivo —
-  `sudo` richiede un TTY per il prompt password; usare la stessa infrastruttura
-  PTY già presente (E13)
-- `[ ]` `E15-S3-T5` test di regressione: `sudo echo ok` (mock sudo con script
-  no-op), blocco `with sudo do`, catena `sudo(cmd) -> prop`
+- `[x]` `E15-S3-T4` gestire correttamente TTY/pty per `sudo` interattivo —
+  `sudo` richiede un TTY per il prompt password; usa la stessa infrastruttura
+  PTY già presente (E13); nessuna modifica necessaria al runtime PTY
+- `[x]` `E15-S3-T5` test di regressione: `sudo echo ok` (mock sudo con script
+  no-op), blocco `with sudo do`, catena `sudo(cmd) -> prop` (CTest 335–337)
 
 ---
 

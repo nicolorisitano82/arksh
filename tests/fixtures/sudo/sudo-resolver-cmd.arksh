@@ -1,0 +1,3 @@
+# E15-S3-T2: sudo("cmd") returns a sudo_context map with __cmd__
+sudo("service") -> __type__
+sudo("service") -> __cmd__

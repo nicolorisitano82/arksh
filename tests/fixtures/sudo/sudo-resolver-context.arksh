@@ -1,0 +1,2 @@
+# E15-S3-T1: sudo() resolver returns a sudo_context map
+sudo() -> __type__
