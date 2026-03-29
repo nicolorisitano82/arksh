@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(arksh VERSION 0.1.0 LANGUAGES C)
+project(arksh VERSION 0.9.0 LANGUAGES C)
 
 include(GNUInstallDirs)
 
@@ -92,6 +92,7 @@ endif()
 
 target_compile_definitions(arksh_core PUBLIC
   ARKSH_RUNTIME_PLUGIN_RELDIR="${ARKSH_RUNTIME_PLUGIN_RELDIR}"
+  ARKSH_VERSION="${PROJECT_VERSION}"
 )
 
 if(NOT WIN32)
@@ -1990,9 +1991,9 @@ set_tests_properties(arksh_sudo_with_block PROPERTIES
 #
 #   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 #   cmake --build build
-#   cd build && cpack -G DEB       # → arksh_0.1.0_amd64.deb
-#   cd build && cpack -G RPM       # → arksh-0.1.0-1.x86_64.rpm
-#   cd build && cpack -G TGZ       # → arksh-0.1.0-Linux.tar.gz
+#   cd build && cpack -G DEB       # → arksh_0.9.0_amd64.deb
+#   cd build && cpack -G RPM       # → arksh-0.9.0-1.x86_64.rpm
+#   cd build && cpack -G TGZ       # → arksh-0.9.0-Linux.tar.gz
 #
 # The produced package installs to the same prefix as cmake --install.
 # Default prefix: /usr/local.  Override at cmake configure time:

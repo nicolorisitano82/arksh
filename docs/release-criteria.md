@@ -77,7 +77,7 @@ Nessun criterio è opzionale; tutti devono essere nello stato `[x]` prima del ta
 
 ---
 
-## Stato attuale (pre-1.0, v0.1.0)
+## Stato attuale (pre-1.0, v0.9.0)
 
 | Area | Completato | Note |
 |------|-----------|------|

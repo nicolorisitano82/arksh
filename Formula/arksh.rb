@@ -16,9 +16,9 @@ class Arksh < Formula
   license "MIT"
 
   # ── Stable release (update URL and sha256 after each tagged release) ────
-  # url "https://github.com/nicolorisitano82/arksh/archive/refs/tags/v0.1.0.tar.gz"
+  # url "https://github.com/nicolorisitano82/arksh/archive/refs/tags/v0.9.0.tar.gz"
   # sha256 "REPLACE_WITH_SHA256_OF_THE_RELEASE_TARBALL"
-  # version "0.1.0"
+  # version "0.9.0"
 
   # ── HEAD (build from latest main branch) ────────────────────────────────
   head "https://github.com/nicolorisitano82/arksh.git", branch: "main"

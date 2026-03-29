@@ -78,6 +78,13 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  if (arg_index < argc && (strcmp(argv[arg_index], "--version") == 0 || strcmp(argv[arg_index], "-V") == 0)) {
+    printf("arksh %s\n", ARKSH_VERSION);
+    arksh_shell_destroy(shell);
+    free(shell);
+    return 0;
+  }
+
   if (arg_index < argc && strcmp(argv[arg_index], "--help") == 0) {
     arksh_shell_print_help(shell, output, sizeof(output));
     print_output_if_any(output);

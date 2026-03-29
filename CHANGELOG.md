@@ -8,6 +8,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning fol
 
 ## [Unreleased]
 
+---
+
+## [0.9.0] — 2026-03-29
+
 ### Added
 
 #### sudo as an object (E15-S3)

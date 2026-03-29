@@ -1,6 +1,6 @@
 # arksh Language and API Reference
 
-Version 0.1.0 — updated 2026-03-29
+Version 0.9.0 — updated 2026-03-29
 
 This is the authoritative quick reference for arksh: commands, value resolvers,
 pipeline stages, syntax, special variables, and the plugin ABI. For conceptual
