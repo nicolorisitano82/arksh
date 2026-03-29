@@ -1880,6 +1880,58 @@ if(BUILD_TESTING)
 endif()
 
 # ────────────────────────────────────────────────────────────────────────────
+# E15-S1: $PPID, $BASHPID, nameref regression tests
+# ────────────────────────────────────────────────────────────────────────────
+add_test(NAME arksh_ppid_numeric
+  COMMAND arksh -c "echo $PPID")
+set_tests_properties(arksh_ppid_numeric PROPERTIES
+  PASS_REGULAR_EXPRESSION "^[0-9]+"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+add_test(NAME arksh_bashpid_numeric
+  COMMAND arksh -c "echo $BASHPID")
+set_tests_properties(arksh_bashpid_numeric PROPERTIES
+  PASS_REGULAR_EXPRESSION "^[0-9]+"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+add_test(NAME arksh_nameref_read
+  COMMAND arksh -c "x=hello; declare -n r=x; echo $r")
+set_tests_properties(arksh_nameref_read PROPERTIES
+  PASS_REGULAR_EXPRESSION "hello"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+add_test(NAME arksh_nameref_write
+  COMMAND arksh -c "x=old; declare -n r=x; r=new; echo $x")
+set_tests_properties(arksh_nameref_write PROPERTIES
+  PASS_REGULAR_EXPRESSION "new"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+add_test(NAME arksh_nameref_unset_target
+  COMMAND arksh -c "x=val; declare -n r=x; unset r; echo \${x-gone}")
+set_tests_properties(arksh_nameref_unset_target PROPERTIES
+  PASS_REGULAR_EXPRESSION "gone"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+add_test(NAME arksh_nameref_unset_self
+  COMMAND arksh -c "x=val; declare -n r=x; unset -n r; echo \${r-norref}")
+set_tests_properties(arksh_nameref_unset_self PROPERTIES
+  PASS_REGULAR_EXPRESSION "norref"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+add_test(NAME arksh_local_nameref
+  COMMAND arksh -c "source ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/scope/local-nameref.arksh")
+set_tests_properties(arksh_local_nameref PROPERTIES
+  PASS_REGULAR_EXPRESSION "hi"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+# ────────────────────────────────────────────────────────────────────────────
 # E9-S2-T2: Linux package (DEB + RPM) via CPack
 # ────────────────────────────────────────────────────────────────────────────
 #

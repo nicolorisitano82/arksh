@@ -372,6 +372,7 @@ typedef struct ArkshShell {
   size_t positional_capacity;
   long long last_bg_pid;
   long long shell_pid;
+  long long parent_pid;  /* E15-S1-T1: $PPID — PID of parent process (fixed at init) */
   long long shell_pgid;
   long long shell_sid;
   long long shell_tty_pgid;
@@ -421,6 +422,11 @@ int arksh_shell_resolve_plugin_path(const ArkshShell *shell, const char *query, 
 const char *arksh_shell_get_var(const ArkshShell *shell, const char *name);
 int arksh_shell_set_var(ArkshShell *shell, const char *name, const char *value, int exported);
 int arksh_shell_unset_var(ArkshShell *shell, const char *name);
+/* E15-S1-T3: nameref — declare -n / local -n */
+#define ARKSH_NAMEREF_PREFIX     "__ARKSH_NAMEREF__"
+#define ARKSH_NAMEREF_PREFIX_LEN 17
+int  arksh_shell_set_nameref(ArkshShell *shell, const char *name, const char *target);
+int  arksh_shell_resolve_nameref(const ArkshShell *shell, const char *name, char *out_target, size_t out_size);
 const ArkshValue *arksh_shell_get_binding(const ArkshShell *shell, const char *name);
 int arksh_shell_set_binding(ArkshShell *shell, const char *name, const ArkshValue *value);
 int arksh_shell_unset_binding(ArkshShell *shell, const char *name);

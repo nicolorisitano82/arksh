@@ -21,6 +21,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#  ifdef __APPLE__
+#    include <sys/sysctl.h>
+#  endif
 #endif
 
 #include "arksh/ast.h"
@@ -853,6 +856,81 @@ int arksh_platform_get_process_info(ArkshPlatformProcessInfo *out_info) {
 #endif
 
   return 0;
+}
+
+int arksh_platform_get_process_info_by_pid(unsigned long pid, ArkshPlatformProcessInfo *out_info) {
+  if (out_info == NULL) {
+    return 1;
+  }
+
+  memset(out_info, 0, sizeof(*out_info));
+  out_info->pid = pid;
+
+#ifdef _WIN32
+  {
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    PROCESSENTRY32 entry;
+    int found = 0;
+
+    if (snapshot == INVALID_HANDLE_VALUE) {
+      return 1;
+    }
+    memset(&entry, 0, sizeof(entry));
+    entry.dwSize = sizeof(entry);
+    if (Process32First(snapshot, &entry)) {
+      do {
+        if (entry.th32ProcessID == (DWORD) pid) {
+          out_info->ppid = (unsigned long) entry.th32ParentProcessID;
+          found = 1;
+          break;
+        }
+      } while (Process32Next(snapshot, &entry));
+    }
+    CloseHandle(snapshot);
+    if (!found) {
+      return 1;
+    }
+    out_info->pgid = pid;
+    out_info->sid  = pid;
+    return 0;
+  }
+#elif defined(__APPLE__)
+  {
+    struct kinfo_proc kp;
+    size_t len = sizeof(kp);
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, (int) pid };
+
+    memset(&kp, 0, sizeof(kp));
+    if (sysctl(mib, 4, &kp, &len, NULL, 0) != 0 || len == 0) {
+      return 1;
+    }
+    out_info->ppid = (unsigned long) kp.kp_eproc.e_ppid;
+    out_info->pgid = (unsigned long) kp.kp_eproc.e_pgid;
+    out_info->sid  = (unsigned long) kp.kp_eproc.e_tpgid; /* best effort */
+    return 0;
+  }
+#else
+  {
+    char path[64];
+    FILE *f;
+    char line[256];
+
+    snprintf(path, sizeof(path), "/proc/%lu/status", pid);
+    f = fopen(path, "r");
+    if (f == NULL) {
+      return 1;
+    }
+    while (fgets(line, sizeof(line), f)) {
+      unsigned long val = 0;
+
+      if (sscanf(line, "PPid: %lu", &val) == 1) {
+        out_info->ppid = val;
+      }
+    }
+    fclose(f);
+    return 0;
+  }
+#endif
 }
 
 int arksh_platform_get_terminal_size(unsigned long *out_cols, unsigned long *out_rows) {

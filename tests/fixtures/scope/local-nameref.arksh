@@ -1,0 +1,7 @@
+function f() do
+  local x=hi
+  local -n lr=x
+  echo ${lr}
+endfunction
+
+f

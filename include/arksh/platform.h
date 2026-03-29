@@ -91,6 +91,7 @@ int arksh_platform_read_text_file(const char *path, size_t limit, char *out, siz
 int arksh_platform_write_text_file(const char *path, const char *text, int append, char *out, size_t out_size);
 int arksh_platform_list_environment(ArkshPlatformEnvEntry entries[], size_t max_entries, size_t *out_count);
 int arksh_platform_get_process_info(ArkshPlatformProcessInfo *out_info);
+int arksh_platform_get_process_info_by_pid(unsigned long pid, ArkshPlatformProcessInfo *out_info);
 int arksh_platform_get_terminal_size(unsigned long *out_cols, unsigned long *out_rows);
 int arksh_platform_prepare_shell_session(
   int login_mode,

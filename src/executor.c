@@ -5682,9 +5682,17 @@ static int execute_simple_command(ArkshShell *shell, const ArkshSimpleCommandNod
         char name[ARKSH_MAX_TOKEN];
         const char *value;
         split_posix_assignment(expanded_argv[ai], name, sizeof(name), &value);
-        if (arksh_shell_set_var(shell, name, value, 0) != 0) {
-          snprintf(out, out_size, "assignment: cannot set '%s'", name);
-          return 1;
+        {
+          char resolved[ARKSH_MAX_TOKEN];
+          const char *target = name;
+
+          if (arksh_shell_resolve_nameref(shell, name, resolved, sizeof(resolved))) {
+            target = resolved;
+          }
+          if (arksh_shell_set_var(shell, target, value, 0) != 0) {
+            snprintf(out, out_size, "assignment: cannot set '%s'", target);
+            return 1;
+          }
         }
       }
       return 0;

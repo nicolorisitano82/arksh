@@ -1129,9 +1129,10 @@ Stato story: `[x]`
 2. `E9-S5`
 3. `E9-S6`
 4. `E9-S7`
-5. `E15-S1`
+5. ~~`E15-S1`~~ `[x]` già completato
 6. `E15-S2`
 7. `E10-S1`
+8. `E15-S3` — `sudo` come oggetto / blocchi privilegiati
 
 ---
 
@@ -1209,15 +1210,15 @@ e l'audit di startup per lo scenario `/bin/sh`.
 
 ### E15-S1. Variabili speciali bash mancanti e `nameref`
 
-Stato story: `[ ]`
+Stato story: `[x]`
 
-- `[ ]` `E15-S1-T1` implementare `$PPID` — PID del processo padre, calcolato una volta al momento dell'init e esposto come variabile read-only di sola lettura
-- `[ ]` `E15-S1-T6` esporre `$PPID` nel modello ad oggetti — `proc($PPID)` restituisce un oggetto di tipo `process` con le stesse proprietà di `proc($$)` (pid, pgid, status, ecc.); utile per ispezionare il processo chiamante da script arksh-native
-- `[ ]` `E15-S1-T2` implementare `$BASHPID` — PID del processo corrente (uguale a `$PPID` nel processo padre, diverso nella subshell); necessario per script che usano `$$` nei contesti di subshell
-- `[ ]` `E15-S1-T7` esporre `$BASHPID` nel modello ad oggetti — `proc($BASHPID)` restituisce un oggetto `process` che riflette il PID effettivo del processo corrente anche dentro una subshell; si distingue da `proc($$)` (che rimane fisso al PID della shell principale) e permette di ispezionare il contesto di esecuzione corrente via member-access
-- `[ ]` `E15-S1-T3` implementare `nameref` (`declare -n` / `local -n`) — variabile che è un riferimento indiretto a un'altra; lettura e scrittura trasparenti; `unset -n` per rimuovere il riferimento senza toccare il target; errore su ciclo (nameref che punta a sé stesso)
-- `[ ]` `E15-S1-T4` aggiungere test di regressione su `$PPID`, `$BASHPID` in subshell e su `nameref` con lettura, scrittura, `unset`, ciclo e passaggio a funzione
-- `[ ]` `E15-S1-T5` estendere `nameref` al modello ad oggetti — una variabile `declare -n ref=obj` dove `obj` è un valore tipizzato (`ArkshValue`) deve permettere `$ref -> property`, `$ref -> method()` e `$ref |> stage()`; il deref avviene prima della member-access; `ref` rimane un riferimento al nome, non una copia del valore
+- `[x]` `E15-S1-T1` implementare `$PPID` — PID del processo padre, calcolato una volta al momento dell'init e esposto come variabile read-only di sola lettura
+- `[x]` `E15-S1-T6` esporre `$PPID` nel modello ad oggetti — `proc($PPID)` restituisce un oggetto di tipo `process` con le stesse proprietà di `proc($$)` (pid, pgid, status, ecc.); utile per ispezionare il processo chiamante da script arksh-native
+- `[x]` `E15-S1-T2` implementare `$BASHPID` — PID del processo corrente (uguale a `$PPID` nel processo padre, diverso nella subshell); necessario per script che usano `$$` nei contesti di subshell
+- `[x]` `E15-S1-T7` esporre `$BASHPID` nel modello ad oggetti — `proc($BASHPID)` restituisce un oggetto `process` che riflette il PID effettivo del processo corrente anche dentro una subshell; si distingue da `proc($$)` (che rimane fisso al PID della shell principale) e permette di ispezionare il contesto di esecuzione corrente via member-access
+- `[x]` `E15-S1-T3` implementare `nameref` (`declare -n` / `local -n`) — variabile che è un riferimento indiretto a un'altra; lettura e scrittura trasparenti; `unset -n` per rimuovere il riferimento senza toccare il target; errore su ciclo (nameref che punta a sé stesso)
+- `[x]` `E15-S1-T4` aggiungere test di regressione su `$PPID`, `$BASHPID` in subshell e su `nameref` con lettura, scrittura, `unset`, ciclo e passaggio a funzione
+- `[x]` `E15-S1-T5` estendere `nameref` al modello ad oggetti — una variabile `declare -n ref=obj` dove `obj` è un valore tipizzato (`ArkshValue`) deve permettere `$ref -> property`, `$ref -> method()` e `$ref |> stage()`; il deref avviene prima della member-access; `ref` rimane un riferimento al nome, non una copia del valore
 
 ### E15-S2. Startup audit per scenario `/bin/sh`
 
@@ -1227,6 +1228,58 @@ Stato story: `[ ]`
 - `[ ]` `E15-S2-T2` profilare le fasi di init (`register_builtin_*`, `try_load_*`, `rebuild_all_lookup_indices`) per identificare i colli di bottiglia nel path di startup non-interattivo
 - `[ ]` `E15-S2-T3` ottimizzare il path non-interattivo: evitare allocazioni/registrazioni non necessarie quando non c'è TTY (es. history load, prompt config, completion generation)
 - `[ ]` `E15-S2-T4` aggiungere un test CTest di benchmark non-regressivo che fallisce se il tempo di startup supera la soglia stabilita in T1; documentare i risultati in `docs/benchmarks-baseline.md`
+
+### E15-S3. `sudo` come oggetto e blocchi privilegiati
+
+Stato story: `[ ]`
+
+Obiettivo: permettere ad arksh di eseguire comandi e blocchi di codice con
+privilegi elevati in modo idiomatico e type-safe, integrandosi con il modello
+ad oggetti.
+
+Opzioni di design (da scegliere prima dell'implementazione):
+
+**Opzione A — `sudo` come resolver di oggetti**
+
+```
+proc(sudo(myapp)) -> kill(9)   # equivale a: sudo kill -9 <pid>
+file(sudo("/etc/hosts")) -> write("127.0.0.1 host")
+```
+
+Il resolver `sudo()` è un wrapper che esegue il comando successivo (o la
+catena member-access) con `sudo`; internamente genera un sottoprocesso
+`sudo <cmd>`.
+
+**Opzione B — blocco `with sudo do ... endwith`**
+
+```
+with sudo do
+  file("/etc/hosts") -> append("127.0.0.1 host")
+  proc(nginx) -> restart()
+endwith
+```
+
+Tutti i comandi all'interno del blocco vengono eseguiti con privilegi
+elevati. Il blocco è una costrutto sintattico che imposta un contesto
+privilegiato; ogni comando nel blocco viene prefissato con `sudo`.
+
+**Raccomandazione**: implementare entrambe, iniziando da A (resolver `sudo()`
+come thin wrapper) poi B (blocco `with sudo do`).
+
+- `[ ]` `E15-S3-T1` aggiungere resolver `sudo(cmd_args...)` — esegue il
+  processo dato con `sudo`; restituisce un oggetto `process`; su Windows è
+  un no-op con warning
+- `[ ]` `E15-S3-T2` integrare `sudo()` nella catena member-access —
+  `sudo(service) -> start()` deve tradursi in `sudo service start`; il
+  resolver intercetta la chiamata e riscrive l'argv
+- `[ ]` `E15-S3-T3` aggiungere sintassi `with sudo do ... endwith` al parser
+  — il blocco imposta un flag `ctx_sudo` nel runtime; ogni `exec_command`
+  controlla il flag e prepende `sudo` all'argv
+- `[ ]` `E15-S3-T4` gestire correttamente TTY/pty per `sudo` interattivo —
+  `sudo` richiede un TTY per il prompt password; usare la stessa infrastruttura
+  PTY già presente (E13)
+- `[ ]` `E15-S3-T5` test di regressione: `sudo echo ok` (mock sudo con script
+  no-op), blocco `with sudo do`, catena `sudo(cmd) -> prop`
 
 ---
 

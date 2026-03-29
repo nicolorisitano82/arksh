@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 #include "arksh/expand.h"
 #include "arksh/perf.h"
@@ -470,20 +473,49 @@ static int glob_match_full(const char *pat, const char *str) {
   return *str == '\0';
 }
 
-/* Resolve a variable name to its string value.
-   Tries special/positional names first, then shell vars.
+/* Resolve a variable name to its string value with nameref following.
+   Tries special/positional names first, then shell vars (with nameref chain).
    Returns 1 if the variable is "set" (even if empty), 0 if unset.  */
+static int lookup_var_value_depth(ArkshShell *shell, const char *name,
+                                   char *out, size_t out_size, int depth);
+
 static int lookup_var_value(ArkshShell *shell, const char *name, char *out, size_t out_size) {
+  return lookup_var_value_depth(shell, name, out, out_size, 0);
+}
+
+static int lookup_var_value_depth(ArkshShell *shell, const char *name,
+                                   char *out, size_t out_size, int depth) {
   const char *v;
+
+  if (depth > 32) {
+    /* nameref cycle detected — return empty/unset */
+    out[0] = '\0';
+    return 0;
+  }
 
   if (resolve_special_name(shell, name, out, out_size)) {
     return 1; /* special vars are always "set" */
   }
+
   v = arksh_shell_get_var(shell, name);
   if (v == NULL) {
     out[0] = '\0';
     return 0; /* unset */
   }
+
+  /* E15-S1-T3: follow nameref chain */
+  if (strncmp(v, ARKSH_NAMEREF_PREFIX, ARKSH_NAMEREF_PREFIX_LEN) == 0) {
+    char target[128];
+    const char *t = v + ARKSH_NAMEREF_PREFIX_LEN;
+    size_t tlen = strlen(t);
+    if (tlen == 0 || tlen >= sizeof(target)) {
+      out[0] = '\0';
+      return 0;
+    }
+    copy_string(target, sizeof(target), t);
+    return lookup_var_value_depth(shell, target, out, out_size, depth + 1);
+  }
+
   copy_string(out, out_size, v);
   return 1; /* set (may be empty) */
 }
@@ -784,6 +816,20 @@ static int resolve_special_name(ArkshShell *shell, const char *name, char *out, 
     }
   }
 
+  /* E15-S1-T1: $PPID — PID of parent process (fixed at shell init) */
+  if (strcmp(name, "PPID") == 0) {
+    snprintf(out, out_size, "%lld", shell == NULL ? 0LL : shell->parent_pid);
+    return 1;
+  }
+  /* E15-S1-T2: $BASHPID — PID of the current process; differs from $$ in subshells */
+  if (strcmp(name, "BASHPID") == 0) {
+#ifdef _WIN32
+    snprintf(out, out_size, "%lu", (unsigned long) GetCurrentProcessId());
+#else
+    snprintf(out, out_size, "%lu", (unsigned long) getpid());
+#endif
+    return 1;
+  }
   if (strcmp(name, "LINENO") == 0) {
     snprintf(out, out_size, "%zu",
              shell != NULL && shell->metadata != NULL &&

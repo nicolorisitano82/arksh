@@ -1751,11 +1751,24 @@ const char *arksh_shell_get_var(const ArkshShell *shell, const char *name) {
 }
 
 const ArkshValue *arksh_shell_get_binding(const ArkshShell *shell, const char *name) {
+  const ArkshValue *binding;
+  char resolved[ARKSH_MAX_VAR_NAME];
+
   if (name == NULL || name[0] == '\0') {
     return NULL;
   }
 
-  return lookup_visible_binding(shell, shell != NULL ? shell->scope_frame : NULL, name);
+  binding = lookup_visible_binding(shell, shell != NULL ? shell->scope_frame : NULL, name);
+  if (binding != NULL) {
+    return binding;
+  }
+
+  /* E15-S1-T5: if name is a nameref, follow chain and return binding of target */
+  if (arksh_shell_resolve_nameref(shell, name, resolved, sizeof(resolved))) {
+    return lookup_visible_binding(shell, shell != NULL ? shell->scope_frame : NULL, resolved);
+  }
+
+  return NULL;
 }
 
 const ArkshShellFunction *arksh_shell_find_function(const ArkshShell *shell, const char *name) {
@@ -1871,6 +1884,67 @@ int arksh_shell_unset_var(ArkshShell *shell, const char *name) {
   }
 
   return 0;
+}
+
+/* =========================================================================
+   E15-S1-T3: nameref — declare -n / local -n support
+   ========================================================================= */
+
+/* Declare (or redirect) a nameref: stores ARKSH_NAMEREF_PREFIX + target as
+   the raw variable value for `name`.  Uses arksh_shell_set_var directly so
+   that any *previous* nameref on `name` is overwritten rather than followed.
+   Returns 1 if name == target (would create an immediate cycle). */
+int arksh_shell_set_nameref(ArkshShell *shell, const char *name, const char *target) {
+  char nameref_value[ARKSH_MAX_VAR_VALUE];
+
+  if (shell == NULL || name == NULL || target == NULL) {
+    return 1;
+  }
+  if (!is_valid_identifier(name) || !is_valid_identifier(target)) {
+    return 1;
+  }
+  if (strcmp(name, target) == 0) {
+    return 1; /* trivial cycle */
+  }
+  if (snprintf(nameref_value, sizeof(nameref_value), "%s%s",
+               ARKSH_NAMEREF_PREFIX, target) >= (int) sizeof(nameref_value)) {
+    return 1;
+  }
+  return arksh_shell_set_var(shell, name, nameref_value, 0);
+}
+
+/* Follow the nameref chain starting from `name`.  Writes the final resolved
+   variable name into out_target.  Returns 1 if `name` is (the start of) a
+   nameref chain, 0 if it is a plain variable.  Detects cycles (max 32 hops)
+   and returns 0 on cycle (treating it as "not resolvable"). */
+int arksh_shell_resolve_nameref(const ArkshShell *shell, const char *name,
+                                 char *out_target, size_t out_size) {
+  char current[ARKSH_MAX_VAR_NAME];
+  int depth;
+  const char *v;
+
+  if (shell == NULL || name == NULL || out_target == NULL || out_size == 0) {
+    return 0;
+  }
+
+  v = arksh_shell_get_var(shell, name);
+  if (v == NULL || strncmp(v, ARKSH_NAMEREF_PREFIX, ARKSH_NAMEREF_PREFIX_LEN) != 0) {
+    return 0; /* not a nameref */
+  }
+
+  copy_string(current, sizeof(current), v + ARKSH_NAMEREF_PREFIX_LEN);
+
+  for (depth = 0; depth < 32; depth++) {
+    const char *next = arksh_shell_get_var(shell, current);
+
+    if (next == NULL || strncmp(next, ARKSH_NAMEREF_PREFIX, ARKSH_NAMEREF_PREFIX_LEN) != 0) {
+      /* current is the final target */
+      copy_string(out_target, out_size, current);
+      return 1;
+    }
+    copy_string(current, sizeof(current), next + ARKSH_NAMEREF_PREFIX_LEN);
+  }
+  return 0; /* cycle detected: treat as not resolvable */
 }
 
 int arksh_shell_set_binding(ArkshShell *shell, const char *name, const ArkshValue *value) {
@@ -4942,18 +5016,28 @@ static int resolver_proc(
   ArkshPlatformProcessInfo info;
   char hostname[ARKSH_MAX_NAME];
 
-  (void) args;
-
   if (shell == NULL || out_value == NULL || error == NULL || error_size == 0) {
     return 1;
   }
-  if (argc != 0) {
-    snprintf(error, error_size, "proc() does not accept arguments");
+
+  /* E15-S1-T6/T7: proc() accepts an optional PID argument.
+     proc()      — current process (existing behaviour)
+     proc($PPID) — info for the given PID via platform function */
+  if (argc > 1) {
+    snprintf(error, error_size, "proc() accepts at most one argument (a PID)");
     return 1;
   }
-  if (arksh_platform_get_process_info(&info) != 0) {
-    snprintf(error, error_size, "unable to inspect current process");
-    return 1;
+  if (argc == 1) {
+    unsigned long target_pid = (unsigned long) args[0].number;
+    if (arksh_platform_get_process_info_by_pid(target_pid, &info) != 0) {
+      snprintf(error, error_size, "proc(): unable to inspect process %lu", target_pid);
+      return 1;
+    }
+  } else {
+    if (arksh_platform_get_process_info(&info) != 0) {
+      snprintf(error, error_size, "unable to inspect current process");
+      return 1;
+    }
   }
 
   arksh_value_set_map(out_value);
@@ -9311,19 +9395,30 @@ static int command_export(ArkshShell *shell, int argc, char **argv, char *out, s
 
 static int command_unset(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
   int i;
+  int nameref_only = 0; /* E15-S1-T3: -n flag — remove the nameref itself, not its target */
 
   if (argc < 2) {
-    snprintf(out, out_size, "usage: unset <name> [name...]");
+    snprintf(out, out_size, "usage: unset [-n] <name> [name...]");
     return 1;
   }
 
   out[0] = '\0';
-  for (i = 1; i < argc; ++i) {
+
+  i = 1;
+  if (argc >= 2 && strcmp(argv[1], "-n") == 0) {
+    nameref_only = 1;
+    i = 2;
+  }
+
+  for (; i < argc; ++i) {
     int removed = 0;
     char assoc_name[ARKSH_MAX_VAR_NAME];
     char assoc_key[ARKSH_MAX_NAME];
+    const char *target_name = argv[i];
+    char resolved[ARKSH_MAX_VAR_NAME];
 
-    if (parse_assoc_reference(argv[i], assoc_name, sizeof(assoc_name), assoc_key, sizeof(assoc_key)) == 0) {
+    if (!nameref_only &&
+        parse_assoc_reference(argv[i], assoc_name, sizeof(assoc_name), assoc_key, sizeof(assoc_key)) == 0) {
       if (remove_assoc_binding_key(shell, assoc_name, assoc_key, out, out_size) != 0) {
         return 1;
       }
@@ -9335,10 +9430,16 @@ static int command_unset(ArkshShell *shell, int argc, char **argv, char *out, si
       return 1;
     }
 
-    if (arksh_shell_unset_var(shell, argv[i]) == 0) {
+    /* Without -n: follow nameref chain to the final target before unsetting.
+       With -n:    remove the nameref variable itself without following. */
+    if (!nameref_only && arksh_shell_resolve_nameref(shell, argv[i], resolved, sizeof(resolved))) {
+      target_name = resolved;
+    }
+
+    if (arksh_shell_unset_var(shell, target_name) == 0) {
       removed = 1;
     }
-    if (arksh_shell_unset_binding(shell, argv[i]) == 0) {
+    if (arksh_shell_unset_binding(shell, target_name) == 0) {
       removed = 1;
     }
     if (!removed) {
@@ -10274,6 +10375,7 @@ static int command_shift(ArkshShell *shell, int argc, char **argv, char *out, si
    ========================================================================= */
 static int command_local(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
   int i;
+  int nameref_mode = 0;
   char var_name[ARKSH_MAX_VAR_NAME];
   char var_value[ARKSH_MAX_VAR_VALUE];
 
@@ -10292,31 +10394,52 @@ static int command_local(ArkshShell *shell, int argc, char **argv, char *out, si
     return 0; /* nothing to do */
   }
 
-  for (i = 1; i < argc; i++) {
-    /* Accept both `local NAME` and `local NAME=VALUE` */
+  /* E15-S1-T3: detect `local -n` nameref flag */
+  i = 1;
+  if (argc >= 2 && strcmp(argv[1], "-n") == 0) {
+    nameref_mode = 1;
+    i = 2;
+  }
+
+  for (; i < argc; i++) {
+    /* Accept both `local [-n] NAME` and `local [-n] NAME=VALUE` */
     if (split_assignment(argv[i], var_name, sizeof(var_name), var_value, sizeof(var_value)) == 0) {
       /* NAME=VALUE form */
       if (!is_valid_identifier(var_name)) {
         snprintf(out, out_size, "local: invalid variable name: %s", var_name);
         return 1;
       }
-      if (arksh_shell_set_var(shell, var_name, var_value, 0) != 0) {
-        snprintf(out, out_size, "local: cannot set variable: %s", var_name);
-        return 1;
+      if (nameref_mode) {
+        if (!is_valid_identifier(var_value)) {
+          snprintf(out, out_size, "local: invalid nameref target: %s", var_value);
+          return 1;
+        }
+        if (arksh_shell_set_nameref(shell, var_name, var_value) != 0) {
+          snprintf(out, out_size, "local: cannot declare nameref: %s -> %s", var_name, var_value);
+          return 1;
+        }
+      } else {
+        if (arksh_shell_set_var(shell, var_name, var_value, 0) != 0) {
+          snprintf(out, out_size, "local: cannot set variable: %s", var_name);
+          return 1;
+        }
       }
     } else {
-      /* NAME-only form: preserve the visible value if one exists. */
-      const char *current_value;
-
+      /* NAME-only form */
       copy_string(var_name, sizeof(var_name), argv[i]);
       if (!is_valid_identifier(var_name)) {
         snprintf(out, out_size, "local: invalid variable name: %s", var_name);
         return 1;
       }
-      current_value = arksh_shell_get_var(shell, var_name);
-      if (arksh_shell_set_var(shell, var_name, current_value == NULL ? "" : current_value, 0) != 0) {
-        snprintf(out, out_size, "local: cannot declare variable: %s", var_name);
+      if (nameref_mode) {
+        snprintf(out, out_size, "local -n: requires NAME=TARGET form");
         return 1;
+      } else {
+        const char *current_value = arksh_shell_get_var(shell, var_name);
+        if (arksh_shell_set_var(shell, var_name, current_value == NULL ? "" : current_value, 0) != 0) {
+          snprintf(out, out_size, "local: cannot declare variable: %s", var_name);
+          return 1;
+        }
       }
     }
   }
@@ -10325,14 +10448,43 @@ static int command_local(ArkshShell *shell, int argc, char **argv, char *out, si
 
 static int command_declare_assoc(ArkshShell *shell, int argc, char **argv, char *out, size_t out_size) {
   int i;
+  const char *cmd = argv[0] == NULL ? "declare" : argv[0];
 
   if (shell == NULL || out == NULL || out_size == 0) {
     return 1;
   }
 
   out[0] = '\0';
-  if (argc < 3 || strcmp(argv[1], "-A") != 0) {
-    snprintf(out, out_size, "usage: %s -A <name> [name...]", argv[0] == NULL ? "declare" : argv[0]);
+
+  if (argc < 3) {
+    snprintf(out, out_size, "usage: %s -A|-n <name[=target]> [...]", cmd);
+    return 1;
+  }
+
+  /* E15-S1-T3: declare -n nameref */
+  if (strcmp(argv[1], "-n") == 0) {
+    for (i = 2; i < argc; ++i) {
+      char ref_name[ARKSH_MAX_VAR_NAME];
+      char ref_target[ARKSH_MAX_VAR_NAME];
+
+      if (split_assignment(argv[i], ref_name, sizeof(ref_name), ref_target, sizeof(ref_target)) != 0) {
+        snprintf(out, out_size, "%s -n: requires NAME=TARGET form for: %s", cmd, argv[i]);
+        return 1;
+      }
+      if (!is_valid_identifier(ref_name) || !is_valid_identifier(ref_target)) {
+        snprintf(out, out_size, "%s -n: invalid name or target: %s", cmd, argv[i]);
+        return 1;
+      }
+      if (arksh_shell_set_nameref(shell, ref_name, ref_target) != 0) {
+        snprintf(out, out_size, "%s -n: cannot declare nameref: %s", cmd, ref_name);
+        return 1;
+      }
+    }
+    return 0;
+  }
+
+  if (strcmp(argv[1], "-A") != 0) {
+    snprintf(out, out_size, "usage: %s -A|-n <name[=target]> [...]", cmd);
     return 1;
   }
 
@@ -10340,14 +10492,14 @@ static int command_declare_assoc(ArkshShell *shell, int argc, char **argv, char 
     ArkshValue dict_value;
 
     if (!is_valid_identifier(argv[i])) {
-      snprintf(out, out_size, "%s: invalid associative array name: %s", argv[0] == NULL ? "declare" : argv[0], argv[i]);
+      snprintf(out, out_size, "%s: invalid associative array name: %s", cmd, argv[i]);
       return 1;
     }
     arksh_value_init(&dict_value);
     arksh_value_set_dict(&dict_value);
     if (arksh_shell_set_binding(shell, argv[i], &dict_value) != 0) {
       arksh_value_free(&dict_value);
-      snprintf(out, out_size, "%s: unable to declare associative array: %s", argv[0] == NULL ? "declare" : argv[0], argv[i]);
+      snprintf(out, out_size, "%s: unable to declare associative array: %s", cmd, argv[i]);
       return 1;
     }
     arksh_value_free(&dict_value);
@@ -13231,7 +13383,8 @@ static void refresh_shell_process_metadata(ArkshShell *shell, const ArkshPlatfor
     return;
   }
 
-  shell->shell_pid = (long long) info->pid;
+  shell->shell_pid  = (long long) info->pid;
+  shell->parent_pid = (long long) info->ppid;
   shell->shell_pgid = (long long) info->pgid;
   shell->shell_sid = (long long) info->sid;
   shell->shell_tty_pgid = (long long) info->tty_pgid;
