@@ -117,18 +117,14 @@ int main(int argc, char **argv) {
 
   /* File argument: arksh script.arksh [args...] */
   if (arg_index < argc && argv[arg_index][0] != '-') {
-    char source_cmd[ARKSH_MAX_PATH + 16];
-    int i;
-
-    snprintf(source_cmd, sizeof(source_cmd), "source \"%s\"", argv[arg_index]);
-    /* Expose positional parameters $1 $2 ... from remaining argv */
-    for (i = arg_index + 1; i < argc && i - arg_index < ARKSH_MAX_ARGS; ++i) {
-      char var[8];
-      snprintf(var, sizeof(var), "%d", i - arg_index);
-      arksh_shell_set_var(shell, var, argv[i], 0);
+    int positional_count = argc - arg_index - 1;
+    if (positional_count > ARKSH_MAX_ARGS) {
+      positional_count = ARKSH_MAX_ARGS;
     }
     output[0] = '\0';
-    status = arksh_shell_execute_line(shell, source_cmd, output, sizeof(output));
+    status = arksh_shell_source_file(shell, argv[arg_index],
+               positional_count, argv + arg_index + 1,
+               output, sizeof(output));
     print_output_if_any(output);
     trap_output[0] = '\0';
     trap_status = arksh_shell_run_exit_trap(shell, trap_output, sizeof(trap_output));

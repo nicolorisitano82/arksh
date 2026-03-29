@@ -15,28 +15,34 @@ Strumento: analisi statica manuale su tutti i file `src/` e `include/`.
 
 ---
 
-## SEC-1 — Filename injection in `source_cmd`
+## ~~SEC-1~~ — Filename injection in `source_cmd` — **RISOLTO**
 
-**Severità:** High
+**Severità:** ~~High~~ → Fixed
 **CWE:** CWE-78 (OS Command Injection)
-**File:** `src/main.c` ~riga 116
+**File:** `src/main.c`
 
 ### Problema
 
-Il path del file script viene interpolato in un comando shell con semplice double-quoting:
+Il path del file script veniva interpolato in un comando shell con semplice double-quoting:
 
 ```c
 snprintf(source_cmd, sizeof(source_cmd), "source \"%s\"", argv[arg_index]);
 ```
 
-Un filename contenente `"` chiude le virgolette e permette injection.
+Un filename contenente `"` chiudeva le virgolette e permetteva injection.
 Esempio: `arksh 'foo"$(rm -rf ~)"bar.arksh'` → esecuzione arbitraria.
 
-### Azione correttiva
+### Fix applicato
 
-Passare il path come valore diretto senza costruire una stringa interpolata.
-Aggiungere una funzione `arksh_shell_source_file_path(shell, path, out, out_size)`
-che esegua direttamente il source senza passare per `execute_line`.
+Rimosso l'`snprintf` e la chiamata a `execute_line`. Ora si chiama direttamente:
+
+```c
+arksh_shell_source_file(shell, argv[arg_index],
+    positional_count, argv + arg_index + 1,
+    output, sizeof(output));
+```
+
+Il path arriva come dato grezzo senza mai essere interpolato in una stringa di comando.
 
 ---
 
@@ -319,7 +325,7 @@ del umask corretto è dell'utente/sysadmin.
 
 | ID | Severità | Area | Effort stimato |
 |----|----------|------|----------------|
-| SEC-1 | High | `src/main.c` — source injection | S |
+| ~~SEC-1~~ | ~~High~~ | ~~`src/main.c` — source injection~~ | ~~S~~ | **FIXED** |
 | SEC-2 | High | `src/plugin.c` — plugin auth | L |
 | SEC-3 | High | `src/executor.c` — sudo logging | M |
 | SEC-4 | Medium | `src/shell.c` — FIFO path | S |
