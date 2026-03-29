@@ -29,6 +29,7 @@ int main(int argc, char **argv) {
   int arg_index = 1;
   int login_mode = 0;
   int sh_mode = 0;
+  int no_sudo_escalation = 0;
   int status;
 
   perf_env = getenv("ARKSH_PERF");
@@ -69,6 +70,11 @@ int main(int argc, char **argv) {
       arg_index++;
       continue;
     }
+    if (strcmp(argv[arg_index], "--no-sudo-escalation") == 0) {
+      no_sudo_escalation = 1;
+      arg_index++;
+      continue;
+    }
     break;
   }
 
@@ -77,6 +83,8 @@ int main(int argc, char **argv) {
     free(shell);
     return 1;
   }
+
+  shell->no_sudo_escalation = no_sudo_escalation;
 
   if (arg_index < argc && (strcmp(argv[arg_index], "--version") == 0 || strcmp(argv[arg_index], "-V") == 0)) {
     printf("arksh %s\n", ARKSH_VERSION);

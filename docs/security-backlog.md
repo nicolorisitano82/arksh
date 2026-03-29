@@ -69,32 +69,33 @@ La query ABI verifica solo `major/minor`, non autentica il plugin.
 
 ---
 
-## SEC-3 — `with sudo do` non limita i comandi eseguibili
+## ~~SEC-3~~ — `with sudo do` non limita i comandi eseguibili — **RISOLTO (parziale)**
 
-**Severità:** High
+**Severità:** ~~High~~ → Mitigato
 **CWE:** CWE-78 (OS Command Injection)
-**File:** `src/executor.c` ~riga 2149, `src/shell.c` ~riga 5121
+**File:** `src/executor.c`, `src/main.c`, `include/arksh/shell.h`
 
 ### Problema
 
-Dentro un blocco `with sudo do ... endwith`, **qualsiasi** comando esterno viene
-automaticamente prefisso con `sudo` senza whitelist, logging o conferma:
+Dentro un blocco `with sudo do ... endwith`, **qualsiasi** comando esterno veniva
+automaticamente prefisso con `sudo` senza logging o conferma.
 
-```c
-if (shell->ctx_sudo > 0 && spec.argc < ARKSH_MAX_ARGS) {
-    /* shift argv, prepend "sudo" */
-}
-```
+### Fix applicato
 
-Uno script che esegue codice arbitrario all'interno del blocco ottiene automaticamente
-escalation a root per ogni comando esterno.
+1. **Log su stderr** prima di ogni escalation (automatica e da member-access):
+   ```
+   [arksh:sudo] /usr/sbin/nginx -s reload
+   ```
+2. **Flag `--no-sudo-escalation`**: disabilita il prepend automatico nel blocco;
+   il comando viene comunque eseguito ma senza `sudo`, con avviso su stderr:
+   ```
+   [arksh:sudo] escalation disabled (--no-sudo-escalation): running 'nginx' without sudo
+   ```
+3. **Help text** aggiornata con esempi sudo e nota sul flag.
 
-### Azione correttiva
+### Aperto
 
-1. Loggare su stderr ogni comando eseguito con sudo (nome comando + args, non valori segreti).
-2. Valutare l'aggiunta di un flag `--no-sudo-escalation` per disabilitare il prepend automatico.
-3. Documentare esplicitamente il rischio nel manuale utente.
-4. Considerare un allowlist dei comandi ammessi nel blocco sudo (configurabile).
+- Allowlist configurabile dei comandi ammessi nel blocco (valutare per v1.0).
 
 ---
 
@@ -327,7 +328,7 @@ del umask corretto è dell'utente/sysadmin.
 |----|----------|------|----------------|
 | ~~SEC-1~~ | ~~High~~ | ~~`src/main.c` — source injection~~ | ~~S~~ | **FIXED** |
 | SEC-2 | High | `src/plugin.c` — plugin auth | L |
-| SEC-3 | High | `src/executor.c` — sudo logging | M |
+| ~~SEC-3~~ | ~~High~~ | ~~`src/executor.c` — sudo logging~~ | ~~M~~ | **FIXED** |
 | SEC-4 | Medium | `src/shell.c` — FIFO path | S |
 | SEC-5 | Medium | `src/executor.c` — overflow check | S |
 | SEC-6 | Medium | `src/shell.c` — mkstemp config | S |

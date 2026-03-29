@@ -393,7 +393,8 @@ typedef struct ArkshShell {
   int login_mode;
   int sh_mode; /* 1 when running as sh-compatible shell (--sh or argv[0]=="sh") */
   int force_capture; /* 1 inside capture()/capture_lines()/bridge — always capture stdout */
-  int ctx_sudo;      /* E15-S3: >0 inside "with sudo do … endwith"; external commands are prefixed with sudo */
+  int ctx_sudo;           /* E15-S3: >0 inside "with sudo do … endwith"; external commands are prefixed with sudo */
+  int no_sudo_escalation; /* SEC-3: set by --no-sudo-escalation; disables automatic sudo prepend in ctx_sudo blocks */
   ArkshScratchArena scratch;
   ArkshTypeDescriptor *type_descriptors;
   size_t type_descriptor_count;

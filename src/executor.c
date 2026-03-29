@@ -2163,6 +2163,16 @@ static int call_bound_value(
           total_argc = 2 + expanded_argc;
         }
 
+        /* SEC-3: log explicit sudo member-access invocations */
+        {
+          int k;
+          fprintf(stderr, "[arksh:sudo]");
+          for (k = 0; k < total_argc; ++k) {
+            fprintf(stderr, " %s", argv_ptrs[k]);
+          }
+          fprintf(stderr, "\n");
+        }
+
         arksh_value_init(out_value);
         return arksh_execute_external_command(shell, total_argc, argv_ptrs, out, out_size);
       }
@@ -4950,15 +4960,28 @@ int arksh_execute_external_command(ArkshShell *shell, int argc, char **argv, cha
     copy_string(spec.argv[i], sizeof(spec.argv[i]), argv[i]);
   }
 
-  /* E15-S3-T3: inside "with sudo do" context — prepend sudo to external commands */
+  /* E15-S3-T3 / SEC-3: inside "with sudo do" context — log and prepend sudo */
 #ifndef _WIN32
-  if (shell->ctx_sudo > 0 && spec.argc < ARKSH_MAX_ARGS) {
-    int j;
-    for (j = spec.argc; j > 0; --j) {
-      copy_string(spec.argv[j], sizeof(spec.argv[j]), spec.argv[j - 1]);
+  if (shell->ctx_sudo > 0) {
+    if (shell->no_sudo_escalation) {
+      /* --no-sudo-escalation: run without sudo and warn */
+      fprintf(stderr, "[arksh:sudo] escalation disabled (--no-sudo-escalation): running '%s' without sudo\n",
+              spec.argv[0]);
+    } else if (spec.argc < ARKSH_MAX_ARGS) {
+      int j;
+      /* log command being escalated before modifying argv */
+      fprintf(stderr, "[arksh:sudo]");
+      for (j = 0; j < spec.argc; ++j) {
+        fprintf(stderr, " %s", spec.argv[j]);
+      }
+      fprintf(stderr, "\n");
+      /* prepend sudo */
+      for (j = spec.argc; j > 0; --j) {
+        copy_string(spec.argv[j], sizeof(spec.argv[j]), spec.argv[j - 1]);
+      }
+      copy_string(spec.argv[0], sizeof(spec.argv[0]), "sudo");
+      spec.argc++;
     }
-    copy_string(spec.argv[0], sizeof(spec.argv[0]), "sudo");
-    spec.argc++;
   }
 #endif
 
