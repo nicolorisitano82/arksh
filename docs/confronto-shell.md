@@ -2,7 +2,7 @@
 
 Questo documento confronta `arksh` con le shell Unix più diffuse lungo le dimensioni che ne definiscono il posizionamento: modello dei dati, ergonomia interattiva, scripting e portabilità.
 
-Stato del confronto: repository aggiornato al `2026-03-29` (E15-S2 completata).
+Stato del confronto: repository aggiornato al `2026-03-29` (E9 completata — packaging, release, docs site; E15-S2 completata).
 
 Le shell analizzate sono: **bash**, **zsh**, **fish**, **nushell**, **dash** e **arksh**.
 
@@ -157,7 +157,7 @@ La dimensione più importante per capire il posizionamento di arksh.
 | Binario singolo                | Si     | Si     | No (richiede libs) | Si | Si | Si |
 | Dipendenze a runtime           | libc, readline | libc, ncurses | vari | libc | libc | libc |
 | Scripting cross-platform nativo| No (POSIX non su Windows) | No | Parziale | Si | No | Si (stesso codice) |
-| Adatto come shell di sistema   | Si     | Si     | No     | No      | Si (minimalismo) | Non ancora (manca packaging/release e validazione corpora reali; modalita `sh` implementata) |
+| Adatto come shell di sistema   | Si     | Si     | No     | No      | Si (minimalismo) | Non ancora (packaging disponibile: Homebrew/DEB/RPM/winget; manca validazione su corpora reali) |
 | Adatto come shell interattiva  | Si     | Si (ottima) | Si (ottima) | Si (ottima) | No (minima) | Si (gia usabile, ancora in evoluzione) |
 
 ---
@@ -179,7 +179,7 @@ Asse 2: Scripting puro                    ←———————————�
 | fish    | UX out-of-the-box eccellente, highlighting nativo  | Rompe POSIX, nessun tipo strutturato           |
 | nushell | Dati strutturati, pipeline tipizzate               | Rottura totale con shell classica, no classi   |
 | dash    | Velocità, POSIX stretto, shell di sistema          | Nessuna funzione interattiva                   |
-| arksh   | Object model + pipeline tipizzate + namespace di sistema + tipi numerici espliciti + JSON nativo + Matrix/Dict + plugin ABI in C + UX interattiva + core POSIX chiuso + modalita `sh` + `$PPID`/`$BASHPID`/nameref + startup ottimizzato | Ecosistema piccolo; restano da chiudere packaging/release e la validazione su corpora reali |
+| arksh   | Object model + pipeline tipizzate + namespace di sistema + tipi numerici espliciti + JSON nativo + Matrix/Dict + plugin ABI in C + UX interattiva + core POSIX chiuso + modalita `sh` + `$PPID`/`$BASHPID`/nameref + startup ottimizzato + packaging (Homebrew/DEB/RPM/winget) + docs site (GitHub Pages) | Ecosistema piccolo; resta la validazione su corpora reali prima di v1.0 |
 
 ---
 

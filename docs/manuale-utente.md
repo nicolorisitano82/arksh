@@ -26,6 +26,17 @@ capture("ls /usr") |> lines() |> grep("lib") |> count()
 
 ## 2. Compilazione e avvio
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew install --HEAD nicolorisitano82/arksh/arksh
+```
+
+Per le opzioni di installazione complete (sistema, Windows, winget) vedere
+[docs/guide-installation.md](guide-installation.md).
+
+### Compilazione da sorgenti
+
 Compilazione base con CMake:
 
 ```bash

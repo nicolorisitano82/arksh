@@ -1,6 +1,6 @@
 # Scelte implementative di arksh
 
-Ultimo aggiornamento: `2026-03-29` (stato post E15-S2; epoche E1–E15-S2 completate).
+Ultimo aggiornamento: `2026-03-29` (stato post E9; epoche E1–E9, E11–E15-S2 completate).
 
 ## Obiettivo
 
@@ -11,11 +11,11 @@ Costruire una shell in C, portabile tra Linux, macOS e Windows, in cui ogni elem
 - metodi
 - capability estendibili via plugin
 
-Il progetto ha superato la fase prototipale: le epoche E1–E15-S2 sono completate.
+Il progetto ha superato la fase prototipale: le epoche E1–E9, E11–E15-S2 sono completate.
 Il core shell copre POSIX di media complessita, il modello ad oggetti e completo,
-la pipeline tipizzata e stabile e il sistema di plugin e versionato (ABI v5).
-Restano aperti packaging/release (E9), il plugin HTTP (E10) e alcune feature
-avanzate (E15-S3, E16+).
+la pipeline tipizzata e stabile, il sistema di plugin e versionato (ABI v5), il packaging
+e il processo di release sono in produzione (Homebrew, winget, CPack, GitHub Pages).
+Restano aperti il plugin HTTP (E10) e alcune feature avanzate (E15-S3, E16+).
 
 ## Assunzioni architetturali
 
@@ -502,7 +502,7 @@ ridurre la pressione sull'allocatore di sistema nelle path calde.
 
 ## Stato dell'implementazione
 
-### Completato (E1–E15-S2)
+### Completato (E1–E9, E11–E15-S2)
 
 - Linguaggio shell: funzioni (POSIX e parametri nominali), classi con ereditarieta multipla,
   estensioni `extend`, heredoc, `case/esac`, `break/continue [n]`, `until`, `coproc`-stub
@@ -512,19 +512,25 @@ ridurre la pressione sull'allocatore di sistema nelle path calde.
   process substitution, fd arbitrari, `getopts`, `umask`, `ulimit`, `stty`,
   `declare -A`, `declare/local -n` (nameref), `$PPID`, `$BASHPID`
 - Modalita `sh`: `--sh`, rilevamento automatico da `argv[0]`, skip di sintassi
-  non-POSIX, caricamento `ENV`
+  non-POSIX, caricamento `ENV`; pagina dedicata `docs/sh-mode.md`
 - Job control POSIX: process group, `tcsetpgrp`, `SIGWINCH`, `SIGCHLD`, ripristino TTY
 - Plugin ABI v5: query/init separati, capability flags, binary search index
 - Performance: scratch arena, indici binari, guard di regressione CTest
-- Test: 333 CTest, PTY REPL, job control smoke, ASan/UBSan CI
+- Test: 334 CTest (incl. smoke no-TTY), PTY REPL, job control smoke, ASan/UBSan CI
 - Startup audit: history load skippa in modalita non-interattiva; guard `wall_ms<=50ms`
+- Packaging: formula Homebrew (`Formula/arksh.rb`), manifest winget (`packaging/winget/`),
+  pacchetti CPack DEB+RPM+TGZ (Linux), man page `arksh(1)` installata da CMake
+- Release process: `CHANGELOG.md`, `docs/release-checklist.md`, `docs/release-criteria.md`
+- Documentazione online: `mkdocs.yml` + MkDocs Material; deploy GitHub Pages automatico
+  via `.github/workflows/pages.yml`; `docs/index.md`, `docs/quick-start.md`
+- Editor integration: VSCode, Neovim, starship, direnv, fzf, zoxide documentati in
+  `docs/guide-installation.md`
 
 ### Aperti
 
-1. Packaging/release: formula Homebrew, tarball firmato, sito docs (E9)
-2. Plugin HTTP/HTTPS con libcurl (E10)
-3. `sudo` come oggetto e blocchi privilegiati `with sudo do` (E15-S3)
-4. Validazione su corpora reali POSIX/bash (script di sistema)
+1. Plugin HTTP/HTTPS con libcurl (E10)
+2. `sudo` come oggetto e blocchi privilegiati `with sudo do` (E15-S3)
+3. Validazione su corpora reali POSIX/bash (script di sistema)
 
 ## Contratto da preservare se un'altra AI continua il lavoro
 

@@ -7,7 +7,7 @@ Nessun criterio è opzionale; tutti devono essere nello stato `[x]` prima del ta
 
 ## 1. Correttezza funzionale
 
-- [ ] Tutti i 333+ test CTest passano su Linux, macOS e Windows senza eccezioni
+- [ ] Tutti i 334+ test CTest passano su Linux, macOS e Windows senza eccezioni
 - [ ] ASan + UBSan build completamente pulita (zero errori, zero leak)
 - [ ] Nessuna regressione aperta contro le epoche E1–E15 nel tracker issue
 - [ ] Lo script di smoke POSIX (`tests/smoke_posix.sh`) termina con exit 0 in ambiente CI senza TTY
@@ -81,15 +81,15 @@ Nessun criterio è opzionale; tutti devono essere nello stato `[x]` prima del ta
 
 | Area | Completato | Note |
 |------|-----------|------|
-| Correttezza funzionale | ~90% | 333 test passano; smoke POSIX da aggiungere |
+| Correttezza funzionale | ~90% | 334 test passano (incl. smoke no-TTY); test VM non ancora eseguito |
 | Compatibilità POSIX/sh | ~80% | E14 implementato; test VM non ancora eseguito |
 | Stabilità interattiva | ~85% | Job control completo; alcuni edge case TTY aperti |
 | Performance | ✓ | Startup ≤ 50 ms verificato da CTest |
 | Plugin ABI stabile | ✓ | ABI v5 implementato e testato |
-| Packaging | ~70% | Linux+Homebrew+winget skeleton; winget non ancora in winget-pkgs |
-| Documentazione | ~80% | Reference e guide complete; sito Pages non ancora pubblicato |
+| Packaging | ~80% | Homebrew + DEB/RPM/TGZ + winget manifest pronti; winget non ancora in winget-pkgs |
+| Documentazione | ~90% | Reference, guide e sito GitHub Pages pronti; starship/fzf/zoxide documentati |
 | Sicurezza | ~70% | Nessun audit formale eseguito |
-| UX interattiva | ~85% | starship/fzf/zoxide da documentare |
-| Processo release | ~60% | Checklist scritta; prima release da eseguire |
+| UX interattiva | ~90% | starship/direnv/fzf/zoxide documentati in guide-installation.md |
+| Processo release | ~75% | Checklist e criteri scritti; CHANGELOG pronto; prima release da eseguire |
 
 Target per v1.0: tutti i criteri `[x]` — stimato dopo E9 completo + audit di sicurezza + test VM.

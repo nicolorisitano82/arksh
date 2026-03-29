@@ -179,6 +179,6 @@ Di seguito un percorso ordinato per colmare i gap. Le epoche sono ordinate per i
 | Shell interattiva personale | Si (con limitazioni) | Mancano alcune feature avanzate, ma l'uso quotidiano base funziona |
 | Shell di sviluppo in progetti arksh | Si | E il caso d'uso primario del repository |
 | Scripting su sistemi POSIX | Si, con limiti | Il core POSIX del progetto e chiuso; modalita `sh` implementata; `$PPID`, `$BASHPID`, nameref implementati; restano `mapfile`, `readarray`, `coproc` e alcune estensioni bash avanzate |
-| Shell di sistema (`/bin/sh` replacement) | No | Modalità `sh` implementata; mancano ancora packaging/release e validazione su corpora reali |
-| Shell in container / initrd | No | Mancano robustezza finale, startup audit dedicato e packaging minimale |
+| Shell di sistema (`/bin/sh` replacement) | No | Modalità `sh` implementata; packaging disponibile (Homebrew, DEB/RPM, winget); manca validazione su corpora reali |
+| Shell in container / initrd | No | Startup audit completato (E15-S2, ≤50ms); packaging disponibile; manca validazione su ambienti minimali |
 | Default shell utente (`chsh`) | Parziale | Possibile su macOS/Linux per chi conosce le limitazioni; sconsigliato per uso generale |

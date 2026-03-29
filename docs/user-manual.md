@@ -26,6 +26,17 @@ capture("ls /usr") |> lines() |> grep("lib") |> count()
 
 ## 2. Build and Run
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew install --HEAD nicolorisitano82/arksh/arksh
+```
+
+For full installation options (system-wide install, Windows, winget) see
+[docs/guide-installation.md](guide-installation.md).
+
+### Build from Source
+
 Build with CMake:
 
 ```bash

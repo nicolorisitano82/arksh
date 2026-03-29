@@ -1,6 +1,6 @@
 # Sintassi di arksh — riferimento aggiornato
 
-Stato: aggiornato al `2026-03-29` (epoche E1–E15-S2 completate).
+Stato: aggiornato al `2026-03-29` (epoche E1–E9, E11–E15-S2 completate).
 
 Questo documento descrive la sintassi correntemente implementata e stabile.
 Le sezioni storiche "sintassi proposta" sono state rimosse: tutte le funzionalità
